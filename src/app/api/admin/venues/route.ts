@@ -13,7 +13,21 @@ export async function GET(request: NextRequest) {
     const venues = await prisma.venue.findMany({
       where: { id: { in: venueIds } },
       include: {
-        courts: { orderBy: { label: "asc" } },
+        courts: {
+          orderBy: { label: "asc" },
+          select: {
+            id: true, label: true, status: true, activeInSession: true,
+            isBookable: true, skipWarmupAfterMaintenance: true, venueId: true,
+            pricingGroupId: true, priceOverride: true,
+          },
+        },
+        pricingGroups: {
+          orderBy: { sortOrder: "asc" },
+          select: {
+            id: true, name: true, sortOrder: true, isDefault: true,
+            isUnconfigured: true, defaultPriceValue: true, pricingRules: true,
+          },
+        },
         sessions: {
           where: { status: "open" },
           take: 1,

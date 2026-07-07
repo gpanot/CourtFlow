@@ -1,5 +1,5 @@
 import { prisma } from "./db";
-import type { Booking } from "@prisma/client";
+import type { Booking, PricingGroup } from "@prisma/client";
 import { toZonedTime, fromZonedTime } from "date-fns-tz";
 import { parseDateKey, toDateKey } from "./date";
 
@@ -37,7 +37,15 @@ export interface BookingConfig {
   slotDurationMinutes: number;
   bookingStartHour: number;
   bookingEndHour: number;
+  /**
+   * @deprecated Pricing now comes from PricingGroup rows.
+   * Kept for legacy fallback parsing only. Do not use in new code.
+   */
   defaultPriceValue: number;
+  /**
+   * @deprecated Pricing now comes from PricingGroup rows.
+   * Kept for legacy fallback parsing only. Do not use in new code.
+   */
   pricingRules: PricingRule[];
   cancellationHours: number;
   /** Allow bookings shorter than 1 hour (1 cell = 30 min). Default false. */
@@ -50,6 +58,121 @@ export interface BookingConfig {
   allowMultiCourtBookings: boolean;
   /** Maximum number of courts per group booking. Default 4. */
   maxCourtsPerBooking: number;
+}
+
+// ─── Pricing matrix types ──────────────────────────────────────────────────────
+
+/**
+ * A self-contained pricing matrix: a default price and a list of day/hour override rules.
+ * Stored in PricingGroup rows and optionally as courts.price_override.
+ */
+export interface PricingMatrix {
+  defaultPriceValue: number;
+  pricingRules: PricingRule[];
+}
+
+/**
+ * Result of resolving which pricing matrix applies to a specific court.
+ * source describes where the matrix came from (for debug / admin display).
+ */
+export interface ResolvedCourtPricing {
+  matrix: PricingMatrix;
+  source: "override" | "group" | "default_group" | "legacy";
+  groupId?: string;
+  groupName?: string;
+}
+
+/**
+ * Normalise a raw JSON blob into a PricingMatrix, handling legacy key names.
+ */
+export function parsePricingMatrix(raw: Record<string, unknown>): PricingMatrix {
+  const rules = Array.isArray(raw.pricingRules)
+    ? (raw.pricingRules as Record<string, unknown>[]).map((r) => ({
+        dayOfWeek: r.dayOfWeek as number,
+        startHour: r.startHour as number,
+        endHour: r.endHour as number,
+        priceValue: (r.priceValue as number) ?? (r.priceInCents as number) ?? 0,
+      }))
+    : [];
+
+  const defaultPriceValue =
+    (raw.defaultPriceValue as number) ??
+    (raw.defaultPriceInCents as number) ??
+    (raw.pricePerSlotCents as number) ??
+    0;
+
+  return { defaultPriceValue, pricingRules: rules };
+}
+
+/**
+ * Resolve which pricing matrix applies to a court.
+ *
+ * Priority order (highest wins):
+ *   1. court.priceOverride — frozen full-replace snapshot set by admin.
+ *      NOTE: Changing pricing_group_id while an override is active has NO effect
+ *      on prices until the override is cleared. This is intentional; the UI warns
+ *      admins about this.
+ *   2. court.pricingGroupId → matching PricingGroup row
+ *   3. The venue's default PricingGroup (is_default = true)
+ *   4. Legacy fallback: legacyBookingConfig.{defaultPriceValue, pricingRules}
+ *
+ * Pass pre-fetched groups to avoid extra DB queries inside tight loops.
+ */
+export function resolveCourtPricingMatrix(
+  court: { pricingGroupId?: string | null; priceOverride?: unknown },
+  groups: Pick<PricingGroup, "id" | "name" | "isDefault" | "defaultPriceValue" | "pricingRules">[],
+  legacyBookingConfig?: { defaultPriceValue: number; pricingRules: PricingRule[] },
+): ResolvedCourtPricing {
+  // 1. Per-court override wins — it is a frozen snapshot independent of the group.
+  if (court.priceOverride && typeof court.priceOverride === "object") {
+    return {
+      matrix: parsePricingMatrix(court.priceOverride as Record<string, unknown>),
+      source: "override",
+    };
+  }
+
+  // 2. Assigned group
+  if (court.pricingGroupId) {
+    const group = groups.find((g) => g.id === court.pricingGroupId);
+    if (group) {
+      return {
+        matrix: parsePricingMatrix({
+          defaultPriceValue: group.defaultPriceValue,
+          pricingRules: group.pricingRules,
+        } as Record<string, unknown>),
+        source: group.isDefault ? "default_group" : "group",
+        groupId: group.id,
+        groupName: group.name,
+      };
+    }
+  }
+
+  // 3. Venue default group (fallback when court has no assignment yet)
+  const defaultGroup = groups.find((g) => g.isDefault);
+  if (defaultGroup) {
+    return {
+      matrix: parsePricingMatrix({
+        defaultPriceValue: defaultGroup.defaultPriceValue,
+        pricingRules: defaultGroup.pricingRules,
+      } as Record<string, unknown>),
+      source: "default_group",
+      groupId: defaultGroup.id,
+      groupName: defaultGroup.name,
+    };
+  }
+
+  // 4. Legacy fallback: settings.bookingConfig pricing keys still present in JSON.
+  if (legacyBookingConfig) {
+    return {
+      matrix: {
+        defaultPriceValue: legacyBookingConfig.defaultPriceValue,
+        pricingRules: legacyBookingConfig.pricingRules,
+      },
+      source: "legacy",
+    };
+  }
+
+  return { matrix: { defaultPriceValue: 0, pricingRules: [] }, source: "legacy" };
 }
 
 export const DEFAULT_BOOKING_CONFIG: BookingConfig = {
@@ -195,14 +318,39 @@ export function getMembershipConfig(venueSettings: Record<string, unknown>): Mem
  * Resolve the hourly price for a given day-of-week + hour bucket.
  * Matches the first pricing rule whose range covers `hour`.
  * Falls back to defaultPriceValue if no rule matches.
+ *
+ * Accepts either a BookingConfig (legacy) or a PricingMatrix (new).
  */
-export function resolveSlotPrice(config: BookingConfig, dayOfWeek: number, hour: number): number {
+export function resolveSlotPrice(config: BookingConfig | PricingMatrix, dayOfWeek: number, hour: number): number {
   for (const rule of config.pricingRules) {
     if (rule.dayOfWeek === dayOfWeek && hour >= rule.startHour && hour < rule.endHour) {
       return rule.priceValue;
     }
   }
   return config.defaultPriceValue;
+}
+
+/**
+ * Compute the total price for a booking spanning [startTime, startTime + durationMinutes)
+ * using a PricingMatrix (from a PricingGroup or court.priceOverride).
+ *
+ * Pricing rule (half-hour bands):
+ *   Each 30-min cell costs 0.5 × hourlyRate(cellStartHour).
+ */
+export function resolveCourtBookingPrice(
+  matrix: PricingMatrix,
+  startTime: Date,
+  durationMinutes: number,
+  venueTimezone: string,
+): number {
+  const cells = durationMinutes / GRID_GRANULARITY_MINUTES;
+  let total = 0;
+  for (let i = 0; i < cells; i++) {
+    const cellStart = new Date(startTime.getTime() + i * GRID_GRANULARITY_MINUTES * 60 * 1000);
+    const zonedCell = toZonedTime(cellStart, venueTimezone);
+    total += resolveSlotPrice(matrix, zonedCell.getDay(), zonedCell.getHours()) / 2;
+  }
+  return Math.round(total);
 }
 
 /**
@@ -215,6 +363,9 @@ export function resolveSlotPrice(config: BookingConfig, dayOfWeek: number, hour:
  *
  * This function is the server-side source of truth for booking prices.
  * Client-side priceValue on TimeSlot cells (= 0.5 × hourlyRate) should sum to the same result.
+ *
+ * @deprecated Prefer resolveCourtBookingPrice(matrix, ...) with a per-court resolved matrix.
+ *   This overload remains for call sites that already have a BookingConfig.
  */
 export function resolveBookingPrice(
   config: BookingConfig,
@@ -297,21 +448,41 @@ export function validateBookingDuration(
  * Grid granularity is always GRID_GRANULARITY_MINUTES (30).
  * Each cell priceValue = 0.5 × hourlyRate so summing cells equals resolveBookingPrice().
  * No slot is emitted when the cell would extend past bookingEndHour.
+ *
+ * Accepts either a BookingConfig (legacy) or a separate matrix + hour bounds.
  */
 function generateTimeSlots(localMidnight: Date, config: BookingConfig, venueTimezone: string): TimeSlot[] {
+  return generateTimeSlotsForMatrix(
+    localMidnight,
+    { defaultPriceValue: config.defaultPriceValue, pricingRules: config.pricingRules },
+    { bookingStartHour: config.bookingStartHour, bookingEndHour: config.bookingEndHour },
+    venueTimezone,
+  );
+}
+
+/**
+ * Generate 30-min slots using an explicit PricingMatrix and venue hour bounds.
+ * This is the canonical slot generator for per-court pricing group support.
+ */
+export function generateTimeSlotsForMatrix(
+  localMidnight: Date,
+  matrix: PricingMatrix,
+  venueHours: { bookingStartHour: number; bookingEndHour: number },
+  venueTimezone: string,
+): TimeSlot[] {
   const zonedDate = toZonedTime(localMidnight, venueTimezone);
   const dayOfWeek = zonedDate.getDay();
   const slots: TimeSlot[] = [];
 
   const endMs = (() => {
     const z = toZonedTime(localMidnight, venueTimezone);
-    z.setHours(config.bookingEndHour, 0, 0, 0);
+    z.setHours(venueHours.bookingEndHour, 0, 0, 0);
     return fromZonedTime(z, venueTimezone).getTime();
   })();
 
   let cellIndex = 0;
   while (true) {
-    const totalMinutes = config.bookingStartHour * 60 + cellIndex * GRID_GRANULARITY_MINUTES;
+    const totalMinutes = venueHours.bookingStartHour * 60 + cellIndex * GRID_GRANULARITY_MINUTES;
     const cellHour = Math.floor(totalMinutes / 60);
     const cellMin = totalMinutes % 60;
 
@@ -320,10 +491,9 @@ function generateTimeSlots(localMidnight: Date, config: BookingConfig, venueTime
     const start = fromZonedTime(zonedStart, venueTimezone);
     const end = new Date(start.getTime() + GRID_GRANULARITY_MINUTES * 60 * 1000);
 
-    // Stop when the cell's END reaches or exceeds close time
     if (end.getTime() > endMs) break;
 
-    const hourlyRate = resolveSlotPrice(config, dayOfWeek, cellHour);
+    const hourlyRate = resolveSlotPrice(matrix, dayOfWeek, cellHour);
 
     slots.push({
       startTime: start.toISOString(),
@@ -396,9 +566,26 @@ export async function getAvailableSlots(
   const config = getBookingConfig(vs);
   const schedule = getScheduleConfig(vs);
 
+  // Load pricing groups for per-court matrix resolution
+  const pricingGroups = await prisma.pricingGroup.findMany({
+    where: { venueId },
+    select: { id: true, name: true, isDefault: true, defaultPriceValue: true, pricingRules: true },
+  });
+
   const courts = await prisma.court.findMany({
     where: { venueId, isBookable: true },
     orderBy: { label: "asc" },
+    select: {
+      id: true,
+      label: true,
+      status: true,
+      activeInSession: true,
+      isBookable: true,
+      skipWarmupAfterMaintenance: true,
+      venueId: true,
+      pricingGroupId: true,
+      priceOverride: true,
+    },
   });
 
   // Noon local (UTC+7) → 05:00 UTC → same calendar date as what is stored.
@@ -442,8 +629,7 @@ export async function getAvailableSlots(
     },
   });
 
-  // Generate 30-min slots
-  const timeSlots = generateTimeSlots(dateOnly, config, venueTimezone);
+  const venueHours = { bookingStartHour: config.bookingStartHour, bookingEndHour: config.bookingEndHour };
 
   // Build schedule windows as timestamp ranges for any-overlap check
   const zonedDate = toZonedTime(dateOnly, venueTimezone);
@@ -469,7 +655,30 @@ export async function getAvailableSlots(
     zonedDate.getMonth() === zonedNow.getMonth() &&
     zonedDate.getDate() === zonedNow.getDate();
 
-  return courts.map((court) => ({
+  // Cache slot arrays by group id (or "override:<hash>") to avoid N duplicate generations
+  const slotCache = new Map<string, TimeSlot[]>();
+
+  return courts.map((court) => {
+    const { matrix } = resolveCourtPricingMatrix(court, pricingGroups, {
+      defaultPriceValue: config.defaultPriceValue,
+      pricingRules: config.pricingRules,
+    });
+
+    // Cache key: court override overrides by a hash of its JSON; otherwise use group id.
+    let cacheKey: string;
+    if (court.priceOverride) {
+      cacheKey = "override:" + JSON.stringify(court.priceOverride);
+    } else {
+      cacheKey = court.pricingGroupId ?? "default";
+    }
+
+    let timeSlots = slotCache.get(cacheKey);
+    if (!timeSlots) {
+      timeSlots = generateTimeSlotsForMatrix(dateOnly, matrix, venueHours, venueTimezone);
+      slotCache.set(cacheKey, timeSlots);
+    }
+
+    return {
     courtId: court.id,
     courtLabel: court.label,
     slots: timeSlots.map((slot) => {
@@ -529,7 +738,8 @@ export async function getAvailableSlots(
           : {}),
       };
     }),
-  }));
+    };
+  });
 }
 
 // ─── Availability helpers ──────────────────────────────────────────────────────
@@ -649,22 +859,27 @@ export function validateMultiCourtBooking(
 
 /**
  * Resolve the price for each court in a group booking and return the combined total.
- * Each court is priced independently using resolveBookingPrice.
+ * Each court is priced independently using its own resolved pricing matrix.
+ *
+ * courtMatrices is a map of courtId → PricingMatrix; if a court has no entry
+ * the function falls back to the legacy config.
+ *
+ * @deprecated (legacy overload) Pass courtMatrices instead. This overload is kept
+ *   for call sites that have not yet been migrated to per-court pricing.
  */
 export function resolveGroupBookingPrice(
   config: BookingConfig,
   courts: MultiCourtEntry[],
   venueTimezone: string,
+  courtMatrices?: Map<string, PricingMatrix>,
 ): GroupPriceResult {
-  const perCourt = courts.map((c) => ({
-    courtId: c.courtId,
-    priceValue: resolveBookingPrice(
-      config,
-      new Date(c.startTime),
-      c.slotCount * GRID_GRANULARITY_MINUTES,
-      venueTimezone,
-    ),
-  }));
+  const perCourt = courts.map((c) => {
+    const matrix = courtMatrices?.get(c.courtId);
+    const priceValue = matrix
+      ? resolveCourtBookingPrice(matrix, new Date(c.startTime), c.slotCount * GRID_GRANULARITY_MINUTES, venueTimezone)
+      : resolveBookingPrice(config, new Date(c.startTime), c.slotCount * GRID_GRANULARITY_MINUTES, venueTimezone);
+    return { courtId: c.courtId, priceValue };
+  });
   return {
     total: perCourt.reduce((sum, c) => sum + c.priceValue, 0),
     perCourt,

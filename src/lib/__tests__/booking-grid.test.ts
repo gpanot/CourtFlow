@@ -14,8 +14,12 @@ import {
   isValidGridStartTime,
   validateBookingDuration,
   resolveSlotPrice,
+  parsePricingMatrix,
+  resolveCourtPricingMatrix,
+  resolveCourtBookingPrice,
+  generateTimeSlotsForMatrix,
 } from "@/lib/booking";
-import type { BookingConfig } from "@/lib/booking";
+import type { BookingConfig, PricingMatrix } from "@/lib/booking";
 
 const TZ = "Asia/Saigon";
 
@@ -227,5 +231,213 @@ describe("validateBookingDuration", () => {
       const r = validateBookingDuration(cfg, 20, "staff");
       expect(r.valid).toBe(false);
     });
+  });
+});
+
+// ─── parsePricingMatrix ───────────────────────────────────────────────────────
+
+describe("parsePricingMatrix", () => {
+  it("parses standard keys", () => {
+    const raw = {
+      defaultPriceValue: 100_000,
+      pricingRules: [{ dayOfWeek: 5, startHour: 18, endHour: 22, priceValue: 200_000 }],
+    };
+    const m = parsePricingMatrix(raw);
+    expect(m.defaultPriceValue).toBe(100_000);
+    expect(m.pricingRules).toHaveLength(1);
+    expect(m.pricingRules[0].priceValue).toBe(200_000);
+  });
+
+  it("handles legacy priceInCents alias in rules", () => {
+    const raw = {
+      defaultPriceValue: 50_000,
+      pricingRules: [{ dayOfWeek: 0, startHour: 8, endHour: 12, priceInCents: 120_000 }],
+    };
+    const m = parsePricingMatrix(raw as Record<string, unknown>);
+    expect(m.pricingRules[0].priceValue).toBe(120_000);
+  });
+
+  it("handles legacy defaultPriceInCents key", () => {
+    const raw = {
+      defaultPriceInCents: 80_000,
+      pricingRules: [],
+    };
+    const m = parsePricingMatrix(raw as Record<string, unknown>);
+    expect(m.defaultPriceValue).toBe(80_000);
+  });
+
+  it("returns zero price and empty rules when both are missing", () => {
+    const m = parsePricingMatrix({});
+    expect(m.defaultPriceValue).toBe(0);
+    expect(m.pricingRules).toHaveLength(0);
+  });
+});
+
+// ─── resolveCourtPricingMatrix ────────────────────────────────────────────────
+
+describe("resolveCourtPricingMatrix", () => {
+  const groupA = {
+    id: "g1",
+    name: "Standard",
+    isDefault: true,
+    defaultPriceValue: 100_000,
+    pricingRules: [],
+  };
+  const groupB = {
+    id: "g2",
+    name: "Premium",
+    isDefault: false,
+    defaultPriceValue: 200_000,
+    pricingRules: [],
+  };
+  const groups = [groupA, groupB];
+
+  it("priority 1: override wins over everything", () => {
+    const court = {
+      pricingGroupId: "g2",
+      priceOverride: { defaultPriceValue: 300_000, pricingRules: [] },
+    };
+    const result = resolveCourtPricingMatrix(court, groups);
+    expect(result.source).toBe("override");
+    expect(result.matrix.defaultPriceValue).toBe(300_000);
+  });
+
+  it("priority 2: assigned group wins when no override", () => {
+    const court = { pricingGroupId: "g2", priceOverride: null };
+    const result = resolveCourtPricingMatrix(court, groups);
+    expect(result.source).toBe("group");
+    expect(result.matrix.defaultPriceValue).toBe(200_000);
+    expect(result.groupId).toBe("g2");
+    expect(result.groupName).toBe("Premium");
+  });
+
+  it("priority 3: default group when no assignment or override", () => {
+    const court = { pricingGroupId: null, priceOverride: null };
+    const result = resolveCourtPricingMatrix(court, groups);
+    expect(result.source).toBe("default_group");
+    expect(result.matrix.defaultPriceValue).toBe(100_000);
+    expect(result.groupId).toBe("g1");
+  });
+
+  it("priority 4: legacy fallback when no groups at all", () => {
+    const court = { pricingGroupId: null, priceOverride: null };
+    const legacy = { defaultPriceValue: 75_000, pricingRules: [] };
+    const result = resolveCourtPricingMatrix(court, [], legacy);
+    expect(result.source).toBe("legacy");
+    expect(result.matrix.defaultPriceValue).toBe(75_000);
+  });
+
+  it("returns zero matrix as last resort (no groups, no legacy)", () => {
+    const court = { pricingGroupId: null, priceOverride: null };
+    const result = resolveCourtPricingMatrix(court, []);
+    expect(result.source).toBe("legacy");
+    expect(result.matrix.defaultPriceValue).toBe(0);
+  });
+
+  it("ignores group assignment when override is set (frozen snapshot behaviour)", () => {
+    const court = {
+      pricingGroupId: "g1",
+      priceOverride: { defaultPriceValue: 999_000, pricingRules: [] },
+    };
+    const result = resolveCourtPricingMatrix(court, groups);
+    expect(result.source).toBe("override");
+    expect(result.matrix.defaultPriceValue).toBe(999_000);
+  });
+
+  it("assigned group resolves as default_group when the group has isDefault=true", () => {
+    const court = { pricingGroupId: "g1", priceOverride: null };
+    const result = resolveCourtPricingMatrix(court, groups);
+    expect(result.source).toBe("default_group");
+    expect(result.groupId).toBe("g1");
+  });
+});
+
+// ─── resolveCourtBookingPrice ─────────────────────────────────────────────────
+
+describe("resolveCourtBookingPrice", () => {
+  it("flat rate: 1h = defaultPriceValue", () => {
+    const matrix: PricingMatrix = { defaultPriceValue: 100_000, pricingRules: [] };
+    const start = vn(2026, 7, 3, 10, 0);
+    expect(resolveCourtBookingPrice(matrix, start, 60, TZ)).toBe(100_000);
+  });
+
+  it("applies pricing rules correctly", () => {
+    const matrix: PricingMatrix = {
+      defaultPriceValue: 100_000,
+      pricingRules: [{ dayOfWeek: 5, startHour: 18, endHour: 22, priceValue: 200_000 }],
+    };
+    const start = vn(2026, 7, 3, 18, 0); // Friday 18:00
+    // 2 cells × 0.5 × 200k = 200k
+    expect(resolveCourtBookingPrice(matrix, start, 60, TZ)).toBe(200_000);
+  });
+
+  it("produces same result as resolveBookingPrice for equivalent BookingConfig", () => {
+    const matrix: PricingMatrix = {
+      defaultPriceValue: 100_000,
+      pricingRules: [{ dayOfWeek: 5, startHour: 18, endHour: 22, priceValue: 200_000 }],
+    };
+    const start = vn(2026, 7, 3, 18, 0);
+    const resultMatrix = resolveCourtBookingPrice(matrix, start, 90, TZ);
+    const resultLegacy = resolveBookingPrice(
+      { ...DEFAULT_BOOKING_CONFIG, defaultPriceValue: 100_000, pricingRules: matrix.pricingRules },
+      start,
+      90,
+      TZ,
+    );
+    expect(resultMatrix).toBe(resultLegacy);
+  });
+});
+
+// ─── generateTimeSlotsForMatrix ───────────────────────────────────────────────
+
+describe("generateTimeSlotsForMatrix", () => {
+  const venueHours = { bookingStartHour: 8, bookingEndHour: 22 };
+
+  it("generates slots from 8:00 to 22:00 (28 slots total)", () => {
+    const matrix: PricingMatrix = { defaultPriceValue: 100_000, pricingRules: [] };
+    const midnight = vn(2026, 7, 3, 0, 0);
+    const slots = generateTimeSlotsForMatrix(midnight, matrix, venueHours, TZ);
+    // (22 - 8) × 2 = 28 half-hour slots
+    expect(slots).toHaveLength(28);
+  });
+
+  it("first slot starts at 8:00 local, last ends at 22:00 local", () => {
+    const matrix: PricingMatrix = { defaultPriceValue: 100_000, pricingRules: [] };
+    const midnight = vn(2026, 7, 3, 0, 0);
+    const slots = generateTimeSlotsForMatrix(midnight, matrix, venueHours, TZ);
+    const firstStart = new Date(slots[0].startTime).toLocaleTimeString("en-US", {
+      hour: "2-digit", minute: "2-digit", hour12: false, timeZone: TZ,
+    });
+    const lastEnd = new Date(slots[slots.length - 1].endTime).toLocaleTimeString("en-US", {
+      hour: "2-digit", minute: "2-digit", hour12: false, timeZone: TZ,
+    });
+    expect(firstStart).toBe("08:00");
+    expect(lastEnd).toBe("22:00");
+  });
+
+  it("slot priceValue reflects the pricing rule", () => {
+    const matrix: PricingMatrix = {
+      defaultPriceValue: 100_000,
+      pricingRules: [{ dayOfWeek: 5, startHour: 18, endHour: 22, priceValue: 200_000 }],
+    };
+    const midnight = vn(2026, 7, 3, 0, 0); // Friday
+    const slots = generateTimeSlotsForMatrix(midnight, matrix, venueHours, TZ);
+    // Find slot at 18:00
+    const slot18 = slots.find((s) => s.hour === 18);
+    expect(slot18).toBeDefined();
+    expect(slot18!.priceValue).toBe(100_000); // 0.5 × 200k
+    // Find slot at 10:00 (default)
+    const slot10 = slots.find((s) => s.hour === 10);
+    expect(slot10!.priceValue).toBe(50_000); // 0.5 × 100k
+  });
+
+  it("two courts with different matrices produce different slot priceValues in same hour", () => {
+    const matrixA: PricingMatrix = { defaultPriceValue: 100_000, pricingRules: [] };
+    const matrixB: PricingMatrix = { defaultPriceValue: 200_000, pricingRules: [] };
+    const midnight = vn(2026, 7, 3, 0, 0);
+    const slotsA = generateTimeSlotsForMatrix(midnight, matrixA, venueHours, TZ);
+    const slotsB = generateTimeSlotsForMatrix(midnight, matrixB, venueHours, TZ);
+    expect(slotsA[0].priceValue).toBe(50_000);
+    expect(slotsB[0].priceValue).toBe(100_000);
   });
 });

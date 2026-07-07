@@ -22,10 +22,21 @@ export async function PUT(
     const settings = (venue.settings as Record<string, unknown>) || {};
     const currentConfig = (settings.bookingConfig as Partial<BookingConfig>) || {};
 
+    // Strip pricing fields — they are now owned by pricing_groups rows.
+    // Accept them in the body for backward-compat but discard silently.
+    const { pricingRules: _pr, defaultPriceValue: _dpv, ...operationalBody } = body as BookingConfig & {
+      pricingRules?: unknown;
+      defaultPriceValue?: unknown;
+    };
+
     const updatedConfig: BookingConfig = {
       ...DEFAULT_BOOKING_CONFIG,
       ...currentConfig,
-      ...body,
+      ...operationalBody,
+      // Preserve any legacy pricing keys that are already in the stored config
+      // so the read-fallback path in resolveCourtPricingMatrix still works.
+      pricingRules: (currentConfig.pricingRules as BookingConfig["pricingRules"]) ?? DEFAULT_BOOKING_CONFIG.pricingRules,
+      defaultPriceValue: (currentConfig.defaultPriceValue as number) ?? DEFAULT_BOOKING_CONFIG.defaultPriceValue,
     };
 
     if (updatedConfig.bookingStartHour >= updatedConfig.bookingEndHour) {

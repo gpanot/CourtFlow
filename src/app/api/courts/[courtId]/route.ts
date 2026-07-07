@@ -4,6 +4,7 @@ import { prisma } from "@/lib/db";
 import { json, error, notFound, parseBody } from "@/lib/api-helpers";
 import { requireStaff } from "@/lib/auth";
 import { emitToVenue, emitToPlayer } from "@/lib/socket-server";
+import type { PricingRule } from "@/lib/booking";
 
 export const dynamic = "force-dynamic";
 export async function PATCH(
@@ -93,6 +94,26 @@ export async function PATCH(
       (nextStatus === "idle" || nextStatus === "active")
     ) {
       updateData.skipWarmupAfterMaintenance = true;
+    }
+
+    // Handle pricing group assignment with venue-ownership guard
+    if ("pricingGroupId" in body) {
+      const newGroupId = (body as Record<string, unknown>).pricingGroupId as string | null;
+      if (newGroupId != null) {
+        const group = await prisma.pricingGroup.findUnique({ where: { id: newGroupId }, select: { venueId: true } });
+        if (!group || group.venueId !== court.venueId) {
+          return error("Pricing group not found or belongs to a different venue", 400);
+        }
+      }
+      updateData.pricingGroupId = newGroupId ?? null;
+    }
+
+    // Handle price override: null clears it, object sets it (full-replace design)
+    if ("priceOverride" in body) {
+      const override = (body as Record<string, unknown>).priceOverride as
+        | { defaultPriceValue?: number; pricingRules?: PricingRule[] }
+        | null;
+      updateData.priceOverride = override ?? null;
     }
 
     const updated = await prisma.court.update({

@@ -41,6 +41,8 @@ import {
   Filter,
   DollarSign,
   Download,
+  PlusCircle,
+  Pencil as PencilIcon,
 } from "lucide-react";
 import { InvoiceDownloadButton } from "@/components/admin/InvoiceDownloadButton";
 import { CourtsManager } from "@/components/admin/CourtsManager";
@@ -57,6 +59,9 @@ import {
 } from "@/components/admin/BookingSelectionBar";
 import { CourtBlockModal, type CourtBlockFormState } from "@/components/admin/CourtBlockModal";
 import { useBookingSlotSelection } from "@/hooks/useBookingSlotSelection";
+import { PricingScheduleGrid, rulesToGrid as pgRulesToGrid, gridToRules as pgGridToRules } from "@/components/admin/PricingScheduleGrid";
+import { getPricingGroupColor } from "@/lib/pricing-group-colors";
+import type { PricingRule } from "@/lib/booking";
 
 export const dynamic = "force-dynamic";
 
@@ -69,6 +74,18 @@ interface VenueCourt {
   label: string;
   status: string;
   isBookable: boolean;
+  pricingGroupId?: string | null;
+  priceOverride?: unknown;
+}
+
+export interface PricingGroupRecord {
+  id: string;
+  name: string;
+  sortOrder: number;
+  isDefault: boolean;
+  isUnconfigured: boolean;
+  defaultPriceValue: number;
+  pricingRules: unknown[];
 }
 
 interface Venue {
@@ -77,6 +94,7 @@ interface Venue {
   timezone?: string;
   settings?: VenueSettings;
   courts?: VenueCourt[];
+  pricingGroups?: PricingGroupRecord[];
 }
 
 interface BookingRecord {
@@ -712,13 +730,6 @@ export default function BookingsPage() {
 
       {activeTab === "settings" && venueDetails?.settings && (
         <div className="rounded-xl border border-neutral-800 bg-neutral-900 p-4 space-y-6">
-          <CourtsManager
-            venueId={selectedVenueId}
-            courts={venueDetails.courts || []}
-            onRefresh={fetchVenueDetails}
-            showBookable
-            readOnly
-          />
           <GeneralSettingsSection
             venueId={selectedVenueId}
             settings={venueDetails.settings}
@@ -727,6 +738,20 @@ export default function BookingsPage() {
           <BookingConfigSection
             venueId={selectedVenueId}
             settings={venueDetails.settings}
+            onRefresh={fetchVenueDetails}
+          />
+          <CourtsManager
+            venueId={selectedVenueId}
+            courts={venueDetails.courts || []}
+            pricingGroups={venueDetails.pricingGroups || []}
+            onRefresh={fetchVenueDetails}
+            showBookable
+            readOnly
+          />
+          <PricingGroupsSection
+            venueId={selectedVenueId}
+            settings={venueDetails.settings}
+            pricingGroups={venueDetails.pricingGroups || []}
             onRefresh={fetchVenueDetails}
           />
           <ScheduleConfigSection
@@ -1390,41 +1415,11 @@ function GeneralSettingsSection({
 
 /* ───────── Booking Config ───────── */
 
-interface PricingRule {
-  dayOfWeek: number;
-  startHour: number;
-  endHour: number;
-  priceValue: number;
-}
-
-type PriceGrid = (number | null)[][];
-
-const DAYS_ORDERED = [1, 2, 3, 4, 5, 6, 0];
-const DAY_LABELS: Record<number, string> = { 0: "Sunday", 1: "Monday", 2: "Tuesday", 3: "Wednesday", 4: "Thursday", 5: "Friday", 6: "Saturday" };
-
 function parseCfg(settings: VenueSettings) {
   const raw = (settings.bookingConfig as Record<string, unknown>) || {};
-  const pricingRules = Array.isArray(raw.pricingRules)
-    ? (raw.pricingRules as Record<string, unknown>[]).map((rule) => ({
-        dayOfWeek: rule.dayOfWeek as number,
-        startHour: rule.startHour as number,
-        endHour: rule.endHour as number,
-        priceValue:
-          (rule.priceValue as number) ??
-          (rule.priceInCents as number) ??
-          0,
-      }))
-    : [];
   return {
-    slotDurationMinutes: (raw.slotDurationMinutes as number) ?? 60,
     bookingStartHour: (raw.bookingStartHour as number) ?? 8,
     bookingEndHour: (raw.bookingEndHour as number) ?? 22,
-    defaultPriceValue:
-      (raw.defaultPriceValue as number) ??
-      (raw.defaultPriceInCents as number) ??
-      (raw.pricePerSlotCents as number) ??
-      0,
-    pricingRules,
     cancellationHours: (raw.cancellationHours as number) ?? 24,
     allow30MinBookings: (raw.allow30MinBookings as boolean) ?? false,
     defaultDurationMinutes: (raw.defaultDurationMinutes as number) ?? 60,
@@ -1432,32 +1427,6 @@ function parseCfg(settings: VenueSettings) {
     allowMultiCourtBookings: (raw.allowMultiCourtBookings as boolean) ?? true,
     maxCourtsPerBooking: (raw.maxCourtsPerBooking as number) ?? 4,
   };
-}
-
-function rulesToGrid(rules: PricingRule[]): PriceGrid {
-  const grid: PriceGrid = Array.from({ length: 7 }, () => Array(24).fill(null));
-  for (const r of rules) {
-    for (let h = r.startHour; h < r.endHour && h < 24; h++) {
-      grid[r.dayOfWeek][h] = r.priceValue;
-    }
-  }
-  return grid;
-}
-
-function gridToRules(grid: PriceGrid, startHour: number, endHour: number): PricingRule[] {
-  const rules: PricingRule[] = [];
-  for (let day = 0; day < 7; day++) {
-    let h = startHour;
-    while (h < endHour) {
-      const price = grid[day][h];
-      if (price === null) { h++; continue; }
-      let end = h + 1;
-      while (end < endHour && grid[day][end] === price) end++;
-      rules.push({ dayOfWeek: day, startHour: h, endHour: end, priceValue: price });
-      h = end;
-    }
-  }
-  return rules;
 }
 
 function BookingConfigSection({
@@ -1471,175 +1440,346 @@ function BookingConfigSection({
 }) {
   const { t } = useTranslation("translation", { i18n: adminI18n });
   const [bCfg, setBCfg] = useState(() => parseCfg(settings));
-  const [grid, setGrid] = useState<PriceGrid>(() => rulesToGrid(parseCfg(settings).pricingRules));
-  const [editingCell, setEditingCell] = useState<{ day: number; hour: number } | null>(null);
-  const [editValue, setEditValue] = useState("");
   const [savingBooking, setSavingBooking] = useState(false);
-  const [dirty, setDirty] = useState(false);
+  const [dirtyGeneral, setDirtyGeneral] = useState(false);
 
   useEffect(() => {
     const parsed = parseCfg(settings);
     setBCfg(parsed);
-    setGrid(rulesToGrid(parsed.pricingRules));
-    setDirty(false);
+    setDirtyGeneral(false);
   }, [settings]);
 
-  const centsToDollars = (c: number) => c;
-  const dollarsToCents = (d: number) => d;
-  const resolve = (cell: number | null) => cell ?? bCfg.defaultPriceValue;
-
-  const updateCell = (day: number, hour: number, cents: number) => {
-    setGrid((prev) => {
-      const next = prev.map((row) => [...row]);
-      next[day][hour] = cents === bCfg.defaultPriceValue ? null : cents;
-      return next;
-    });
-    setDirty(true);
-  };
-
-  const startEdit = (day: number, hour: number) => {
-    setEditingCell({ day, hour });
-    setEditValue(String(centsToDollars(resolve(grid[day][hour]))));
-  };
-
-  const commitEdit = () => {
-    if (!editingCell) return;
-    const dollars = Math.max(0, parseInt(editValue.replace(/[^0-9]/g, "") || "0", 10));
-    updateCell(editingCell.day, editingCell.hour, dollarsToCents(dollars));
-    setEditingCell(null);
-  };
-
-  const fillDay = (day: number, cents: number) => {
-    const val = cents === bCfg.defaultPriceValue ? null : cents;
-    setGrid((prev) => {
-      const next = prev.map((row) => [...row]);
-      for (let h = bCfg.bookingStartHour; h < bCfg.bookingEndHour; h++) {
-        next[day][h] = val;
-      }
-      return next;
-    });
-    setDirty(true);
-  };
-
-  const copyDayToAll = (sourceDay: number) => {
-    setGrid((prev) => {
-      const next = prev.map((row) => [...row]);
-      for (let day = 0; day < 7; day++) {
-        if (day === sourceDay) continue;
-        for (let h = 0; h < 24; h++) {
-          next[day][h] = prev[sourceDay][h];
-        }
-      }
-      return next;
-    });
-    setDirty(true);
-  };
-
-  const saveBookingConfig = async () => {
+  const saveGeneralConfig = async () => {
     setSavingBooking(true);
     try {
-      const rules = gridToRules(grid, bCfg.bookingStartHour, bCfg.bookingEndHour);
-      await api.put(`/api/admin/venues/${venueId}/booking-config`, { ...bCfg, pricingRules: rules });
-      setDirty(false);
+      await api.put(`/api/admin/venues/${venueId}/booking-config`, bCfg);
+      setDirtyGeneral(false);
       await onRefresh();
     } catch (e) { alert((e as Error).message); }
     finally { setSavingBooking(false); }
   };
 
   const inputCls = "w-full rounded border border-neutral-700 bg-neutral-800 px-2 py-1.5 text-xs text-white focus:border-purple-500 focus:outline-none";
-  const activeHours: number[] = [];
-  for (let h = bCfg.bookingStartHour; h < bCfg.bookingEndHour; h++) activeHours.push(h);
-  const fmtDollars = (c: number) => c.toLocaleString("vi-VN");
 
   return (
     <div className="space-y-4">
       <h4 className="flex items-center gap-2 text-sm font-medium text-neutral-400 uppercase tracking-wider">
         <CalendarDays className="h-4 w-4" /> {t("bookings.bookingConfig")}
       </h4>
-      <div className="space-y-4">
-        <div className="space-y-3 rounded-lg border border-neutral-800 bg-neutral-800/30 p-3">
+
+      <div className="space-y-3 rounded-lg border border-neutral-800 bg-neutral-800/30 p-3">
+        <div className="flex items-center justify-between">
           <p className="text-xs font-medium text-neutral-300">{t("bookings.general")}</p>
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-            <div>
-              <label className="text-[10px] text-neutral-500">{t("bookings.openHour")}</label>
-              <input type="number" min={0} max={23} value={bCfg.bookingStartHour} onChange={(e) => { setBCfg({ ...bCfg, bookingStartHour: Number(e.target.value) }); setDirty(true); }} className={inputCls} />
-            </div>
-            <div>
-              <label className="text-[10px] text-neutral-500">{t("bookings.closeHour")}</label>
-              <input type="number" min={0} max={24} value={bCfg.bookingEndHour} onChange={(e) => { setBCfg({ ...bCfg, bookingEndHour: Number(e.target.value) }); setDirty(true); }} className={inputCls} />
-            </div>
-            <div>
-              <label className="text-[10px] text-neutral-500">{t("bookings.cancelHrs")}</label>
-              <input type="number" value={bCfg.cancellationHours} onChange={(e) => { setBCfg({ ...bCfg, cancellationHours: Number(e.target.value) }); setDirty(true); }} className={inputCls} />
-            </div>
-            <div>
-              <label className="text-[10px] text-neutral-500">{t("bookings.defaultPrice")}</label>
-              <input type="text" inputMode="numeric" value={centsToDollars(bCfg.defaultPriceValue).toLocaleString("en-US")}
-                onChange={(e) => { const v = parseInt(e.target.value.replace(/[^0-9]/g, "") || "0", 10); setBCfg({ ...bCfg, defaultPriceValue: dollarsToCents(v) }); setDirty(true); }} className={inputCls} />
-            </div>
+          {dirtyGeneral && <span className="rounded-full bg-amber-600/20 px-2 py-0.5 text-[10px] font-medium text-amber-400">{t("bookings.unsavedChanges")}</span>}
+        </div>
+        <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+          <div>
+            <label className="text-[10px] text-neutral-500">{t("bookings.openHour")}</label>
+            <input type="number" min={0} max={23} value={bCfg.bookingStartHour} onChange={(e) => { setBCfg({ ...bCfg, bookingStartHour: Number(e.target.value) }); setDirtyGeneral(true); }} className={inputCls} />
+          </div>
+          <div>
+            <label className="text-[10px] text-neutral-500">{t("bookings.closeHour")}</label>
+            <input type="number" min={0} max={24} value={bCfg.bookingEndHour} onChange={(e) => { setBCfg({ ...bCfg, bookingEndHour: Number(e.target.value) }); setDirtyGeneral(true); }} className={inputCls} />
+          </div>
+          <div>
+            <label className="text-[10px] text-neutral-500">{t("bookings.cancelHrs")}</label>
+            <input type="number" value={bCfg.cancellationHours} onChange={(e) => { setBCfg({ ...bCfg, cancellationHours: Number(e.target.value) }); setDirtyGeneral(true); }} className={inputCls} />
           </div>
         </div>
-        <div className="space-y-3 rounded-lg border border-neutral-800 bg-neutral-800/30 p-3">
-          <div className="flex items-center justify-between">
-            <p className="text-xs font-medium text-neutral-300">{t("bookings.pricingSchedule")} <span className="text-neutral-600 font-normal">— {t("bookings.clickToEditPrice")}</span></p>
-            {dirty && <span className="rounded-full bg-amber-600/20 px-2 py-0.5 text-[10px] font-medium text-amber-400">{t("bookings.unsavedChanges")}</span>}
-          </div>
-          <div className="overflow-x-auto -mx-1 px-1">
-            <table className="border-collapse text-[10px] table-fixed">
-              <thead>
-                <tr>
-                  <th className="sticky left-0 z-10 bg-neutral-900 px-1 py-1 text-left font-medium text-neutral-500 w-[80px]">{t("bookings.day")}</th>
-                  {activeHours.map((h) => <th key={h} className="px-0 py-1 text-center font-medium text-neutral-500 w-[46px]">{h}:00</th>)}
-                  <th className="px-1 py-1 text-center font-medium text-neutral-500 min-w-[50px]">{t("bookings.quickFill")}</th>
-                </tr>
-              </thead>
-              <tbody>
-                {DAYS_ORDERED.map((day) => (
-                  <tr key={day} className="group">
-                    <td className="sticky left-0 z-10 bg-neutral-900 px-1 py-0.5 font-medium text-neutral-300 text-xs whitespace-nowrap">{DAY_LABELS[day]}</td>
-                    {activeHours.map((h) => {
-                      const isEditing = editingCell?.day === day && editingCell?.hour === h;
-                      const raw = grid[day][h];
-                      const isDefault = raw === null;
-                      const cents = resolve(raw);
-                      return (
-                        <td key={h} className="px-0.5 py-0.5">
-                          {isEditing ? (
-                            <input type="text" inputMode="decimal" value={editValue} onChange={(e) => setEditValue(e.target.value)}
-                              onBlur={commitEdit} onKeyDown={(e) => { if (e.key === "Enter") commitEdit(); if (e.key === "Escape") setEditingCell(null); }}
-                              onFocus={(e) => e.target.select()} className="w-full max-w-full rounded border border-purple-500 bg-neutral-800 px-1 py-1 text-[10px] text-white text-center focus:outline-none" autoFocus />
-                          ) : (
-                            <button onClick={() => startEdit(day, h)} className={cn("w-full rounded border px-1 py-1 text-center transition-colors",
-                              isDefault ? "border-transparent bg-neutral-800/60 text-neutral-500 hover:bg-neutral-700/80 hover:text-neutral-300" : "border-purple-600/20 bg-purple-600/20 text-purple-300 hover:bg-purple-600/30")}>
-                              {fmtDollars(cents)}
-                            </button>
-                          )}
-                        </td>
-                      );
-                    })}
-                    <td className="px-0.5 py-0.5">
-                      <div className="flex gap-0.5">
-                        <button onClick={() => { const val = prompt(`Set all ${DAY_LABELS[day]} slots ($):`, String(centsToDollars(bCfg.defaultPriceValue))); if (val !== null) fillDay(day, dollarsToCents(Math.max(0, parseInt(val.replace(/[^0-9]/g, "") || "0", 10)))); }}
-                          className="rounded px-1.5 py-1 text-[9px] text-neutral-500 hover:bg-neutral-700 hover:text-neutral-300" title={`Fill all ${DAY_LABELS[day]} slots`}>{t("bookings.fillDay")}</button>
-                        <button onClick={() => { if (confirm(`Copy ${DAY_LABELS[day]} prices to all days?`)) copyDayToAll(day); }}
-                          className="rounded px-1.5 py-1 text-[9px] text-neutral-500 hover:bg-neutral-700 hover:text-neutral-300" title={`Copy ${DAY_LABELS[day]} to all days`}>{t("bookings.copyToAll")}</button>
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-          <div className="flex items-center gap-3 text-[10px] text-neutral-600">
-            <span className="flex items-center gap-1"><span className="inline-block h-3 w-5 rounded bg-neutral-800/60" /> = {t("bookings.defaultPriceLegend")}</span>
-            <span className="flex items-center gap-1"><span className="inline-block h-3 w-5 rounded bg-purple-600/20 border border-purple-600/20" /> = {t("bookings.customPriceLegend")}</span>
-          </div>
-          <button onClick={saveBookingConfig} disabled={savingBooking}
-            className="flex items-center gap-1.5 rounded-lg bg-purple-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-purple-500 disabled:opacity-40">
-            <Save className="h-3 w-3" /> {savingBooking ? t("common.saving") : t("bookings.saveBookingConfig")}
+        <button onClick={saveGeneralConfig} disabled={savingBooking || !dirtyGeneral}
+          className="flex items-center gap-1.5 rounded-lg bg-purple-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-purple-500 disabled:opacity-40">
+          <Save className="h-3 w-3" /> {savingBooking ? t("common.saving") : t("bookings.saveBookingConfig")}
+        </button>
+      </div>
+    </div>
+  );
+}
+
+/* ───────── Pricing Groups ───────── */
+
+function PricingGroupsSection({
+  venueId,
+  settings,
+  pricingGroups,
+  onRefresh,
+}: {
+  venueId: string;
+  settings: VenueSettings;
+  pricingGroups: PricingGroupRecord[];
+  onRefresh: () => void;
+}) {
+  const { t } = useTranslation("translation", { i18n: adminI18n });
+  const bCfg = parseCfg(settings);
+
+  const [activeGroupId, setActiveGroupId] = useState<string | null>(
+    () => pricingGroups.find((g) => g.isDefault)?.id ?? pricingGroups[0]?.id ?? null
+  );
+  const [groupChanges, setGroupChanges] = useState<Map<string, { rules: PricingRule[]; defaultPriceValue: number }>>(
+    () => new Map()
+  );
+  const [savingGroup, setSavingGroup] = useState<string | null>(null);
+  const [renamingGroup, setRenamingGroup] = useState<string | null>(null);
+  const [renameValue, setRenameValue] = useState("");
+  const [showAddGroupModal, setShowAddGroupModal] = useState(false);
+  const [newGroupName, setNewGroupName] = useState("");
+  const [addingGroup, setAddingGroup] = useState(false);
+
+  useEffect(() => {
+    if (!activeGroupId && pricingGroups.length > 0) {
+      setActiveGroupId(pricingGroups.find((g) => g.isDefault)?.id ?? pricingGroups[0]?.id ?? null);
+    }
+  }, [pricingGroups, activeGroupId]);
+
+  const saveGroup = async (groupId: string) => {
+    const changes = groupChanges.get(groupId);
+    if (!changes) return;
+    setSavingGroup(groupId);
+    try {
+      await api.patch(`/api/admin/pricing-groups/${groupId}`, {
+        pricingRules: changes.rules,
+        defaultPriceValue: changes.defaultPriceValue,
+      });
+      setGroupChanges((prev) => { const next = new Map(prev); next.delete(groupId); return next; });
+      await onRefresh();
+    } catch (e) { alert((e as Error).message); }
+    finally { setSavingGroup(null); }
+  };
+
+  const openAddGroupModal = () => {
+    setNewGroupName("");
+    setShowAddGroupModal(true);
+  };
+
+  const closeAddGroupModal = () => {
+    if (addingGroup) return;
+    setShowAddGroupModal(false);
+    setNewGroupName("");
+  };
+
+  const submitAddGroup = async () => {
+    const name = newGroupName.trim();
+    if (!name) return;
+    setAddingGroup(true);
+    try {
+      await api.post(`/api/admin/venues/${venueId}/pricing-groups`, { name });
+      setShowAddGroupModal(false);
+      setNewGroupName("");
+      await onRefresh();
+    } catch (e) { alert((e as Error).message); }
+    finally { setAddingGroup(false); }
+  };
+
+  const deleteGroup = async (groupId: string) => {
+    const group = pricingGroups.find((g) => g.id === groupId);
+    if (!group) return;
+    if (!confirm(`Delete pricing group "${group.name}"? This cannot be undone.`)) return;
+    try {
+      await api.delete(`/api/admin/pricing-groups/${groupId}`);
+      if (activeGroupId === groupId) setActiveGroupId(pricingGroups.find((g) => g.id !== groupId)?.id ?? null);
+      await onRefresh();
+    } catch (e) { alert((e as Error).message); }
+  };
+
+  const commitRename = async (groupId: string) => {
+    if (!renameValue.trim()) { setRenamingGroup(null); return; }
+    try {
+      await api.patch(`/api/admin/pricing-groups/${groupId}`, { name: renameValue.trim() });
+      setRenamingGroup(null);
+      await onRefresh();
+    } catch (e) { alert((e as Error).message); }
+  };
+
+  const activeGroup = pricingGroups.find((g) => g.id === activeGroupId);
+  const pendingChanges = activeGroupId ? groupChanges.get(activeGroupId) : undefined;
+
+  return (
+    <div className="space-y-4">
+      <h4 className="flex items-center gap-2 text-sm font-medium text-neutral-400 uppercase tracking-wider">
+        <DollarSign className="h-4 w-4" /> {t("bookings.pricingGroups", "Pricing Groups")}
+      </h4>
+
+      <div className="space-y-3 rounded-lg border border-neutral-800 bg-neutral-800/30 p-3">
+        <div className="flex items-center justify-between">
+          <p className="text-xs font-medium text-neutral-300">{t("bookings.pricingGroups", "Pricing Groups")} <span className="text-neutral-600 font-normal">— {t("bookings.clickToEditPrice")}</span></p>
+          <button onClick={openAddGroupModal} className="flex items-center gap-1 rounded bg-neutral-700 px-2 py-1 text-[10px] text-neutral-300 hover:bg-neutral-600">
+            <PlusCircle className="h-3 w-3" /> {t("bookings.addGroup", "Add group")}
           </button>
         </div>
+
+        {pricingGroups.length === 0 ? (
+          <p className="text-xs text-neutral-500">{t("bookings.noPricingGroupsHint", "No pricing groups yet. Click \"Add group\" to create one.")}</p>
+        ) : (
+          <>
+            {/* Tab bar */}
+            <div className="flex flex-wrap gap-1 border-b border-neutral-700 pb-2">
+              {pricingGroups.map((g) => {
+                const hasPending = groupChanges.has(g.id);
+                const color = getPricingGroupColor(pricingGroups, g.id);
+                const isActive = activeGroupId === g.id;
+                return (
+                  <button key={g.id}
+                    onClick={() => setActiveGroupId(g.id)}
+                    className={cn(
+                      "flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs transition-colors",
+                      isActive && color
+                        ? color.tabActive
+                        : color
+                          ? color.tab
+                          : "text-neutral-400 hover:text-neutral-200 hover:bg-neutral-800",
+                      !isActive && color && "border-transparent",
+                    )}
+                  >
+                    {renamingGroup === g.id ? (
+                      <input
+                        autoFocus
+                        value={renameValue}
+                        onChange={(e) => setRenameValue(e.target.value)}
+                        onBlur={() => commitRename(g.id)}
+                        onKeyDown={(e) => { if (e.key === "Enter") commitRename(g.id); if (e.key === "Escape") setRenamingGroup(null); }}
+                        onClick={(e) => e.stopPropagation()}
+                        className="w-24 rounded border border-purple-500 bg-neutral-800 px-1 py-0 text-xs text-white focus:outline-none"
+                      />
+                    ) : (
+                      <span onDoubleClick={(e) => { e.stopPropagation(); setRenamingGroup(g.id); setRenameValue(g.name); }}>{g.name}</span>
+                    )}
+                    {g.isUnconfigured && (
+                      <span className="rounded-full bg-amber-600/30 px-1 py-0.5 text-[9px] text-amber-400">⚠</span>
+                    )}
+                    {hasPending && (
+                      <span className="h-1.5 w-1.5 rounded-full bg-amber-400" />
+                    )}
+                  </button>
+                );
+              })}
+            </div>
+
+            {/* Active group editor */}
+            {activeGroup && (
+              <div className="space-y-3 pt-1">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <button onClick={() => { setRenamingGroup(activeGroup.id); setRenameValue(activeGroup.name); }}
+                    className="flex items-center gap-1 rounded bg-neutral-700 px-2 py-1 text-[10px] text-neutral-300 hover:bg-neutral-600">
+                    <PencilIcon className="h-3 w-3" /> {t("common.rename", "Rename")}
+                  </button>
+                  {!activeGroup.isDefault && (
+                    <button onClick={() => deleteGroup(activeGroup.id)}
+                      className="flex items-center gap-1 rounded bg-red-900/30 px-2 py-1 text-[10px] text-red-400 hover:bg-red-900/50">
+                      <Trash2 className="h-3 w-3" /> {t("common.delete", "Delete")}
+                    </button>
+                  )}
+                  {pendingChanges && (
+                    <span className="rounded-full bg-amber-600/20 px-2 py-0.5 text-[10px] font-medium text-amber-400">
+                      {t("bookings.unsavedChanges")}
+                    </span>
+                  )}
+                </div>
+
+                {activeGroup.isUnconfigured && (
+                  <div className="rounded-lg border border-amber-600/40 bg-amber-600/10 px-3 py-2 text-[11px] text-amber-400">
+                    ⚠ {t("bookings.groupUnconfiguredWarning")}
+                  </div>
+                )}
+
+                <PricingScheduleGrid
+                  key={activeGroup.id}
+                  pricingRules={(pendingChanges?.rules ?? activeGroup.pricingRules) as PricingRule[]}
+                  defaultPriceValue={pendingChanges?.defaultPriceValue ?? activeGroup.defaultPriceValue}
+                  startHour={bCfg.bookingStartHour}
+                  endHour={bCfg.bookingEndHour}
+                  onChange={(rules, defaultPriceValue) => {
+                    setGroupChanges((prev) => {
+                      const next = new Map(prev);
+                      next.set(activeGroup.id, { rules, defaultPriceValue });
+                      return next;
+                    });
+                  }}
+                />
+
+                <button
+                  onClick={() => saveGroup(activeGroup.id)}
+                  disabled={!pendingChanges || savingGroup === activeGroup.id}
+                  className="flex items-center gap-1.5 rounded-lg bg-purple-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-purple-500 disabled:opacity-40"
+                >
+                  <Save className="h-3 w-3" />
+                  {savingGroup === activeGroup.id ? t("common.saving") : t("bookings.saveGroup", "Save group")}
+                </button>
+              </div>
+            )}
+          </>
+        )}
       </div>
+
+      {showAddGroupModal && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4"
+          onClick={closeAddGroupModal}
+        >
+          <div
+            className="w-full max-w-sm rounded-2xl border border-neutral-700 bg-neutral-900 p-5 shadow-2xl space-y-4"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between gap-3">
+              <h3 className="text-sm font-semibold text-white">
+                {t("bookings.addGroup", "Add group")}
+              </h3>
+              <button
+                type="button"
+                onClick={closeAddGroupModal}
+                disabled={addingGroup}
+                className="rounded p-1.5 text-neutral-400 hover:text-white hover:bg-neutral-700 disabled:opacity-40"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+
+            <div>
+              <label htmlFor="new-pricing-group-name" className="mb-1.5 block text-xs text-neutral-400">
+                {t("bookings.groupNameLabel", "Group name")}
+              </label>
+              <input
+                id="new-pricing-group-name"
+                type="text"
+                value={newGroupName}
+                onChange={(e) => setNewGroupName(e.target.value)}
+                placeholder={t("bookings.groupNamePlaceholder", "e.g. Standard, Premium Pickleball")}
+                autoFocus
+                disabled={addingGroup}
+                className="w-full rounded-lg border border-neutral-700 bg-neutral-800 px-3 py-2 text-sm text-white placeholder:text-neutral-600 focus:border-purple-500 focus:outline-none disabled:opacity-60"
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") submitAddGroup();
+                  if (e.key === "Escape") closeAddGroupModal();
+                }}
+              />
+            </div>
+
+            <div className="flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={closeAddGroupModal}
+                disabled={addingGroup}
+                className="rounded-lg border border-neutral-700 px-4 py-2 text-xs text-neutral-300 hover:bg-neutral-800 disabled:opacity-40"
+              >
+                {t("common.cancel", "Cancel")}
+              </button>
+              <button
+                type="button"
+                onClick={submitAddGroup}
+                disabled={addingGroup || !newGroupName.trim()}
+                className="flex items-center gap-1.5 rounded-lg bg-purple-600 px-4 py-2 text-xs font-medium text-white hover:bg-purple-500 disabled:opacity-40"
+              >
+                {addingGroup ? (
+                  <>
+                    <Loader2 className="h-3 w-3 animate-spin" />
+                    {t("common.saving", "Saving…")}
+                  </>
+                ) : (
+                  t("bookings.addGroup", "Add group")
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

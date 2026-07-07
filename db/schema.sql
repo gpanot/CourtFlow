@@ -865,7 +865,9 @@ CREATE TABLE public.courts (
     status public."CourtStatus" DEFAULT 'idle'::public."CourtStatus" NOT NULL,
     active_in_session boolean DEFAULT false NOT NULL,
     is_bookable boolean DEFAULT false NOT NULL,
-    skip_warmup_after_maintenance boolean DEFAULT false NOT NULL
+    skip_warmup_after_maintenance boolean DEFAULT false NOT NULL,
+    pricing_group_id text,
+    price_override jsonb
 );
 
 
@@ -1428,6 +1430,24 @@ CREATE TABLE public.players (
     password_hash text,
     player_identity_id text,
     blurred_face_photo_path text
+);
+
+
+--
+-- Name: pricing_groups; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.pricing_groups (
+    id text NOT NULL,
+    venue_id text NOT NULL,
+    name text NOT NULL,
+    sort_order integer DEFAULT 0 NOT NULL,
+    is_default boolean DEFAULT false NOT NULL,
+    is_unconfigured boolean DEFAULT false NOT NULL,
+    default_price_value integer DEFAULT 0 NOT NULL,
+    pricing_rules jsonb DEFAULT '[]'::jsonb NOT NULL,
+    created_at timestamp(3) without time zone DEFAULT CURRENT_TIMESTAMP NOT NULL,
+    updated_at timestamp(3) without time zone NOT NULL
 );
 
 
@@ -2724,6 +2744,14 @@ ALTER TABLE ONLY public.players
 
 
 --
+-- Name: pricing_groups pricing_groups_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.pricing_groups
+    ADD CONSTRAINT pricing_groups_pkey PRIMARY KEY (id);
+
+
+--
 -- Name: program_pass_type_coaches program_pass_type_coaches_pass_type_id_coach_id_key; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -3365,6 +3393,13 @@ CREATE INDEX court_blocks_venue_id_date_idx ON public.court_blocks USING btree (
 
 
 --
+-- Name: courts_pricing_group_id_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX courts_pricing_group_id_idx ON public.courts USING btree (pricing_group_id);
+
+
+--
 -- Name: credit_transactions_credit_id_idx; Type: INDEX; Schema: public; Owner: -
 --
 
@@ -3712,6 +3747,20 @@ CREATE INDEX players_player_identity_id_idx ON public.players USING btree (playe
 --
 
 CREATE INDEX players_registration_venue_id_idx ON public.players USING btree (registration_venue_id);
+
+
+--
+-- Name: pricing_groups_one_default_per_venue; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE UNIQUE INDEX pricing_groups_one_default_per_venue ON public.pricing_groups USING btree (venue_id) WHERE (is_default = true);
+
+
+--
+-- Name: pricing_groups_venue_id_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX pricing_groups_venue_id_idx ON public.pricing_groups USING btree (venue_id);
 
 
 --
@@ -4432,6 +4481,14 @@ ALTER TABLE ONLY public.court_blocks
 
 
 --
+-- Name: courts courts_pricing_group_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.courts
+    ADD CONSTRAINT courts_pricing_group_id_fkey FOREIGN KEY (pricing_group_id) REFERENCES public.pricing_groups(id) ON DELETE SET NULL;
+
+
+--
 -- Name: courts courts_venue_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -4781,6 +4838,14 @@ ALTER TABLE ONLY public.players
 
 ALTER TABLE ONLY public.players
     ADD CONSTRAINT players_registration_venue_id_fkey FOREIGN KEY (registration_venue_id) REFERENCES public.venues(id) ON UPDATE CASCADE ON DELETE SET NULL;
+
+
+--
+-- Name: pricing_groups pricing_groups_venue_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.pricing_groups
+    ADD CONSTRAINT pricing_groups_venue_id_fkey FOREIGN KEY (venue_id) REFERENCES public.venues(id) ON DELETE CASCADE;
 
 
 --
@@ -5319,4 +5384,5 @@ INSERT INTO public.schema_migrations (version) VALUES
     ('20260706010731'),
     ('20260706055400'),
     ('20260706074030'),
-    ('20260706080327');
+    ('20260706080327'),
+    ('20260707015817');

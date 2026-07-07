@@ -4,7 +4,8 @@ import { json, error, parseBody } from "@/lib/api-helpers";
 import { requireStaff } from "@/lib/auth";
 import {
   getBookingConfig,
-  resolveBookingPrice,
+  resolveCourtBookingPrice,
+  resolveCourtPricingMatrix,
   validateBookingDuration,
   GRID_GRANULARITY_MINUTES,
 } from "@/lib/booking";
@@ -67,13 +68,20 @@ export async function POST(request: NextRequest) {
 
     const court = await prisma.court.findFirst({
       where: { id: body.courtId, venueId: body.venueId, isBookable: true },
+      select: { id: true, label: true, venueId: true, isBookable: true, pricingGroupId: true, priceOverride: true },
     });
     if (!court) return error("Court not found or not bookable", 404);
 
-    const venue = await prisma.venue.findUniqueOrThrow({
-      where: { id: body.venueId },
-      select: { settings: true, timezone: true },
-    });
+    const [venue, pricingGroups] = await Promise.all([
+      prisma.venue.findUniqueOrThrow({
+        where: { id: body.venueId },
+        select: { settings: true, timezone: true },
+      }),
+      prisma.pricingGroup.findMany({
+        where: { venueId: body.venueId },
+        select: { id: true, name: true, isDefault: true, defaultPriceValue: true, pricingRules: true },
+      }),
+    ]);
     const venueTimezone = venue.timezone ?? "Asia/Ho_Chi_Minh";
     const config = getBookingConfig(venue.settings as Record<string, unknown>);
 
@@ -91,7 +99,11 @@ export async function POST(request: NextRequest) {
     const durationMinutes = slotCount * GRID_GRANULARITY_MINUTES;
     const endTime = new Date(startTime.getTime() + durationMinutes * 60 * 1000);
 
-    const totalPrice = resolveBookingPrice(config, startTime, durationMinutes, venueTimezone);
+    const { matrix } = resolveCourtPricingMatrix(court, pricingGroups, {
+      defaultPriceValue: config.defaultPriceValue,
+      pricingRules: config.pricingRules,
+    });
+    const totalPrice = resolveCourtBookingPrice(matrix, startTime, durationMinutes, venueTimezone);
 
     // Apply optional staff discount
     const discountPct = typeof body.discountPct === "number" && body.discountPct > 0 && body.discountPct <= 100

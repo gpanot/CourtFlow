@@ -5,9 +5,11 @@ import { requireStaff } from "@/lib/auth";
 import {
   getBookingConfig,
   resolveGroupBookingPrice,
+  resolveCourtPricingMatrix,
   validateMultiCourtBooking,
   GRID_GRANULARITY_MINUTES,
   type MultiCourtEntry,
+  type PricingMatrix,
 } from "@/lib/booking";
 import { sendBookingEmail, wrapPaymentUrlWithMagicLogin } from "@/lib/email/send";
 export const dynamic = "force-dynamic";
@@ -46,9 +48,24 @@ export async function POST(request: NextRequest) {
     // Verify all courts belong to the venue and are bookable
     const courtRecords = await prisma.court.findMany({
       where: { id: { in: courtsInput.map((c) => c.courtId) }, venueId: body.venueId, isBookable: true },
+      select: { id: true, pricingGroupId: true, priceOverride: true },
     });
     if (courtRecords.length !== courtsInput.length) {
       return error("One or more courts not found or not bookable", 404);
+    }
+
+    // Build per-court matrix map for per-group pricing
+    const pricingGroups = await prisma.pricingGroup.findMany({
+      where: { venueId: body.venueId },
+      select: { id: true, name: true, isDefault: true, defaultPriceValue: true, pricingRules: true },
+    });
+    const courtMatrices = new Map<string, PricingMatrix>();
+    for (const cr of courtRecords) {
+      const { matrix } = resolveCourtPricingMatrix(cr, pricingGroups, {
+        defaultPriceValue: config.defaultPriceValue,
+        pricingRules: config.pricingRules,
+      });
+      courtMatrices.set(cr.id, matrix);
     }
 
     const dateKey = body.date.split("T")[0];
@@ -59,7 +76,7 @@ export async function POST(request: NextRequest) {
     const durationMinutes = courtsInput[0].slotCount * GRID_GRANULARITY_MINUTES;
     const refEnd = new Date(refStart.getTime() + durationMinutes * 60 * 1000);
 
-    const pricing = resolveGroupBookingPrice(config, courtsInput, venueTimezone);
+    const pricing = resolveGroupBookingPrice(config, courtsInput, venueTimezone, courtMatrices);
 
     // Apply optional staff discount
     const discountPct = typeof body.discountPct === "number" && body.discountPct > 0 && body.discountPct <= 100

@@ -2,7 +2,7 @@ import { NextRequest } from "next/server";
 import { prisma } from "@/lib/db";
 import { json, error, parseBody, notFound } from "@/lib/api-helpers";
 import { requireStaff } from "@/lib/auth";
-import { getBookingConfig, resolveBookingPrice } from "@/lib/booking";
+import { getBookingConfig, resolveCourtBookingPrice, resolveCourtPricingMatrix } from "@/lib/booking";
 import { sendBookingEmail, wrapPaymentUrlWithMagicLogin } from "@/lib/email/send";
 
 export const dynamic = "force-dynamic";
@@ -138,13 +138,20 @@ export async function PATCH(
 
     const court = await prisma.court.findFirst({
       where: { id: courtId, venueId: existing.venueId, isBookable: true },
+      select: { id: true, venueId: true, isBookable: true, pricingGroupId: true, priceOverride: true },
     });
     if (!court) return error("Court not found or not bookable", 404);
 
-    const venue = await prisma.venue.findUniqueOrThrow({
-      where: { id: existing.venueId },
-      select: { settings: true, timezone: true },
-    });
+    const [venue, pricingGroups] = await Promise.all([
+      prisma.venue.findUniqueOrThrow({
+        where: { id: existing.venueId },
+        select: { settings: true, timezone: true },
+      }),
+      prisma.pricingGroup.findMany({
+        where: { venueId: existing.venueId },
+        select: { id: true, name: true, isDefault: true, defaultPriceValue: true, pricingRules: true },
+      }),
+    ]);
     const venueTimezone = venue.timezone ?? "Asia/Ho_Chi_Minh";
     const config = getBookingConfig(venue.settings as Record<string, unknown>);
 
@@ -173,8 +180,12 @@ export async function PATCH(
     });
     if (conflict) return error("That slot is already booked", 409);
 
-    // Reprice for the full preserved duration at the new start time
-    const newPrice = resolveBookingPrice(config, startTime, durationMinutes, venueTimezone);
+    // Reprice for the full preserved duration at the new start time using per-court matrix
+    const { matrix } = resolveCourtPricingMatrix(court, pricingGroups, {
+      defaultPriceValue: config.defaultPriceValue,
+      pricingRules: config.pricingRules,
+    });
+    const newPrice = resolveCourtBookingPrice(matrix, startTime, durationMinutes, venueTimezone);
 
     const booking = await prisma.booking.update({
       where: { id },

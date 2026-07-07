@@ -11,7 +11,7 @@ import {
   resolveGroupBookingPrice,
   DEFAULT_BOOKING_CONFIG,
 } from "@/lib/booking";
-import type { BookingConfig, MultiCourtEntry } from "@/lib/booking";
+import type { BookingConfig, MultiCourtEntry, PricingMatrix } from "@/lib/booking";
 
 const TZ = "Asia/Saigon";
 const START = "2026-07-05T08:00:00+07:00"; // 8am local
@@ -151,5 +151,72 @@ describe("resolveGroupBookingPrice", () => {
     expect(result.perCourt[0].priceValue).toBe(200_000);
     expect(result.perCourt[1].priceValue).toBe(200_000);
     expect(result.total).toBe(400_000);
+  });
+});
+
+// ─── resolveGroupBookingPrice with per-court pricing matrices ─────────────────
+
+describe("resolveGroupBookingPrice — per-court pricing matrices", () => {
+  const courts: MultiCourtEntry[] = [
+    { courtId: "c1", startTime: START, slotCount: 2 }, // 60 min = 2 cells
+    { courtId: "c2", startTime: START, slotCount: 2 },
+  ];
+
+  it("uses courtMatrices when provided, ignoring BookingConfig pricing", () => {
+    const matrixC1: PricingMatrix = { defaultPriceValue: 100_000, pricingRules: [] };
+    const matrixC2: PricingMatrix = { defaultPriceValue: 200_000, pricingRules: [] };
+    const courtMatrices = new Map<string, PricingMatrix>([
+      ["c1", matrixC1],
+      ["c2", matrixC2],
+    ]);
+    // cfg has defaultPriceValue: 100_000 — without per-court matrices both courts would be 100k
+    const result = resolveGroupBookingPrice(cfg, courts, TZ, courtMatrices);
+    // c1: 2 cells × 0.5 × 100k = 100k; c2: 2 cells × 0.5 × 200k = 200k
+    expect(result.perCourt[0].priceValue).toBe(100_000);
+    expect(result.perCourt[1].priceValue).toBe(200_000);
+    expect(result.total).toBe(300_000);
+  });
+
+  it("falls back to legacy BookingConfig when no courtMatrices entry for a court", () => {
+    // Only c1 has an entry in the map; c2 falls back to cfg
+    const matrixC1: PricingMatrix = { defaultPriceValue: 150_000, pricingRules: [] };
+    const courtMatrices = new Map<string, PricingMatrix>([["c1", matrixC1]]);
+    const result = resolveGroupBookingPrice(cfg, courts, TZ, courtMatrices);
+    expect(result.perCourt[0].priceValue).toBe(150_000);
+    // c2 uses cfg.defaultPriceValue = 100_000 for 60 min
+    expect(result.perCourt[1].priceValue).toBe(100_000);
+    expect(result.total).toBe(250_000);
+  });
+
+  it("two courts on different pricing groups → independent totals", () => {
+    // Group A: 100k/h, Group B: 300k/h — both courts booked for 60 min (2 cells)
+    const groupAMatrix: PricingMatrix = {
+      defaultPriceValue: 100_000,
+      pricingRules: [],
+    };
+    const groupBMatrix: PricingMatrix = {
+      defaultPriceValue: 300_000,
+      pricingRules: [],
+    };
+    const courtMatrices = new Map<string, PricingMatrix>([
+      ["c1", groupAMatrix],
+      ["c2", groupBMatrix],
+    ]);
+    const result = resolveGroupBookingPrice(cfg, courts, TZ, courtMatrices);
+    expect(result.perCourt[0].priceValue).toBe(100_000); // c1 @ 100k/h × 1h
+    expect(result.perCourt[1].priceValue).toBe(300_000); // c2 @ 300k/h × 1h
+    expect(result.total).toBe(400_000);
+  });
+
+  it("total equals sum of per-court prices regardless of matrix count", () => {
+    const m1: PricingMatrix = { defaultPriceValue: 120_000, pricingRules: [] };
+    const m2: PricingMatrix = { defaultPriceValue: 180_000, pricingRules: [] };
+    const courtMatrices = new Map<string, PricingMatrix>([
+      ["c1", m1],
+      ["c2", m2],
+    ]);
+    const result = resolveGroupBookingPrice(cfg, courts, TZ, courtMatrices);
+    const manualTotal = result.perCourt.reduce((s, c) => s + c.priceValue, 0);
+    expect(result.total).toBe(manualTotal);
   });
 });

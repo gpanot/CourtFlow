@@ -70,6 +70,7 @@ model Venue {
   playerCoachCredits    PlayerCoachCredit[]
   playerNotes           PlayerNote[]
   registeredPlayers     Player[]               @relation("PlayerRegistrationVenue")
+  pricingGroups         PricingGroup[]
   programPassTypes      ProgramPassType[]
   sessions              Session[]
   signupDuplicateLogs   SignupDuplicateLog[]
@@ -260,13 +261,17 @@ model Court {
   isBookable                 Boolean           @default(false) @map("is_bookable")
   /// * After staff restores from maintenance/stand-by, assignments skip warmup until next maintenance.
   skipWarmupAfterMaintenance Boolean           @default(false) @map("skip_warmup_after_maintenance")
+  pricingGroupId             String?           @map("pricing_group_id")
+  priceOverride              Json?             @map("price_override")
   bookings                   Booking[]
   classInstances             ClassInstance[]
   coachLessons               CoachLesson[]
   courtAssignments           CourtAssignment[]
+  pricingGroup               PricingGroup?     @relation(fields: [pricingGroupId], references: [id], onUpdate: NoAction)
   venue                      Venue             @relation(fields: [venueId], references: [id])
   playerRankings             PlayerRanking[]
 
+  @@index([pricingGroupId])
   @@map("courts")
 }
 
@@ -1441,6 +1446,24 @@ model InvoiceSequence {
 
   @@unique([venueId, type, year])
   @@map("invoice_sequences")
+}
+
+model PricingGroup {
+  id               String   @id @default(cuid())
+  venueId          String   @map("venue_id")
+  name             String
+  sortOrder        Int      @default(0) @map("sort_order")
+  isDefault        Boolean  @default(false) @map("is_default")
+  isUnconfigured   Boolean  @default(false) @map("is_unconfigured")
+  defaultPriceValue Int     @default(0) @map("default_price_value")
+  pricingRules     Json     @default("[]") @map("pricing_rules")
+  createdAt        DateTime @default(now()) @map("created_at")
+  updatedAt        DateTime @updatedAt @map("updated_at")
+  courts           Court[]
+  venue            Venue    @relation(fields: [venueId], references: [id], onDelete: Cascade)
+
+  @@index([venueId])
+  @@map("pricing_groups")
 }
 
 enum SkillLevel {

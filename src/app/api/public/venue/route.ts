@@ -46,13 +46,13 @@ export async function GET(request: NextRequest) {
         bookingStartHour: config.bookingStartHour,
         bookingEndHour: config.bookingEndHour,
         cancellationHours: config.cancellationHours,
-        pricingRules: config.pricingRules,
-        defaultPriceValue: config.defaultPriceValue,
         allow30MinBookings: config.allow30MinBookings,
         defaultDurationMinutes: config.defaultDurationMinutes,
         maxDurationMinutes: config.maxDurationMinutes,
         allowMultiCourtBookings: config.allowMultiCourtBookings,
         maxCourtsPerBooking: config.maxCourtsPerBooking,
+        // pricingRules and defaultPriceValue removed — pricing is now per-court via pricing_groups.
+        // Slot priceValues are embedded directly in the availability response.
       },
       bankName: venue.bankName,
       bankAccount: venue.bankAccount,

@@ -5,9 +5,11 @@ import { requireStaff } from "@/lib/auth";
 import {
   getBookingConfig,
   resolveGroupBookingPrice,
+  resolveCourtPricingMatrix,
   validateMultiCourtBooking,
   GRID_GRANULARITY_MINUTES,
   type MultiCourtEntry,
+  type PricingMatrix,
 } from "@/lib/booking";
 
 export const dynamic = "force-dynamic";
@@ -73,12 +75,27 @@ export async function PATCH(
     // Verify courts belong to the venue and are bookable
     const courtRecords = await prisma.court.findMany({
       where: { id: { in: newCourtIds }, venueId: group.venueId, isBookable: true },
+      select: { id: true, pricingGroupId: true, priceOverride: true },
     });
     if (courtRecords.length !== newCourtIds.length) {
       return error("One or more courts not found or not bookable", 404);
     }
 
-    const pricing = resolveGroupBookingPrice(config, courtsInput, venueTimezone);
+    // Build per-court matrix map
+    const pricingGroups = await prisma.pricingGroup.findMany({
+      where: { venueId: group.venueId },
+      select: { id: true, name: true, isDefault: true, defaultPriceValue: true, pricingRules: true },
+    });
+    const courtMatrices = new Map<string, PricingMatrix>();
+    for (const cr of courtRecords) {
+      const { matrix } = resolveCourtPricingMatrix(cr, pricingGroups, {
+        defaultPriceValue: config.defaultPriceValue,
+        pricingRules: config.pricingRules,
+      });
+      courtMatrices.set(cr.id, matrix);
+    }
+
+    const pricing = resolveGroupBookingPrice(config, courtsInput, venueTimezone, courtMatrices);
     const durationMinutes = newSlotCount * GRID_GRANULARITY_MINUTES;
 
     const result = await prisma.$transaction(async (tx) => {

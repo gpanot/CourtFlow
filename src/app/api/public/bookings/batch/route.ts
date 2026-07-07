@@ -6,9 +6,11 @@ import { getPortalVenueId } from "@/lib/venue-config";
 import {
   getBookingConfig,
   resolveGroupBookingPrice,
+  resolveCourtPricingMatrix,
   validateMultiCourtBooking,
   GRID_GRANULARITY_MINUTES,
   type MultiCourtEntry,
+  type PricingMatrix,
 } from "@/lib/booking";
 import { generatePaymentRef } from "@/modules/courtpay/lib/payment-reference";
 import { buildVietQRUrl } from "@/lib/vietqr";
@@ -59,9 +61,26 @@ export async function POST(request: NextRequest) {
     // Verify all courts belong to the venue and are bookable
     const courtRecords = await prisma.court.findMany({
       where: { id: { in: courtIds }, venueId, isBookable: true },
+      select: { id: true, pricingGroupId: true, priceOverride: true },
     });
     if (courtRecords.length !== courtIds.length) {
       return error("One or more courts not found or not bookable", 404);
+    }
+
+    // Load pricing groups for per-court price resolution
+    const pricingGroups = await prisma.pricingGroup.findMany({
+      where: { venueId },
+      select: { id: true, name: true, isDefault: true, defaultPriceValue: true, pricingRules: true },
+    });
+
+    // Build per-court matrix map
+    const courtMatrices = new Map<string, PricingMatrix>();
+    for (const cr of courtRecords) {
+      const { matrix } = resolveCourtPricingMatrix(cr, pricingGroups, {
+        defaultPriceValue: config.defaultPriceValue,
+        pricingRules: config.pricingRules,
+      });
+      courtMatrices.set(cr.id, matrix);
     }
 
     const dateKey = dateStr.split("T")[0];
@@ -71,7 +90,7 @@ export async function POST(request: NextRequest) {
     const durationMs = rawSlotCount * GRID_GRANULARITY_MINUTES * 60 * 1000;
     const endTime = new Date(startTime.getTime() + durationMs);
 
-    const pricing = resolveGroupBookingPrice(config, courtsInput, venueTimezone);
+    const pricing = resolveGroupBookingPrice(config, courtsInput, venueTimezone, courtMatrices);
     const paymentRef = await generatePaymentRef("booking");
     const holdExpiresAt = new Date(Date.now() + HOLD_MINUTES * 60 * 1000);
 
