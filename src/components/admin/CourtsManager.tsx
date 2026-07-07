@@ -153,7 +153,14 @@ export function CourtsManager({
         </div>
       )}
 
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2">
+      <div
+        className={cn(
+          "grid",
+          showBookable
+            ? "grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3"
+            : "grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2",
+        )}
+      >
         {courts.map((court) => {
           const groupColor = getPricingGroupColor(pricingGroups, court.pricingGroupId);
 
@@ -161,17 +168,28 @@ export function CourtsManager({
             <div
               key={court.id}
               className={cn(
-                "group relative rounded-xl border-2 bg-gradient-to-b from-neutral-800/80 to-neutral-900/80 overflow-hidden transition-all",
-                court.isBookable
-                  ? "border-neutral-700/60 hover:border-purple-600/40"
-                  : "border-neutral-800/60 opacity-75 hover:border-neutral-600/40"
+                "group relative rounded-xl border overflow-hidden transition-all",
+                showBookable
+                  ? cn(
+                      "border-neutral-700/60 bg-neutral-900/60",
+                      court.isBookable ? "hover:border-neutral-600" : "opacity-80",
+                    )
+                  : cn(
+                      "border-2 bg-gradient-to-b from-neutral-800/80 to-neutral-900/80",
+                      court.isBookable
+                        ? "border-neutral-700/60 hover:border-purple-600/40"
+                        : "border-neutral-800/60 opacity-75 hover:border-neutral-600/40",
+                    ),
               )}
             >
-              {/* Court surface pattern */}
-              <div className="absolute inset-2 rounded-lg border border-neutral-700/30 pointer-events-none" />
-              <div className="absolute inset-[18px] border-t border-neutral-700/20 top-1/2 pointer-events-none" />
+              {!showBookable && (
+                <>
+                  <div className="absolute inset-2 rounded-lg border border-neutral-700/30 pointer-events-none" />
+                  <div className="absolute inset-[18px] border-t border-neutral-700/20 top-1/2 pointer-events-none" />
+                </>
+              )}
 
-              {!readOnly && editingId === court.id ? (
+              {editingId === court.id ? (
                 <div className="relative z-10 p-3 space-y-2">
                   <input
                     type="text"
@@ -196,23 +214,39 @@ export function CourtsManager({
                     >Cancel</button>
                   </div>
                 </div>
-              ) : (
-                <div className="relative z-10 p-3 flex flex-col items-center gap-2 min-h-[100px]">
-                  <div className="flex items-start justify-center gap-1.5 w-full px-1">
+              ) : showBookable ? (
+                <div className="relative z-10 p-3 space-y-3">
+                  <div className="flex items-center gap-2 min-w-0 border-b border-neutral-800 pb-2.5">
                     <span
                       className={cn(
-                        "mt-1.5 h-2 w-2 rounded-full shrink-0",
-                        showBookable ? bookableDotColor(court.isBookable) : statusColor(court.status)
+                        "h-2 w-2 rounded-full shrink-0",
+                        bookableDotColor(court.isBookable),
                       )}
                     />
-                    <span className="text-sm font-bold text-white text-center break-words leading-tight">
+                    <h5 className="text-sm font-semibold text-white truncate flex-1 min-w-0">
                       {court.label}
-                    </span>
+                    </h5>
+                    <button
+                      type="button"
+                      onClick={() => startEdit(court)}
+                      className="shrink-0 rounded p-1 text-neutral-500 hover:text-white hover:bg-neutral-800 transition-colors"
+                      title={t("common.rename", "Rename")}
+                      aria-label={`${t("common.rename", "Rename")} ${court.label}`}
+                    >
+                      <Pencil className="h-3.5 w-3.5" />
+                    </button>
                   </div>
 
-                  {showBookable && (
-                    <div className="flex items-center gap-2">
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-between gap-3">
+                      <label
+                        htmlFor={`bookable-${court.id}`}
+                        className="text-xs font-medium text-neutral-400 shrink-0"
+                      >
+                        {t("bookings.bookable")}
+                      </label>
                       <button
+                        id={`bookable-${court.id}`}
                         type="button"
                         role="switch"
                         aria-checked={court.isBookable}
@@ -223,33 +257,53 @@ export function CourtsManager({
                       >
                         <span className={knobCls(court.isBookable)} />
                       </button>
-                      <span className={cn("text-[10px] font-medium", court.isBookable ? "text-purple-300" : "text-neutral-500")}>
-                        {t("bookings.bookable")}
-                      </span>
                     </div>
-                  )}
 
-                  {/* Pricing group selector */}
-                  {showBookable && hasPricingGroups && (
-                    <div className="w-full">
-                      <select
-                        value={court.pricingGroupId ?? ""}
-                        onChange={(e) => assignGroup(court.id, e.target.value || null)}
-                        disabled={assigningGroupId === court.id}
-                        className={cn(
-                          "w-full rounded border px-1.5 py-1 text-[10px] focus:outline-none disabled:opacity-60",
-                          groupColor
-                            ? cn(groupColor.bg, groupColor.text, groupColor.border)
-                            : "border-neutral-700 bg-neutral-800 text-white focus:border-purple-500",
-                        )}
-                      >
-                        <option value="">{t("bookings.noGroupOption", "— no group —")}</option>
-                        {pricingGroups.map((g) => (
-                          <option key={g.id} value={g.id}>{g.name}{g.isDefault ? t("bookings.defaultGroupSuffix", " (default)") : ""}</option>
-                        ))}
-                      </select>
-                    </div>
-                  )}
+                    {hasPricingGroups && (
+                      <div className="flex items-center justify-between gap-2">
+                        <label
+                          htmlFor={`pricing-group-${court.id}`}
+                          className="text-xs font-medium text-neutral-400 shrink-0"
+                        >
+                          {t("bookings.pricingGroup", "Pricing group")}
+                        </label>
+                        <select
+                          id={`pricing-group-${court.id}`}
+                          value={court.pricingGroupId ?? ""}
+                          onChange={(e) => assignGroup(court.id, e.target.value || null)}
+                          disabled={assigningGroupId === court.id}
+                          className={cn(
+                            "min-w-0 flex-1 max-w-[58%] rounded-lg border px-2 py-1 text-xs focus:outline-none disabled:opacity-60",
+                            groupColor
+                              ? cn(groupColor.bg, groupColor.text, groupColor.border)
+                              : "border-neutral-700 bg-neutral-800 text-white focus:border-purple-500",
+                          )}
+                        >
+                          <option value="">{t("bookings.noGroupOption", "— no group —")}</option>
+                          {pricingGroups.map((g) => (
+                            <option key={g.id} value={g.id}>
+                              {g.name}
+                              {g.isDefault ? t("bookings.defaultGroupSuffix", " (default)") : ""}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              ) : (
+                <div className="relative z-10 p-3 flex flex-col items-center gap-2 min-h-[100px]">
+                  <div className="flex items-start justify-center gap-1.5 w-full px-1">
+                    <span
+                      className={cn(
+                        "mt-1.5 h-2 w-2 rounded-full shrink-0",
+                        statusColor(court.status),
+                      )}
+                    />
+                    <span className="text-sm font-bold text-white text-center break-words leading-tight">
+                      {court.label}
+                    </span>
+                  </div>
 
                   {!readOnly && (
                     <div className="absolute top-1.5 right-1.5 hidden gap-0.5 group-hover:flex">
