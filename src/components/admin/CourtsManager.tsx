@@ -1,8 +1,10 @@
 "use client";
 
 import { useState } from "react";
+import { useTranslation } from "react-i18next";
 import { api } from "@/lib/api-client";
 import { cn } from "@/lib/cn";
+import adminI18n from "@/i18n/admin-i18n";
 import { Plus, Pencil, Trash2 } from "lucide-react";
 
 export interface Court {
@@ -25,10 +27,12 @@ export function CourtsManager({
   showBookable?: boolean;
   readOnly?: boolean;
 }) {
+  const { t } = useTranslation("translation", { i18n: adminI18n });
   const [addLabel, setAddLabel] = useState("");
   const [adding, setAdding] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editLabel, setEditLabel] = useState("");
+  const [togglingId, setTogglingId] = useState<string | null>(null);
 
   const addCourt = async () => {
     if (!addLabel.trim()) return;
@@ -68,10 +72,13 @@ export function CourtsManager({
   };
 
   const toggleBookable = async (court: Court) => {
+    if (togglingId) return;
+    setTogglingId(court.id);
     try {
       await api.patch(`/api/courts/${court.id}`, { isBookable: !court.isBookable });
       await onRefresh();
     } catch (err) { alert((err as Error).message); }
+    finally { setTogglingId(null); }
   };
 
   const startEdit = (court: Court) => {
@@ -84,19 +91,33 @@ export function CourtsManager({
     setEditLabel("");
   };
 
+  const bookableDotColor = (isBookable: boolean) =>
+    isBookable ? "bg-green-500" : "bg-neutral-500";
+
   const statusColor = (s: string) => {
     if (s === "active") return "bg-green-500";
     if (s === "maintenance") return "bg-neutral-500";
     return "bg-neutral-600";
   };
 
+  const toggleCls = (on: boolean) => cn(
+    "relative inline-flex h-4 w-7 shrink-0 rounded-full border-2 border-transparent transition-colors focus:outline-none disabled:opacity-50",
+    on ? "bg-purple-600" : "bg-neutral-600"
+  );
+  const knobCls = (on: boolean) => cn(
+    "pointer-events-none inline-block h-3 w-3 rounded-full bg-white shadow transition-transform",
+    on ? "translate-x-3" : "translate-x-0"
+  );
+
   return (
     <div className="space-y-3">
       <div className="flex items-center justify-between">
         <h4 className="text-sm font-medium text-neutral-400 uppercase tracking-wider">
-          Courts
+          {t("bookings.courts")}
         </h4>
-        <span className="text-xs text-neutral-600">{courts.length} court{courts.length !== 1 ? "s" : ""}</span>
+        <span className="text-xs text-neutral-600">
+          {courts.length} {courts.length !== 1 ? t("bookings.courtsPlural") : t("bookings.court")}
+        </span>
       </div>
 
       {courts.length === 0 && (
@@ -110,7 +131,12 @@ export function CourtsManager({
         {courts.map((court) => (
           <div
             key={court.id}
-            className="group relative min-h-[100px] rounded-xl border-2 border-neutral-700/60 bg-gradient-to-b from-neutral-800/80 to-neutral-900/80 overflow-hidden transition-all hover:border-purple-600/40"
+            className={cn(
+              "group relative min-h-[100px] rounded-xl border-2 bg-gradient-to-b from-neutral-800/80 to-neutral-900/80 overflow-hidden transition-all",
+              court.isBookable
+                ? "border-neutral-700/60 hover:border-purple-600/40"
+                : "border-neutral-800/60 opacity-75 hover:border-neutral-600/40"
+            )}
           >
             {/* Court surface pattern */}
             <div className="absolute inset-2 rounded-lg border border-neutral-700/30 pointer-events-none" />
@@ -142,26 +168,39 @@ export function CourtsManager({
                 </div>
               </div>
             ) : (
-              <div className="relative z-10 p-4 flex flex-col items-center justify-center gap-2 h-full">
-                <div className="flex items-center gap-1.5">
-                  <span className={cn("h-2 w-2 rounded-full shrink-0", statusColor(court.status))} />
-                  <span className="text-sm font-bold text-white truncate max-w-[80px]">{court.label}</span>
+              <div className="relative z-10 p-3 flex flex-col items-center justify-center gap-2.5 h-full">
+                <div className="flex items-start justify-center gap-1.5 w-full px-1">
+                  <span
+                    className={cn(
+                      "mt-1.5 h-2 w-2 rounded-full shrink-0",
+                      showBookable ? bookableDotColor(court.isBookable) : statusColor(court.status)
+                    )}
+                  />
+                  <span className="text-sm font-bold text-white text-center break-words leading-tight">
+                    {court.label}
+                  </span>
                 </div>
 
-                <span className="text-[10px] uppercase tracking-wider text-neutral-500 capitalize">{court.status}</span>
-
                 {showBookable && (
-                  <button
-                    onClick={() => toggleBookable(court)}
-                    className={cn(
-                      "rounded-full px-2.5 py-0.5 text-[10px] font-medium transition-colors",
-                      court.isBookable
-                        ? "bg-purple-600/25 text-purple-300 hover:bg-purple-600/40"
-                        : "bg-neutral-700/50 text-neutral-500 hover:bg-neutral-700"
-                    )}
-                  >
-                    {court.isBookable ? "Bookable" : "Not Bookable"}
-                  </button>
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      role="switch"
+                      aria-checked={court.isBookable}
+                      aria-label={`${court.label} — ${t("bookings.bookable")}`}
+                      disabled={togglingId === court.id}
+                      onClick={() => toggleBookable(court)}
+                      className={toggleCls(court.isBookable)}
+                    >
+                      <span className={knobCls(court.isBookable)} />
+                    </button>
+                    <span className={cn(
+                      "text-[10px] font-medium",
+                      court.isBookable ? "text-purple-300" : "text-neutral-500"
+                    )}>
+                      {t("bookings.bookable")}
+                    </span>
+                  </div>
                 )}
 
                 {!readOnly && (

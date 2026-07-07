@@ -1278,67 +1278,83 @@ function GeneralSettingsSection({
     finally { setSaving(false); }
   };
 
-  const inputCls = "w-full rounded border border-neutral-700 bg-neutral-800 px-2 py-1.5 text-xs text-white focus:border-purple-500 focus:outline-none";
+  const inputCls = "w-full rounded border border-neutral-700 bg-neutral-800 px-2 py-1 text-xs text-white focus:border-purple-500 focus:outline-none";
+  const toggleCls = (on: boolean) => cn(
+    "relative mt-0.5 inline-flex h-4 w-7 shrink-0 rounded-full border-2 border-transparent transition-colors focus:outline-none",
+    on ? "bg-purple-600" : "bg-neutral-600"
+  );
+  const knobCls = (on: boolean) => cn(
+    "pointer-events-none inline-block h-3 w-3 rounded-full bg-white shadow transition-transform",
+    on ? "translate-x-3" : "translate-x-0"
+  );
 
   return (
-    <div className="space-y-4">
-      <h4 className="flex items-center gap-2 text-sm font-medium text-neutral-400 uppercase tracking-wider">
-        <Settings className="h-4 w-4" /> {t("bookings.generalSettings")}
-      </h4>
-      <div className="rounded-lg border border-neutral-800 bg-neutral-800/30 p-3 space-y-3">
-        {/* Allow 30-min bookings toggle */}
-        <label className="flex items-center gap-3 cursor-pointer">
+    <div className="space-y-2">
+      <div className="flex items-center justify-between gap-2">
+        <h4 className="flex items-center gap-1.5 text-xs font-medium text-neutral-400 uppercase tracking-wider">
+          <Settings className="h-3.5 w-3.5" /> {t("bookings.generalSettings")}
+        </h4>
+        {dirty && (
           <button
-            role="switch"
-            aria-checked={allow30Min}
-            onClick={() => { setAllow30Min(!allow30Min); setDirty(true); }}
-            className={cn(
-              "relative inline-flex h-5 w-9 shrink-0 rounded-full border-2 border-transparent transition-colors focus:outline-none",
-              allow30Min ? "bg-purple-600" : "bg-neutral-600"
-            )}
+            onClick={save}
+            disabled={saving}
+            className="flex items-center gap-1 rounded-md bg-purple-600 px-2.5 py-1 text-[11px] font-medium text-white hover:bg-purple-500 disabled:opacity-40"
           >
-            <span className={cn("pointer-events-none inline-block h-4 w-4 rounded-full bg-white shadow transition-transform", allow30Min ? "translate-x-4" : "translate-x-0")} />
+            <Save className="h-3 w-3" /> {saving ? t("common.saving") : t("common.save")}
           </button>
-          <span className="text-xs text-neutral-300">{t("bookings.allow30MinBookings")}</span>
-        </label>
-        <p className="text-[10px] text-neutral-500">{t("bookings.allow30MinBookingsHint")}</p>
-
-        {/* Allow multi-court group bookings toggle */}
-        <label className="flex items-center gap-3 cursor-pointer pt-1">
-          <button
-            role="switch"
-            aria-checked={allowMultiCourt}
-            onClick={() => { setAllowMultiCourt(!allowMultiCourt); setDirty(true); }}
-            className={cn(
-              "relative inline-flex h-5 w-9 shrink-0 rounded-full border-2 border-transparent transition-colors focus:outline-none",
-              allowMultiCourt ? "bg-purple-600" : "bg-neutral-600"
-            )}
-          >
-            <span className={cn("pointer-events-none inline-block h-4 w-4 rounded-full bg-white shadow transition-transform", allowMultiCourt ? "translate-x-4" : "translate-x-0")} />
-          </button>
-          <span className="text-xs text-neutral-300">{t("bookings.allowMultiCourtBookings")}</span>
-        </label>
-        <p className="text-[10px] text-neutral-500">{t("bookings.allowMultiCourtBookingsHint")}</p>
-        {allowMultiCourt && (
-          <div className="pt-1">
-            <label className="text-[10px] text-neutral-500 block mb-1">{t("bookings.maxCourtsPerBooking")}</label>
-            <select
-              value={maxCourts}
-              onChange={(e) => { setMaxCourts(Number(e.target.value)); setDirty(true); }}
-              className={inputCls}
-            >
-              {[2, 3, 4, 6, 8].map((n) => (
-                <option key={n} value={n}>{n} {t("bookings.courts", { defaultValue: "courts" })}</option>
-              ))}
-            </select>
-            <p className="text-[10px] text-neutral-500 mt-0.5">{t("bookings.maxCourtsPerBookingHint")}</p>
-          </div>
         )}
+      </div>
+      <div className="rounded-lg border border-neutral-800 bg-neutral-800/30 p-2 space-y-2">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+          <label className="flex items-start gap-2 cursor-pointer">
+            <button
+              role="switch"
+              aria-checked={allow30Min}
+              onClick={() => { setAllow30Min(!allow30Min); setDirty(true); }}
+              className={toggleCls(allow30Min)}
+            >
+              <span className={knobCls(allow30Min)} />
+            </button>
+            <span className="min-w-0">
+              <span className="block text-xs leading-tight text-neutral-300">{t("bookings.allow30MinBookings")}</span>
+              <span className="block text-[10px] leading-snug text-neutral-500">{t("bookings.allow30MinBookingsHint")}</span>
+            </span>
+          </label>
+          <label className="flex items-start gap-2 cursor-pointer">
+            <button
+              role="switch"
+              aria-checked={allowMultiCourt}
+              onClick={() => { setAllowMultiCourt(!allowMultiCourt); setDirty(true); }}
+              className={toggleCls(allowMultiCourt)}
+            >
+              <span className={knobCls(allowMultiCourt)} />
+            </button>
+            <span className="min-w-0">
+              <span className="block text-xs leading-tight text-neutral-300">{t("bookings.allowMultiCourtBookings")}</span>
+              <span className="block text-[10px] leading-snug text-neutral-500">{t("bookings.allowMultiCourtBookingsHint")}</span>
+            </span>
+          </label>
+        </div>
 
-        {/* Duration fields */}
-        <div className="grid grid-cols-2 gap-3 pt-1">
+        <div className={cn("grid gap-2", allowMultiCourt ? "grid-cols-2 sm:grid-cols-4" : "grid-cols-2")}>
+          {allowMultiCourt && (
+            <div>
+              <label className="text-[10px] text-neutral-500" title={t("bookings.maxCourtsPerBookingHint")}>
+                {t("bookings.maxCourtsPerBooking")}
+              </label>
+              <select
+                value={maxCourts}
+                onChange={(e) => { setMaxCourts(Number(e.target.value)); setDirty(true); }}
+                className={inputCls}
+              >
+                {[2, 3, 4, 6, 8].map((n) => (
+                  <option key={n} value={n}>{n} {t("bookings.courts", { defaultValue: "courts" })}</option>
+                ))}
+              </select>
+            </div>
+          )}
           <div>
-            <label className="text-[10px] text-neutral-500 block mb-1">{t("bookings.defaultDurationMin")}</label>
+            <label className="text-[10px] text-neutral-500">{t("bookings.defaultDurationMin")}</label>
             <select
               value={defaultDuration}
               onChange={(e) => { setDefaultDuration(Number(e.target.value)); setDirty(true); }}
@@ -1351,7 +1367,7 @@ function GeneralSettingsSection({
             </select>
           </div>
           <div>
-            <label className="text-[10px] text-neutral-500 block mb-1">{t("bookings.maxDurationMin")}</label>
+            <label className="text-[10px] text-neutral-500">{t("bookings.maxDurationMin")}</label>
             <select
               value={maxDuration}
               onChange={(e) => { setMaxDuration(Number(e.target.value)); setDirty(true); }}
@@ -1367,15 +1383,6 @@ function GeneralSettingsSection({
             </select>
           </div>
         </div>
-        {dirty && (
-          <button
-            onClick={save}
-            disabled={saving}
-            className="flex items-center gap-1.5 rounded-lg bg-purple-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-purple-500 disabled:opacity-40"
-          >
-            <Save className="h-3 w-3" /> {saving ? t("common.saving") : t("common.save")}
-          </button>
-        )}
       </div>
     </div>
   );
