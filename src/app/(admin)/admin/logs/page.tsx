@@ -53,11 +53,48 @@ interface LogsResponse {
   total: number;
   page: number;
   limit: number;
+  summary: AuthLogSummaryItem[];
+}
+
+interface AuthLogSummaryItem {
+  key: string;
+  name: string;
+  phone: string | null;
+  logins: number;
+  failed: number;
+  blocked: number;
+  total: number;
 }
 
 type ActionFilter = "all" | "login_success" | "login_failed" | "biometric_login" | "login_rate_limited";
+type DatePreset = "24h" | "7d" | "30d" | null;
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
+
+function formatDateKey(d: Date): string {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
+}
+
+function getPresetDates(preset: "7d" | "30d"): { from: string; to: string } {
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const to = formatDateKey(today);
+  const from = new Date(today);
+  from.setDate(from.getDate() - (preset === "7d" ? 6 : 29));
+  return { from: formatDateKey(from), to };
+}
+
+function detectDatePreset(dateFrom: string, dateTo: string): DatePreset {
+  if (!dateFrom && !dateTo) return null;
+  for (const preset of ["7d", "30d"] as const) {
+    const { from, to } = getPresetDates(preset);
+    if (dateFrom === from && dateTo === to) return preset;
+  }
+  return null;
+}
 
 function formatDate(iso: string) {
   return new Date(iso).toLocaleString("en-GB", {
@@ -121,6 +158,7 @@ export default function LogsPage() {
   const { t } = useTranslation("translation", { i18n: adminI18n });
   const { token } = useSessionStore();
   const [logs, setLogs] = useState<StaffAuthLog[]>([]);
+  const [summary, setSummary] = useState<AuthLogSummaryItem[]>([]);
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
   const [loading, setLoading] = useState(false);
@@ -129,6 +167,36 @@ export default function LogsPage() {
   const [search, setSearch] = useState("");
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
+  const [datePreset, setDatePreset] = useState<DatePreset>(null);
+
+  const applyDatePreset = (preset: DatePreset) => {
+    if (!preset) {
+      setDatePreset(null);
+      setDateFrom("");
+      setDateTo("");
+      return;
+    }
+    if (preset === "24h") {
+      setDatePreset("24h");
+      setDateFrom("");
+      setDateTo("");
+      return;
+    }
+    const { from, to } = getPresetDates(preset);
+    setDatePreset(preset);
+    setDateFrom(from);
+    setDateTo(to);
+  };
+
+  const handleDateFromChange = (value: string) => {
+    setDateFrom(value);
+    setDatePreset(detectDatePreset(value, dateTo));
+  };
+
+  const handleDateToChange = (value: string) => {
+    setDateTo(value);
+    setDatePreset(detectDatePreset(dateFrom, value));
+  };
 
   const fetchLogs = useCallback(
     async (pg: number) => {
@@ -138,8 +206,12 @@ export default function LogsPage() {
         const qs = new URLSearchParams({ page: String(pg), limit: String(LIMIT) });
         if (actionFilter !== "all") qs.set("action", actionFilter);
         if (search.trim()) qs.set("search", search.trim());
-        if (dateFrom) qs.set("dateFrom", dateFrom);
-        if (dateTo) qs.set("dateTo", dateTo);
+        if (datePreset === "24h") {
+          qs.set("sinceHours", "24");
+        } else {
+          if (dateFrom) qs.set("dateFrom", dateFrom);
+          if (dateTo) qs.set("dateTo", dateTo);
+        }
 
         const res = await fetch(`/api/admin/staff-auth-logs?${qs}`, {
           headers: { Authorization: `Bearer ${token}` },
@@ -148,13 +220,14 @@ export default function LogsPage() {
         const data: LogsResponse = await res.json();
         setLogs(data.logs);
         setTotal(data.total);
+        setSummary(data.summary ?? []);
       } catch (e) {
         console.error(e);
       } finally {
         setLoading(false);
       }
     },
-    [token, actionFilter, search, dateFrom, dateTo],
+    [token, actionFilter, search, dateFrom, dateTo, datePreset],
   );
 
   useEffect(() => {
@@ -188,6 +261,37 @@ export default function LogsPage() {
 
       {/* Filters */}
       <div className="flex flex-wrap items-end gap-3">
+        {/* Date preset pills */}
+        <div className="flex gap-1">
+          {(
+            [
+              { id: "24h" as const, label: t("logs.last24Hours") },
+              { id: "7d" as const, label: t("logs.last7Days") },
+              { id: "30d" as const, label: t("logs.last30Days") },
+            ] as const
+          ).map(({ id, label }) => (
+            <button
+              key={id}
+              onClick={() => applyDatePreset(datePreset === id ? null : id)}
+              className={cn(
+                "rounded-lg px-3 py-1.5 text-xs font-medium transition-colors",
+                datePreset === id
+                  ? "bg-purple-500/20 text-purple-300 ring-1 ring-purple-500/40"
+                  : "text-neutral-400 hover:bg-neutral-800 hover:text-neutral-200",
+              )}
+            >
+              {label}
+            </button>
+          ))}
+          {!datePreset && !dateFrom && !dateTo && (
+            <span className="flex items-center rounded-lg px-2 py-1.5 text-[10px] text-neutral-600">
+              {t("logs.allTime")}
+            </span>
+          )}
+        </div>
+
+        <div className="hidden h-6 w-px bg-neutral-800 sm:block" />
+
         {/* Action filter pills */}
         <div className="flex gap-1">
           {(["all", "login_success", "login_failed", "biometric_login", "login_rate_limited"] as ActionFilter[]).map((f) => {
@@ -232,14 +336,14 @@ export default function LogsPage() {
           <input
             type="date"
             value={dateFrom}
-            onChange={(e) => setDateFrom(e.target.value)}
+            onChange={(e) => handleDateFromChange(e.target.value)}
             className="h-8 rounded-lg border border-neutral-700 bg-neutral-900 px-2 text-xs text-white focus:outline-none focus:ring-1 focus:ring-purple-500"
           />
           <span className="text-neutral-500 text-xs">to</span>
           <input
             type="date"
             value={dateTo}
-            onChange={(e) => setDateTo(e.target.value)}
+            onChange={(e) => handleDateToChange(e.target.value)}
             className="h-8 rounded-lg border border-neutral-700 bg-neutral-900 px-2 text-xs text-white focus:outline-none focus:ring-1 focus:ring-purple-500"
           />
         </div>
@@ -252,6 +356,48 @@ export default function LogsPage() {
           <RefreshCw className={cn("h-3.5 w-3.5", loading && "animate-spin")} />
           {t("logs.refresh")}
         </button>
+      </div>
+
+      {/* Activity summary */}
+      <div className="rounded-xl border border-neutral-800 bg-neutral-900/40 px-4 py-3">
+        <p className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-neutral-500">
+          {t("logs.summaryTitle")}
+        </p>
+        {loading && summary.length === 0 ? (
+          <div className="flex items-center gap-2 text-xs text-neutral-500">
+            <RefreshCw className="h-3.5 w-3.5 animate-spin" />
+            {t("logs.loading")}
+          </div>
+        ) : summary.length === 0 ? (
+          <p className="text-xs text-neutral-500">{t("logs.summaryEmpty")}</p>
+        ) : (
+          <div className="flex flex-wrap gap-2">
+            {summary.map((item) => (
+              <button
+                key={item.key}
+                type="button"
+                onClick={() => setSearch(item.name)}
+                className="inline-flex max-w-full flex-col rounded-lg border border-neutral-800 bg-neutral-900/80 px-3 py-2 text-left transition-colors hover:border-neutral-700 hover:bg-neutral-800/60"
+              >
+                <span className="truncate text-sm font-medium text-white">{item.name}</span>
+                <span className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[11px]">
+                  {item.logins > 0 && (
+                    <span className="text-green-400">{t("logs.summaryLogins", { count: item.logins })}</span>
+                  )}
+                  {item.failed > 0 && (
+                    <span className="text-red-400">{t("logs.summaryFailed", { count: item.failed })}</span>
+                  )}
+                  {item.blocked > 0 && (
+                    <span className="text-amber-400">{t("logs.summaryBlocked", { count: item.blocked })}</span>
+                  )}
+                  {item.logins === 0 && item.failed === 0 && item.blocked === 0 && (
+                    <span className="text-neutral-500">{item.total}</span>
+                  )}
+                </span>
+              </button>
+            ))}
+          </div>
+        )}
       </div>
 
       {/* Table */}

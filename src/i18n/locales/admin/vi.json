@@ -1247,7 +1247,16 @@
     "unknown": "Không xác định",
     "yes": "Có",
     "mobile": "Di động",
-    "desktop": "Máy tính"
+    "desktop": "Máy tính",
+    "summaryTitle": "Tóm tắt hoạt động",
+    "summaryEmpty": "Không có hoạt động trong khoảng thời gian này.",
+    "summaryLogins": "{{count}} lần đăng nhập",
+    "summaryFailed": "{{count}} lần thất bại",
+    "summaryBlocked": "{{count}} lần bị chặn",
+    "last24Hours": "24 giờ qua",
+    "last7Days": "7 ngày",
+    "last30Days": "30 ngày",
+    "allTime": "Tất cả"
   },
   "logErrors": {
     "title": "Nhật ký lỗi",
