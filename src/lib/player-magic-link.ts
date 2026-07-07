@@ -9,8 +9,8 @@
  *      which is server-rewritten to /book/auth/magic (Next.js beforeFiles rewrite).
  *   4. Server verifies JWT (type=magic_login, not expired, jti not used).
  *   5. Server marks the DB row used, mints a normal 30-day session token,
- *      and redirects to /book/auth/magic?session=<session-jwt> (client page).
- *   6. Client page writes session token to localStorage then → /book/bookings.
+ *      and redirects to /book/auth/magic?session=<session-jwt>[&next=<path>] (client page).
+ *   6. Client page writes session token to localStorage then → redirectTo or /book/bookings.
  *
  * Single-use enforcement:
  *   The JWT carries a `jti` (JWT ID). On first visit the server writes
@@ -18,8 +18,9 @@
  *   finds `usedAt` already set and returns 410 Gone.
  *
  * Expiry:
- *   The JWT itself expires in 5 minutes (short, suitable for a direct link).
- *   The DB row mirrors `expiresAt` so expired tokens can be cleaned up later.
+ *   Default TTL is 5 minutes (for bot-generated login links).
+ *   Payment-link magic tokens use a 7-day TTL so booking confirmation emails
+ *   remain useful for a week.
  */
 
 import jwt from "jsonwebtoken";
@@ -31,7 +32,8 @@ const PLAYER_JWT_SECRET =
   process.env.JWT_SECRET ||
   "courtflow-dev-secret-change-in-production";
 
-const MAGIC_TOKEN_TTL_SECONDS = 5 * 60; // 5 minutes
+const MAGIC_TOKEN_TTL_SECONDS = 5 * 60;           // 5 min — bot links
+const PAYMENT_MAGIC_TOKEN_TTL_SECONDS = 7 * 24 * 60 * 60; // 7 days — email pay links
 
 export const TOKEN_TYPE_MAGIC = "magic_login" as const;
 
@@ -39,6 +41,8 @@ export interface MagicLoginTokenPayload {
   playerId: string;
   type: typeof TOKEN_TYPE_MAGIC;
   jti: string;
+  /** Optional path the client should navigate to after login (e.g. /book/pay/:id) */
+  redirectTo?: string;
 }
 
 function getBaseUrl(): string {
@@ -53,36 +57,32 @@ function getBaseUrl(): string {
  * Persists a `PlayerMagicToken` row to enforce single-use semantics server-side.
  * Returns the full absolute URL the booking agent should send to the player.
  *
- * @param playerId  Prisma Player.id
- * @returns         { url } — full HTTPS URL, valid for 5 minutes, single-use
+ * @param playerId    Prisma Player.id
+ * @param redirectTo  Optional path to navigate to after login (e.g. /book/pay/:id).
+ *                    When provided the token TTL is extended to 7 days.
+ * @returns           { url } — full HTTPS URL, single-use
  */
 export async function createMagicLoginToken(
-  playerId: string
+  playerId: string,
+  redirectTo?: string
 ): Promise<{ url: string }> {
   const jti = randomUUID();
-  const expiresAt = new Date(Date.now() + MAGIC_TOKEN_TTL_SECONDS * 1000);
+  const ttl = redirectTo ? PAYMENT_MAGIC_TOKEN_TTL_SECONDS : MAGIC_TOKEN_TTL_SECONDS;
+  const expiresAt = new Date(Date.now() + ttl * 1000);
 
   const payload: MagicLoginTokenPayload = {
     playerId,
     type: TOKEN_TYPE_MAGIC,
     jti,
+    ...(redirectTo ? { redirectTo } : {}),
   };
 
-  const token = jwt.sign(payload, PLAYER_JWT_SECRET, {
-    expiresIn: MAGIC_TOKEN_TTL_SECONDS,
-    // jti is already in the payload object — don't pass jwtid again or jwt.sign throws
-  });
+  const token = jwt.sign(payload, PLAYER_JWT_SECRET, { expiresIn: ttl });
 
   await prisma.playerMagicToken.create({
-    data: {
-      playerId,
-      jti,
-      expiresAt,
-    },
+    data: { playerId, jti, expiresAt },
   });
 
-  // /auth/magic is the clean public URL on the CourtPass host.
-  // next.config.ts beforeFiles rewrites /auth/magic → /book/auth/magic internally.
   const url = `${getBaseUrl()}/auth/magic?token=${token}`;
   return { url };
 }
@@ -90,7 +90,7 @@ export async function createMagicLoginToken(
 /**
  * Verifies and consumes a magic login token.
  *
- * Returns the playerId on success.
+ * Returns the playerId and optional redirectTo path on success.
  * Throws a MagicLinkError with a machine-readable code on all failure paths.
  */
 export class MagicLinkError extends Error {
@@ -105,7 +105,7 @@ export class MagicLinkError extends Error {
 
 export async function consumeMagicLoginToken(
   rawToken: string
-): Promise<{ playerId: string }> {
+): Promise<{ playerId: string; redirectTo?: string }> {
   let payload: MagicLoginTokenPayload;
 
   try {
@@ -122,7 +122,6 @@ export async function consumeMagicLoginToken(
     throw new MagicLinkError("Invalid login link.", "invalid");
   }
 
-  // Single-use check: findUnique by jti then atomically mark used
   const row = await prisma.playerMagicToken.findUnique({
     where: { jti: payload.jti },
     select: { id: true, usedAt: true, expiresAt: true },
@@ -139,11 +138,13 @@ export async function consumeMagicLoginToken(
     );
   }
 
-  // Mark as used atomically — a second concurrent request will find usedAt set
   await prisma.playerMagicToken.update({
     where: { id: row.id },
     data: { usedAt: new Date() },
   });
 
-  return { playerId: payload.playerId };
+  return {
+    playerId: payload.playerId,
+    ...(payload.redirectTo ? { redirectTo: payload.redirectTo } : {}),
+  };
 }

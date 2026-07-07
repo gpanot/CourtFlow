@@ -5,7 +5,7 @@ import { requireAdminAccess } from "@/lib/auth";
 import { assertVenueAccess } from "@/lib/venue-scope";
 import { createOpenPlayRegistration } from "@/lib/open-play";
 import { parseDateKey } from "@/lib/date";
-import { sendBookingEmail } from "@/lib/email/send";
+import { sendBookingEmail, wrapPaymentUrlWithMagicLogin } from "@/lib/email/send";
 
 export const dynamic = "force-dynamic";
 
@@ -51,10 +51,11 @@ export async function POST(request: NextRequest) {
 
     if (player?.email) {
       const appUrl = process.env.APP_URL ?? "";
-      const paymentUrl = `${appUrl}/book/open-play/pay/${reg.id}`;
+      const rawPaymentUrl = `${appUrl}/book/open-play/pay/${reg.id}`;
+      const paymentUrl = await wrapPaymentUrlWithMagicLogin(body.playerId, rawPaymentUrl);
       const dateStr = reg.date.toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" });
       const timeStr = `${reg.startTime.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })} – ${reg.endTime.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}`;
-      console.log(`[staffOpenPlayRegister] sending email to=${player.email} paymentUrl=${paymentUrl}`);
+      console.log(`[staffOpenPlayRegister] sending email to=${player.email} paymentUrl=${rawPaymentUrl}`);
       void sendBookingEmail({
         to: player.email,
         playerName: player.name,

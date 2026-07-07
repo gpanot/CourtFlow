@@ -27,8 +27,9 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
   }
 
   let playerId: string;
+  let redirectTo: string | undefined;
   try {
-    ({ playerId } = await consumeMagicLoginToken(rawToken));
+    ({ playerId, redirectTo } = await consumeMagicLoginToken(rawToken));
   } catch (e) {
     if (e instanceof MagicLinkError) {
       return errorRedirect(e.code);
@@ -52,7 +53,8 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
 
   // Redirect to the client-side page that persists the token to localStorage.
   // /auth/magic is the clean public URL; next.config.ts rewrites it to /book/auth/magic.
+  const nextParam = redirectTo ? `&next=${encodeURIComponent(redirectTo)}` : "";
   return NextResponse.redirect(
-    `${getBaseUrl()}/auth/magic?session=${encodeURIComponent(sessionToken)}`
+    `${getBaseUrl()}/auth/magic?session=${encodeURIComponent(sessionToken)}${nextParam}`
   );
 }

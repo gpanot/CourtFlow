@@ -9,7 +9,7 @@ import {
   GRID_GRANULARITY_MINUTES,
   type MultiCourtEntry,
 } from "@/lib/booking";
-import { sendBookingEmail } from "@/lib/email/send";
+import { sendBookingEmail, wrapPaymentUrlWithMagicLogin } from "@/lib/email/send";
 export const dynamic = "force-dynamic";
 
 export async function POST(request: NextRequest) {
@@ -145,8 +145,9 @@ export async function POST(request: NextRequest) {
         `${result.group.startTime.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })} – ` +
         `${result.group.endTime.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}`;
       // Link to the first booking so the player can pay
-      const paymentUrl = `${appUrl}/book/pay/${result.bookings[0].id}`;
-      console.log(`[staffBatchBooking] sending email to=${player.email} courts="${courtLabels}" paymentUrl=${paymentUrl}`);
+      const rawPaymentUrl = `${appUrl}/book/pay/${result.bookings[0].id}`;
+      const paymentUrl = await wrapPaymentUrlWithMagicLogin(body.playerId, rawPaymentUrl);
+      console.log(`[staffBatchBooking] sending email to=${player.email} courts="${courtLabels}" paymentUrl=${rawPaymentUrl}`);
       void sendBookingEmail({
         to: player.email,
         playerName: player.name,

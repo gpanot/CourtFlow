@@ -8,7 +8,7 @@ import {
   validateBookingDuration,
   GRID_GRANULARITY_MINUTES,
 } from "@/lib/booking";
-import { sendBookingEmail } from "@/lib/email/send";
+import { sendBookingEmail, wrapPaymentUrlWithMagicLogin } from "@/lib/email/send";
 
 export const dynamic = "force-dynamic";
 
@@ -137,10 +137,11 @@ export async function POST(request: NextRequest) {
     console.log(`[staffBooking] created bookingId=${booking.id} player="${booking.player.name}" email=${booking.player.email ?? "NONE"} paymentStatus=pending`);
     if (booking.player.email) {
       const appUrl = process.env.APP_URL ?? "";
-      const paymentUrl = `${appUrl}/book/pay/${booking.id}`;
+      const rawPaymentUrl = `${appUrl}/book/pay/${booking.id}`;
+      const paymentUrl = await wrapPaymentUrlWithMagicLogin(booking.player.id, rawPaymentUrl);
       const dateStr = booking.date.toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" });
       const timeStr = `${booking.startTime.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })} – ${booking.endTime.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}`;
-      console.log(`[staffBooking] sending confirmation email to=${booking.player.email} paymentUrl=${paymentUrl}`);
+      console.log(`[staffBooking] sending confirmation email to=${booking.player.email} paymentUrl=${rawPaymentUrl}`);
       void sendBookingEmail({
         to: booking.player.email,
         playerName: booking.player.name,

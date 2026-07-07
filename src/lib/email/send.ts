@@ -1,5 +1,6 @@
 import { prisma } from "../db";
 import { getResendClient } from "./client";
+import { createMagicLoginToken } from "../player-magic-link";
 
 const FROM = "noreply_bookings@thecourtflow.com";
 
@@ -261,6 +262,34 @@ function buildEmail(params: SendBookingEmailParams): { subject: string; html: st
         html: `<p>${greeting}</p><p>A staff member has created a <strong>${label}</strong> for you. Your spot is reserved and payment is pending.</p>${detailsBlock}${payButton}<p style="margin-top:24px;">If you have any questions, please contact the venue directly.</p>${signature(details.venueName)}`,
       };
     }
+  }
+}
+
+/**
+ * Wraps a payment URL in a magic login link for the given player.
+ *
+ * When the player clicks "Pay now" in a booking email they are automatically
+ * signed in and land directly on the payment page — no login step needed.
+ * Falls back to the bare paymentUrl if the player has no account or token
+ * creation fails (so the email is always sent).
+ *
+ * @param playerId   Prisma Player.id
+ * @param paymentUrl Absolute payment URL (e.g. https://…/book/pay/:id)
+ */
+export async function wrapPaymentUrlWithMagicLogin(
+  playerId: string,
+  paymentUrl: string
+): Promise<string> {
+  try {
+    // Extract the path portion so it is embedded in the JWT, not the full URL.
+    // The magic-link handler redirects to this path after writing the session token.
+    const url = new URL(paymentUrl);
+    const redirectTo = url.pathname + url.search;
+    const { url: magicUrl } = await createMagicLoginToken(playerId, redirectTo);
+    return magicUrl;
+  } catch (err) {
+    console.warn("[wrapPaymentUrlWithMagicLogin] Failed to create magic token — using bare URL:", err);
+    return paymentUrl;
   }
 }
 

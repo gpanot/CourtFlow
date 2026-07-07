@@ -24,8 +24,10 @@ function MagicAuthContent() {
     if (session) {
       setPlayerToken(session);
       setState("success");
-      // Give the token write a tick to flush before navigating
-      setTimeout(() => router.replace("/book/bookings"), 100);
+      // Navigate to the redirectTo path if provided, otherwise bookings list
+      const next = searchParams.get("next");
+      const dest = next && next.startsWith("/book") ? next : "/book/bookings";
+      setTimeout(() => router.replace(dest), 100);
       return;
     }
 
@@ -50,7 +52,7 @@ function MagicAuthContent() {
   const messages: Record<Exclude<State, "loading" | "success">, { heading: string; body: string }> = {
     expired: {
       heading: "Link expired",
-      body: "This login link has expired (links are valid for 5 minutes). Please ask for a new one or sign in with your email.",
+      body: "This login link has expired. Please ask for a new one or sign in with your email.",
     },
     already_used: {
       heading: "Link already used",

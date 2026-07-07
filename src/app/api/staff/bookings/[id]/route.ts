@@ -3,7 +3,7 @@ import { prisma } from "@/lib/db";
 import { json, error, parseBody, notFound } from "@/lib/api-helpers";
 import { requireStaff } from "@/lib/auth";
 import { getBookingConfig, resolveBookingPrice } from "@/lib/booking";
-import { sendBookingEmail } from "@/lib/email/send";
+import { sendBookingEmail, wrapPaymentUrlWithMagicLogin } from "@/lib/email/send";
 
 export const dynamic = "force-dynamic";
 
@@ -196,7 +196,8 @@ export async function PATCH(
     console.log(`[staffEditBooking] bookingId=${booking.id} player="${booking.player.name}" email=${booking.player.email ?? "NONE"}`);
     if (booking.player.email) {
       const appUrl = process.env.APP_URL ?? "";
-      const paymentUrl = `${appUrl}/book/pay/${booking.id}`;
+      const rawPaymentUrl = `${appUrl}/book/pay/${booking.id}`;
+      const paymentUrl = await wrapPaymentUrlWithMagicLogin(booking.player.id, rawPaymentUrl);
       const dateStr = booking.date.toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" });
       const timeStr = `${booking.startTime.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })} – ${booking.endTime.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}`;
       console.log(`[staffEditBooking] sending reschedule email to=${booking.player.email}`);
