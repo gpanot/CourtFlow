@@ -2025,8 +2025,27 @@ function CancellationPolicySection({
   const [partialCancelHours, setPartialCancelHours] = useState(rawPolicy.partialCancelHours ?? 12);
   const [noCancelHours, setNoCancelHours] = useState(rawPolicy.noCancelHours ?? 4);
   const [saving, setSaving] = useState(false);
+  const [dirty, setDirty] = useState(false);
   const [savedMsg, setSavedMsg] = useState("");
   const [saveErr, setSaveErr] = useState("");
+
+  useEffect(() => {
+    const policy = (settings?.cancellationPolicy as {
+      freeCancelHours?: number;
+      partialCancelHours?: number;
+      noCancelHours?: number;
+    }) ?? {};
+    setFreeCancelHours(policy.freeCancelHours ?? 24);
+    setPartialCancelHours(policy.partialCancelHours ?? 12);
+    setNoCancelHours(policy.noCancelHours ?? 4);
+    setDirty(false);
+  }, [settings]);
+
+  const markDirty = () => {
+    setDirty(true);
+    setSavedMsg("");
+    setSaveErr("");
+  };
 
   async function save() {
     setSaving(true);
@@ -2034,6 +2053,7 @@ function CancellationPolicySection({
     setSavedMsg("");
     try {
       await api.put(`/api/admin/venues/${venueId}/cancellation-config`, { freeCancelHours, partialCancelHours, noCancelHours });
+      setDirty(false);
       setSavedMsg(t("common.saved"));
       onRefresh();
     } catch (e) {
@@ -2063,7 +2083,7 @@ function CancellationPolicySection({
               type="number"
               min={1}
               value={freeCancelHours}
-              onChange={(e) => setFreeCancelHours(Number(e.target.value))}
+              onChange={(e) => { setFreeCancelHours(Number(e.target.value)); markDirty(); }}
               className="w-24 rounded-lg border border-neutral-700 bg-neutral-800 px-3 py-1.5 text-sm text-white focus:border-purple-500 focus:outline-none"
             />
             <span className="text-xs text-neutral-500">{t("bookings.hoursBeforeStart")}</span>
@@ -2078,7 +2098,7 @@ function CancellationPolicySection({
               type="number"
               min={1}
               value={partialCancelHours}
-              onChange={(e) => setPartialCancelHours(Number(e.target.value))}
+              onChange={(e) => { setPartialCancelHours(Number(e.target.value)); markDirty(); }}
               className="w-24 rounded-lg border border-neutral-700 bg-neutral-800 px-3 py-1.5 text-sm text-white focus:border-purple-500 focus:outline-none"
             />
             <span className="text-xs text-neutral-500">{t("bookings.hoursBeforeStart")}</span>
@@ -2093,7 +2113,7 @@ function CancellationPolicySection({
               type="number"
               min={0}
               value={noCancelHours}
-              onChange={(e) => setNoCancelHours(Number(e.target.value))}
+              onChange={(e) => { setNoCancelHours(Number(e.target.value)); markDirty(); }}
               className="w-24 rounded-lg border border-neutral-700 bg-neutral-800 px-3 py-1.5 text-sm text-white focus:border-purple-500 focus:outline-none"
             />
             <span className="text-xs text-neutral-500">{t("bookings.hoursBeforeStart")}</span>
@@ -2101,16 +2121,18 @@ function CancellationPolicySection({
         </div>
       </div>
 
-      <div className="flex items-center gap-3">
-        <button
-          onClick={save}
-          disabled={saving}
-          className="flex items-center gap-1.5 rounded-lg bg-purple-600 px-4 py-2 text-sm font-medium text-white hover:bg-purple-500 disabled:opacity-50"
-        >
-          <Save className="h-3.5 w-3.5" />
-          {saving ? t("bookings.savingSettings") : t("bookings.saveSettings")}
-        </button>
-        {savedMsg && <span className="text-xs text-emerald-400">{savedMsg}</span>}
+      <div className="flex items-center gap-3 min-h-[36px]">
+        {dirty && (
+          <button
+            onClick={save}
+            disabled={saving}
+            className="flex items-center gap-1.5 rounded-lg bg-purple-600 px-4 py-2 text-sm font-medium text-white hover:bg-purple-500 disabled:opacity-50"
+          >
+            <Save className="h-3.5 w-3.5" />
+            {saving ? t("bookings.savingSettings") : t("bookings.saveSettings")}
+          </button>
+        )}
+        {savedMsg && !dirty && <span className="text-xs text-emerald-400">{savedMsg}</span>}
         {saveErr && <span className="text-xs text-red-400">{saveErr}</span>}
       </div>
     </div>
