@@ -113,19 +113,28 @@ html[data-palette="sage"][data-theme="light"] {
   box-shadow: 0 0 0 2px color-mix(in srgb, var(--client-primary) 45%, transparent);
 }
 
-/* Native light palette overrides for utility-heavy dark UI. */
+/* ─── Premium Light Theme — Linear/Stripe/Vercel-inspired SaaS admin ─────────
+   Applied via html.cf-theme-light (toggled by applyThemeMode in theme-mode.ts)
+   Design tokens:
+     Background:   #F7F8FC (off-white page)  #FFFFFF (card/panel surface)
+     Border:       #E6E8EF (subtle 1px)
+     Brand:        #7C3AED (purple primary)   #F3E8FF (lavender selection)
+     Text:         #111827 (headings)         #6B7280 (secondary)
+     Shadows:      0 1px 3px rgba(17,24,39,.06)
+   ─────────────────────────────────────────────────────────────────────────── */
 html.cf-theme-light {
   color-scheme: light;
+  font-family: "Inter", system-ui, -apple-system, sans-serif;
 }
 
 html.cf-theme-light body {
-  background: #ffffff !important;
-  color: #0f172a !important;
+  background-color: #F7F8FC !important;
+  color: #111827 !important;
 }
 
-/* Staff PWA light shell: white page + tab/header areas (avoid slate-tinted #f8fafc). */
+/* ── Page & shell backgrounds ─────────────────────────────────────────────── */
 html.cf-theme-light .bg-neutral-950 {
-  background-color: #ffffff !important;
+  background-color: #F7F8FC !important;
 }
 
 html.cf-theme-light .bg-neutral-950\/40,
@@ -136,9 +145,10 @@ html.cf-theme-light .bg-neutral-950\/80,
 html.cf-theme-light .bg-neutral-950\/90,
 html.cf-theme-light .bg-neutral-950\/95,
 html.cf-theme-light .bg-neutral-950\/98 {
-  background-color: #ffffff !important;
+  background-color: rgba(255, 255, 255, 0.97) !important;
 }
 
+/* Cards, panels, sidebar → white surface */
 html.cf-theme-light .bg-neutral-900,
 html.cf-theme-light .bg-neutral-900\/30,
 html.cf-theme-light .bg-neutral-900\/40,
@@ -149,71 +159,551 @@ html.cf-theme-light .bg-neutral-900\/80,
 html.cf-theme-light .bg-neutral-900\/85,
 html.cf-theme-light .bg-neutral-900\/90,
 html.cf-theme-light .bg-neutral-900\/95 {
-  background-color: #ffffff !important;
+  background-color: #FFFFFF !important;
+  box-shadow: 0 1px 3px rgba(17, 24, 39, 0.06), 0 1px 2px rgba(17, 24, 39, 0.04) !important;
 }
 
+/* Subtle surface (hover backgrounds, inputs) */
 html.cf-theme-light .bg-neutral-800,
-html.cf-theme-light .bg-neutral-800\/50,
-html.cf-theme-light .bg-neutral-800\/40 {
-  background-color: #f1f5f9 !important;
+html.cf-theme-light .bg-neutral-800\/40,
+html.cf-theme-light .bg-neutral-800\/50 {
+  background-color: #F0F1F7 !important;
+  box-shadow: none !important;
 }
 
+/* Dividers / muted backgrounds */
 html.cf-theme-light .bg-neutral-700,
 html.cf-theme-light .bg-neutral-700\/40 {
-  background-color: #e2e8f0 !important;
+  background-color: #E6E8EF !important;
+  box-shadow: none !important;
 }
 
 html.cf-theme-light .bg-black {
-  background-color: #ffffff !important;
+  background-color: #FFFFFF !important;
 }
 
+/* Overlays / backdrops */
 html.cf-theme-light .bg-black\/40,
 html.cf-theme-light .bg-black\/55,
 html.cf-theme-light .bg-black\/60,
+html.cf-theme-light .bg-black\/70,
 html.cf-theme-light .bg-black\/75,
 html.cf-theme-light .bg-black\/80 {
-  background-color: rgba(15, 23, 42, 0.08) !important;
+  background-color: rgba(17, 24, 39, 0.35) !important;
 }
 
+/* ── Borders ──────────────────────────────────────────────────────────────── */
 html.cf-theme-light .border-neutral-900,
 html.cf-theme-light .border-neutral-800,
 html.cf-theme-light .border-neutral-800\/70,
 html.cf-theme-light .border-neutral-700,
 html.cf-theme-light .border-neutral-700\/70,
 html.cf-theme-light .border-neutral-600 {
-  border-color: #dbe3ef !important;
+  border-color: #E6E8EF !important;
 }
 
+html.cf-theme-light .divide-neutral-800\/50 > * + *,
+html.cf-theme-light .divide-neutral-800\/60 > * + *,
+html.cf-theme-light .divide-neutral-800 > * + * {
+  border-color: #E6E8EF !important;
+}
+
+/* ── Typography ───────────────────────────────────────────────────────────── */
 html.cf-theme-light .text-white {
-  color: #0f172a !important;
+  color: #111827 !important;
 }
 
 html.cf-theme-light .text-neutral-200,
 html.cf-theme-light .text-neutral-300 {
-  color: #1e293b !important;
+  color: #374151 !important;
 }
 
-html.cf-theme-light .text-neutral-400,
+html.cf-theme-light .text-neutral-400 {
+  color: #6B7280 !important;
+}
+
 html.cf-theme-light .text-neutral-500 {
-  color: #475569 !important;
+  color: #9CA3AF !important;
 }
 
 html.cf-theme-light .text-neutral-600 {
-  color: #64748b !important;
+  color: #9CA3AF !important;
 }
 
+/* ── Interactive states ───────────────────────────────────────────────────── */
 html.cf-theme-light .hover\:bg-neutral-800:hover,
+html.cf-theme-light .hover\:bg-neutral-800\/30:hover,
+html.cf-theme-light .hover\:bg-neutral-800\/40:hover,
 html.cf-theme-light .hover\:bg-neutral-800\/50:hover,
 html.cf-theme-light .hover\:bg-neutral-800\/80:hover,
 html.cf-theme-light .hover\:bg-neutral-700:hover,
 html.cf-theme-light .hover\:bg-black\/75:hover,
 html.cf-theme-light .hover\:bg-black\/80:hover {
-  background-color: #e2e8f0 !important;
+  background-color: #EEF0F8 !important;
+}
+
+html.cf-theme-light .hover\:text-white:hover {
+  color: #111827 !important;
+}
+
+html.cf-theme-light .hover\:text-neutral-300:hover {
+  color: #374151 !important;
 }
 
 html.cf-theme-light .hover\:border-neutral-700:hover,
 html.cf-theme-light .hover\:border-neutral-600:hover {
-  border-color: #c7d2e3 !important;
+  border-color: #C9CDD9 !important;
+}
+
+html.cf-theme-light .active\:text-neutral-300 {
+  color: #374151 !important;
+}
+
+/* ── Sidebar navigation ───────────────────────────────────────────────────── */
+/* Sidebar shell */
+html.cf-theme-light aside {
+  background-color: #FFFFFF !important;
+  border-right-color: #E6E8EF !important;
+}
+
+/* Active nav item: lavender selection bg + purple text */
+html.cf-theme-light .bg-purple-600\/20 {
+  background-color: #F3E8FF !important;
+}
+
+/* Section labels */
+html.cf-theme-light .text-purple-400 {
+  color: #7C3AED !important;
+}
+
+html.cf-theme-light .text-purple-500 {
+  color: #6D28D9 !important;
+}
+
+/* Buttons: lang / theme toggle */
+html.cf-theme-light .bg-neutral-900.border-neutral-700 {
+  background-color: #F7F8FC !important;
+  border-color: #E6E8EF !important;
+}
+
+/* ── Mobile header & bottom bar ───────────────────────────────────────────── */
+html.cf-theme-light .backdrop-blur-sm {
+  backdrop-filter: blur(12px);
+}
+
+/* ── Skeleton / loading states ────────────────────────────────────────────── */
+html.cf-theme-light .animate-pulse {
+  background-color: #EEF0F8 !important;
+}
+
+html.cf-theme-light .animate-pulse.border-neutral-800,
+html.cf-theme-light .animate-pulse.bg-neutral-900 {
+  border-color: #E6E8EF !important;
+  background-color: #EEF0F8 !important;
+}
+
+/* ── Status badges — pastel backgrounds with dark readable text ───────────── */
+/* Green (confirmed, paid) */
+html.cf-theme-light .bg-green-600\/20,
+html.cf-theme-light .bg-green-500\/10 {
+  background-color: #D1FAE5 !important;
+}
+html.cf-theme-light .text-green-400 {
+  color: #065F46 !important;
+}
+
+/* Teal (coaching) */
+html.cf-theme-light .bg-teal-600\/20,
+html.cf-theme-light .bg-teal-500\/10 {
+  background-color: #CCFBF1 !important;
+}
+html.cf-theme-light .text-teal-400 {
+  color: #0F766E !important;
+}
+
+/* Emerald (open play) */
+html.cf-theme-light .bg-emerald-600\/20,
+html.cf-theme-light .bg-emerald-500\/10 {
+  background-color: #D1FAE5 !important;
+}
+html.cf-theme-light .text-emerald-400 {
+  color: #065F46 !important;
+}
+
+/* Amber (warnings) */
+html.cf-theme-light .bg-amber-600\/20,
+html.cf-theme-light .bg-amber-500\/10 {
+  background-color: #FEF3C7 !important;
+}
+html.cf-theme-light .text-amber-400 {
+  color: #92400E !important;
+}
+
+/* Red (errors, cancelled) */
+html.cf-theme-light .bg-red-600\/20,
+html.cf-theme-light .bg-red-500\/10 {
+  background-color: #FEE2E2 !important;
+}
+html.cf-theme-light .text-red-400 {
+  color: #991B1B !important;
+}
+
+/* Blue */
+html.cf-theme-light .bg-blue-600\/20,
+html.cf-theme-light .bg-blue-500\/10 {
+  background-color: #DBEAFE !important;
+}
+html.cf-theme-light .text-blue-400 {
+  color: #1E40AF !important;
+}
+
+/* Yellow */
+html.cf-theme-light .bg-yellow-600\/20 {
+  background-color: #FEF9C3 !important;
+}
+html.cf-theme-light .text-yellow-400 {
+  color: #854D0E !important;
+}
+
+/* Neutral muted badge */
+html.cf-theme-light .bg-neutral-600\/20 {
+  background-color: #F1F2F7 !important;
+}
+
+/* ── Alert banners ─────────────────────────────────────────────────────────── */
+html.cf-theme-light .bg-red-500\/10.border-red-500\/20 {
+  background-color: #FEF2F2 !important;
+  border-color: #FECACA !important;
+}
+html.cf-theme-light .bg-teal-500\/10.border-teal-500\/20 {
+  background-color: #F0FDFA !important;
+  border-color: #99F6E4 !important;
+}
+html.cf-theme-light .bg-purple-500\/10.border-purple-500\/20 {
+  background-color: #FAF5FF !important;
+  border-color: #E9D5FF !important;
+}
+
+/* Alert text */
+html.cf-theme-light .text-neutral-300 {
+  color: #374151 !important;
+}
+
+/* ── Capacity bar track ────────────────────────────────────────────────────── */
+html.cf-theme-light .bg-neutral-700.overflow-hidden {
+  background-color: #E6E8EF !important;
+}
+
+/* ── Spinner ──────────────────────────────────────────────────────────────── */
+html.cf-theme-light .border-neutral-700 {
+  border-color: #E6E8EF !important;
+}
+html.cf-theme-light .border-t-neutral-400 {
+  border-top-color: #7C3AED !important;
+}
+
+/* ── Table rows ───────────────────────────────────────────────────────────── */
+html.cf-theme-light .hover\:bg-neutral-800\/30:hover {
+  background-color: #F7F8FC !important;
+}
+
+html.cf-theme-light .border-neutral-800\/50 {
+  border-color: #E6E8EF !important;
+}
+
+html.cf-theme-light .border-neutral-800\/60 {
+  border-color: #E6E8EF !important;
+}
+
+/* ── Scroll container clip-path & overflow ────────────────────────────────── */
+html.cf-theme-light .bg-neutral-900.overflow-hidden {
+  box-shadow: 0 1px 3px rgba(17, 24, 39, 0.07), 0 1px 2px rgba(17, 24, 39, 0.04) !important;
+}
+
+/* ── Extra badge colors ────────────────────────────────────────────────────── */
+/* Orange (proof submitted) */
+html.cf-theme-light .bg-orange-600\/20 {
+  background-color: #FFEDD5 !important;
+}
+html.cf-theme-light .text-orange-400 {
+  color: #9A3412 !important;
+}
+
+/* Sky / light blue (VietQR) */
+html.cf-theme-light .bg-sky-600\/20 {
+  background-color: #E0F2FE !important;
+}
+html.cf-theme-light .text-sky-400 {
+  color: #075985 !important;
+}
+
+/* Violet (bank transfer) */
+html.cf-theme-light .bg-violet-600\/20 {
+  background-color: #EDE9FE !important;
+}
+html.cf-theme-light .text-violet-400 {
+  color: #5B21B6 !important;
+}
+
+/* ── /15 opacity badge variants (payroll, analytics, memberships) ─────────── */
+html.cf-theme-light .bg-green-600\/15,
+html.cf-theme-light .bg-green-500\/15 {
+  background-color: #D1FAE5 !important;
+}
+html.cf-theme-light .bg-amber-600\/15,
+html.cf-theme-light .bg-amber-500\/15 {
+  background-color: #FEF3C7 !important;
+}
+html.cf-theme-light .bg-red-600\/15,
+html.cf-theme-light .bg-red-500\/15 {
+  background-color: #FEE2E2 !important;
+}
+html.cf-theme-light .bg-blue-600\/15,
+html.cf-theme-light .bg-blue-500\/15 {
+  background-color: #DBEAFE !important;
+}
+html.cf-theme-light .bg-purple-600\/15,
+html.cf-theme-light .bg-purple-500\/15 {
+  background-color: #F3E8FF !important;
+}
+html.cf-theme-light .bg-teal-600\/15,
+html.cf-theme-light .bg-teal-500\/15 {
+  background-color: #CCFBF1 !important;
+}
+
+/* ── Saturated (500) text variants in analytics, payroll ─────────────────── */
+html.cf-theme-light .text-green-500 {
+  color: #065F46 !important;
+}
+html.cf-theme-light .text-amber-500 {
+  color: #92400E !important;
+}
+html.cf-theme-light .text-red-500 {
+  color: #991B1B !important;
+}
+html.cf-theme-light .text-blue-500 {
+  color: #1E40AF !important;
+}
+html.cf-theme-light .text-teal-300 {
+  color: #0F766E !important;
+}
+
+/* ── Blue 800/900 (coaching page alert) ──────────────────────────────────── */
+html.cf-theme-light .bg-blue-900\/10,
+html.cf-theme-light .bg-blue-900\/20 {
+  background-color: #EFF6FF !important;
+}
+html.cf-theme-light .border-blue-800\/40 {
+  border-color: #BFDBFE !important;
+}
+
+/* ── Green 500/5 (courtpay-players) ─────────────────────────────────────── */
+html.cf-theme-light .bg-green-500\/5 {
+  background-color: #F0FDF4 !important;
+}
+html.cf-theme-light .border-green-500\/20 {
+  border-color: #BBF7D0 !important;
+}
+html.cf-theme-light .border-green-500\/40 {
+  border-color: #86EFAC !important;
+}
+
+/* ── Teal 600/10 (coach portal) ──────────────────────────────────────────── */
+html.cf-theme-light .bg-teal-600\/10 {
+  background-color: #F0FDFA !important;
+}
+html.cf-theme-light .bg-teal-500\/10 {
+  background-color: #F0FDFA !important;
+}
+html.cf-theme-light .border-teal-600\/20,
+html.cf-theme-light .border-teal-500\/20 {
+  border-color: #99F6E4 !important;
+}
+html.cf-theme-light .border-teal-600\/30 {
+  border-color: #5EEAD4 !important;
+}
+
+/* ── Amber 600/15 hover states (memberships) ─────────────────────────────── */
+html.cf-theme-light .hover\:bg-amber-600\/25:hover {
+  background-color: #FDE68A !important;
+}
+html.cf-theme-light .hover\:bg-green-600\/25:hover {
+  background-color: #A7F3D0 !important;
+}
+
+/* ── Additional background variants used across admin pages ─────────────── */
+html.cf-theme-light .bg-neutral-800\/30 {
+  background-color: #F0F1F7 !important;
+  box-shadow: none !important;
+}
+
+html.cf-theme-light .border-neutral-700\/50 {
+  border-color: #E6E8EF !important;
+}
+
+html.cf-theme-light .bg-neutral-700\/50 {
+  background-color: #E6E8EF !important;
+}
+
+html.cf-theme-light .bg-neutral-600,
+html.cf-theme-light .bg-neutral-600\/20 {
+  background-color: #E6E8EF !important;
+}
+
+html.cf-theme-light .border-neutral-600 {
+  border-color: #C9CDD9 !important;
+}
+
+/* Form inputs / select menus */
+html.cf-theme-light input,
+html.cf-theme-light select,
+html.cf-theme-light textarea {
+  background-color: #FFFFFF !important;
+  border-color: #E6E8EF !important;
+  color: #111827 !important;
+}
+
+html.cf-theme-light input::placeholder,
+html.cf-theme-light textarea::placeholder {
+  color: #9CA3AF !important;
+}
+
+html.cf-theme-light input:focus,
+html.cf-theme-light select:focus,
+html.cf-theme-light textarea:focus {
+  border-color: #7C3AED !important;
+  box-shadow: 0 0 0 3px rgba(124, 58, 237, 0.1) !important;
+  outline: none !important;
+}
+
+/* Neutral-700 used as button background (small pill buttons) */
+html.cf-theme-light .bg-neutral-700 {
+  background-color: #E6E8EF !important;
+}
+
+html.cf-theme-light .hover\:bg-neutral-600:hover {
+  background-color: #D1D5E0 !important;
+}
+
+/* Text-neutral-100 and text-white overriding white-on-dark labels on buttons */
+html.cf-theme-light .text-neutral-100 {
+  color: #111827 !important;
+}
+
+/* Emerald-300 (day-of-week selector active state text) */
+html.cf-theme-light .text-emerald-300 {
+  color: #065F46 !important;
+}
+
+/* Emerald border for selected day buttons */
+html.cf-theme-light .border-emerald-500 {
+  border-color: #10B981 !important;
+}
+
+/* Tabs / toggle pill */
+html.cf-theme-light .bg-purple-600 {
+  background-color: #7C3AED !important;
+}
+
+/* bg-white stays white */
+html.cf-theme-light .bg-white {
+  background-color: #FFFFFF !important;
+}
+
+/* Purple focus ring */
+html.cf-theme-light .focus\:border-purple-500:focus {
+  border-color: #7C3AED !important;
+}
+
+/* ── Indigo (venue-analytics coach badge, players reclub) ────────────────── */
+html.cf-theme-light .bg-indigo-500\/20,
+html.cf-theme-light .bg-indigo-600\/20 {
+  background-color: #E0E7FF !important;
+}
+html.cf-theme-light .bg-indigo-500\/5 {
+  background-color: #EEF2FF !important;
+}
+html.cf-theme-light .text-indigo-400,
+html.cf-theme-light .text-indigo-300 {
+  color: #3730A3 !important;
+}
+html.cf-theme-light .text-indigo-300\/70 {
+  color: rgba(55, 48, 163, 0.7) !important;
+}
+html.cf-theme-light .border-indigo-500\/20 {
+  border-color: #C7D2FE !important;
+}
+
+/* ── AI Chat Widget — hard-coded dark hex overrides ──────────────────────── */
+html.cf-theme-light .bg-\[\#0f1117\],
+html.cf-theme-light .bg-\[\#1a1d2a\],
+html.cf-theme-light .bg-\[\#161922\] {
+  background-color: #FFFFFF !important;
+}
+
+html.cf-theme-light .border-\[\#2a2d3a\] {
+  border-color: #E6E8EF !important;
+}
+
+html.cf-theme-light .bg-neutral-800.rotate-0 {
+  background-color: #E6E8EF !important;
+}
+
+html.cf-theme-light .bg-neutral-500 {
+  background-color: #D1D5DB !important;
+}
+
+html.cf-theme-light .text-neutral-500.animate-bounce {
+  background-color: #9CA3AF !important;
+}
+
+html.cf-theme-light .hover\:text-indigo-300:hover {
+  color: #4338CA !important;
+}
+
+/* ── Setup wizard green-950 banner ───────────────────────────────────────── */
+html.cf-theme-light .bg-green-950\/40,
+html.cf-theme-light .bg-green-950\/30 {
+  background-color: #F0FDF4 !important;
+}
+html.cf-theme-light .border-green-500\/30 {
+  border-color: #BBF7D0 !important;
+}
+html.cf-theme-light .bg-green-600\/10 {
+  background-color: #ECFDF5 !important;
+}
+html.cf-theme-light .bg-green-300 {
+  color: #065F46 !important;
+}
+html.cf-theme-light .text-green-300 {
+  color: #065F46 !important;
+}
+
+/* bg-green-600 solid (checkmark circle background) */
+html.cf-theme-light .bg-green-600 {
+  background-color: #059669 !important;
+}
+
+/* ring (setup wizard step border focus) */
+html.cf-theme-light .ring-1 {
+  --tw-ring-opacity: 1;
+}
+html.cf-theme-light .ring-green-500\/40 {
+  --tw-ring-color: rgba(16, 185, 129, 0.4) !important;
+}
+
+/* bg-neutral-800\/80 (setup wizard current step) */
+html.cf-theme-light .bg-neutral-800\/80 {
+  background-color: #EEF0F8 !important;
+}
+
+/* ── Rounded cards — enforce design-spec 16px radius ─────────────────────── */
+html.cf-theme-light .rounded-xl {
+  border-radius: 16px !important;
+}
+
+html.cf-theme-light .rounded-2xl {
+  border-radius: 20px !important;
 }
 
 /* Lock document scroll in standalone / PWA; player shell is position:fixed (see player/layout.tsx). */
