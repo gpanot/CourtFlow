@@ -209,7 +209,8 @@ html.cf-theme-light .divide-neutral-800 > * + * {
 }
 
 /* ── Typography ───────────────────────────────────────────────────────────── */
-html.cf-theme-light .text-white {
+/* Darken white text on light surfaces, but keep white on solid brand CTAs */
+html.cf-theme-light .text-white:not(.bg-purple-600):not(.bg-purple-600\/80):not(.bg-purple-500) {
   color: #111827 !important;
 }
 
@@ -600,9 +601,22 @@ html.cf-theme-light .border-emerald-500 {
   border-color: #10B981 !important;
 }
 
-/* Tabs / toggle pill */
+/* Tabs / toggle pill / primary CTA */
 html.cf-theme-light .bg-purple-600 {
   background-color: #7C3AED !important;
+  color: #FFFFFF !important;
+}
+
+html.cf-theme-light .bg-purple-600\/80 {
+  background-color: rgba(124, 58, 237, 0.8) !important;
+  color: #FFFFFF !important;
+}
+
+html.cf-theme-light .hover\:bg-purple-500:hover.bg-purple-600,
+html.cf-theme-light .hover\:bg-purple-500:hover.bg-purple-600\/80,
+html.cf-theme-light button.hover\:bg-purple-500:hover.bg-purple-600,
+html.cf-theme-light a.hover\:bg-purple-500:hover.bg-purple-600 {
+  color: #FFFFFF !important;
 }
 
 /* bg-white stays white */
