@@ -23,6 +23,10 @@ export async function GET(request: NextRequest) {
         country: true,
         currency: true,
         paymentRegion: true,
+        legalCompanyName: true,
+        registrationNumber: true,
+        taxId: true,
+        registeredAddress: true,
         createdAt: true,
         _count: { select: { venues: true } },
       },
@@ -44,6 +48,10 @@ export async function POST(request: NextRequest) {
       country: string;
       currency?: string;
       venueId?: string;
+      legalCompanyName?: string;
+      registrationNumber?: string;
+      taxId?: string;
+      registeredAddress?: string;
     }>(request);
 
     if (!body.name?.trim()) return error("name is required", 400);
@@ -65,6 +73,10 @@ export async function POST(request: NextRequest) {
         country,
         currency: body.currency?.trim() ?? "VND",
         paymentRegion,
+        legalCompanyName: body.legalCompanyName?.trim() || null,
+        registrationNumber: body.registrationNumber?.trim() || null,
+        taxId: body.taxId?.trim() || null,
+        registeredAddress: body.registeredAddress?.trim() || null,
       },
     });
 

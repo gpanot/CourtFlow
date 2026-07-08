@@ -270,10 +270,24 @@ export async function GET(request: NextRequest) {
 
     // Bookings per day
     const bookingsByDate: Record<string, number> = {};
+    const hoursByDate: Record<string, number> = {};
     for (const b of confirmedBookings) {
       const d = new Date(b.date);
       const key = `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, "0")}-${String(d.getUTCDate()).padStart(2, "0")}`;
       bookingsByDate[key] = (bookingsByDate[key] || 0) + 1;
+      hoursByDate[key] = (hoursByDate[key] || 0) +
+        (new Date(b.endTime).getTime() - new Date(b.startTime).getTime()) / 3600000;
+    }
+
+    const dailyAvailableHours = bookableCourtCount * hoursPerDayPerCourt;
+    const dailyUtilization: { date: string; utilizationPct: number; hours: number; availableHours: number }[] = [];
+    const rangeCursor = new Date(dateFrom);
+    while (rangeCursor <= dateTo) {
+      const key = `${rangeCursor.getUTCFullYear()}-${String(rangeCursor.getUTCMonth() + 1).padStart(2, "0")}-${String(rangeCursor.getUTCDate()).padStart(2, "0")}`;
+      const hours = Math.round((hoursByDate[key] || 0) * 10) / 10;
+      const utilizationPct = dailyAvailableHours > 0 ? Math.round((hours / dailyAvailableHours) * 100) : 0;
+      dailyUtilization.push({ date: key, utilizationPct, hours, availableHours: dailyAvailableHours });
+      rangeCursor.setUTCDate(rangeCursor.getUTCDate() + 1);
     }
 
     // Per-court usage
@@ -481,6 +495,7 @@ export async function GET(request: NextRequest) {
         totalAvailableHours,
         bookingRevenue,
         bookingsByDate,
+        dailyUtilization,
         perCourt: Object.values(perCourt),
         peakHours,
         repeatBookerPct,

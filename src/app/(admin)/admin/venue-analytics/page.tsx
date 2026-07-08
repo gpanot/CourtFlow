@@ -12,7 +12,7 @@ import {
   UserCircle, Download, Activity, Repeat, XCircle, Layers, ArrowUpDown,
 } from "lucide-react";
 import {
-  BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell, Legend,
+  BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell, Legend, ReferenceLine,
 } from "recharts";
 
 export const dynamic = "force-dynamic";
@@ -28,6 +28,7 @@ interface AnalyticsData {
     totalAvailableHours: number;
     bookingRevenue: number;
     bookingsByDate: Record<string, number>;
+    dailyUtilization: { date: string; utilizationPct: number; hours: number; availableHours: number }[];
     perCourt: { label: string; bookings: number; hours: number; availableHours: number; utilizationPct: number }[];
     peakHours: Record<number, Record<number, number>>;
     repeatBookerPct: number;
@@ -118,6 +119,19 @@ const SKILL_COLORS: Record<string, string> = {
   beginner: "#22c55e", intermediate: "#3b82f6", advanced: "#f59e0b", pro: "#ef4444",
 };
 
+function median(values: number[]): number {
+  if (values.length === 0) return 0;
+  const sorted = [...values].sort((a, b) => a - b);
+  const mid = Math.floor(sorted.length / 2);
+  return sorted.length % 2 === 0
+    ? (sorted[mid - 1] + sorted[mid]) / 2
+    : sorted[mid];
+}
+
+function fmtMedianCount(value: number): string {
+  return Number.isInteger(value) ? String(value) : value.toFixed(1);
+}
+
 function localISO(d: Date) {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 }
@@ -176,6 +190,10 @@ function ChartTooltip({ active, payload, label, suffix }: { active?: boolean; pa
   );
 }
 
+function utilBarColor(pct: number): string {
+  return pct >= 70 ? "#10b981" : pct >= 40 ? "#f59e0b" : "#ef4444";
+}
+
 function CourtUtilTooltip({ active, payload }: { active?: boolean; payload?: { payload: { name: string; hours: number; availableHours: number; utilizationPct: number; bookings: number } }[] }) {
   if (!active || !payload?.length) return null;
   const d = payload[0].payload;
@@ -191,12 +209,70 @@ function CourtUtilTooltip({ active, payload }: { active?: boolean; payload?: { p
   );
 }
 
-function CourtUtilLabel({ x, y, width, height, value }: { x?: number; y?: number; width?: number; height?: number; value?: number }) {
-  if (value === undefined || width === undefined || (width as number) < 30) return null;
+function DailyUtilTooltip({ active, payload }: { active?: boolean; payload?: { payload: { fullDate: string; hours: number; availableHours: number; utilizationPct: number } }[] }) {
+  if (!active || !payload?.length) return null;
+  const d = payload[0].payload;
   return (
-    <text x={(x ?? 0) + (width ?? 0) + 4} y={(y ?? 0) + (height ?? 0) / 2} dominantBaseline="middle" fontSize={10}
-      fill={value >= 70 ? "#10b981" : value >= 40 ? "#f59e0b" : "#ef4444"}>
-      {value}%
+    <div className="rounded-lg border border-neutral-700 bg-neutral-900 px-3 py-2 text-xs shadow-lg space-y-0.5">
+      <p className="font-semibold text-white">{d.fullDate}</p>
+      <p className="text-neutral-400">{d.hours}h booked / {d.availableHours}h available</p>
+      <p className={d.utilizationPct >= 70 ? "text-emerald-400" : d.utilizationPct >= 40 ? "text-amber-400" : "text-red-400"}>
+        {d.utilizationPct}% utilization
+      </p>
+    </div>
+  );
+}
+
+function UtilPctVerticalLabel({ x, y, width, height, value }: { x?: number; y?: number; width?: number; height?: number; value?: number }) {
+  if (value === undefined) return null;
+  const pct = Math.round(Number(value));
+  if (pct === 0) return null;
+  const barWidth = width ?? 0;
+  const barHeight = height ?? 0;
+  const cx = (x ?? 0) + barWidth / 2;
+  const inside = barHeight >= 14;
+  const cy = inside ? (y ?? 0) + barHeight / 2 : (y ?? 0) - 4;
+  return (
+    <text
+      x={cx}
+      y={cy}
+      textAnchor="middle"
+      dominantBaseline={inside ? "middle" : "auto"}
+      fontSize={9}
+      fontWeight={600}
+      fill={inside ? "#ffffff" : utilBarColor(pct)}
+    >
+      {pct}%
+    </text>
+  );
+}
+
+function UtilPctHorizontalLabel({ x, y, width, height, value }: { x?: number; y?: number; width?: number; height?: number; value?: number }) {
+  if (value === undefined) return null;
+  const pct = Math.round(Number(value));
+  const barWidth = width ?? 0;
+  const barHeight = height ?? 0;
+  const cy = (y ?? 0) + barHeight / 2;
+  if (pct === 0) {
+    return (
+      <text x={(x ?? 0) + 4} y={cy} dominantBaseline="middle" fontSize={9} fontWeight={600} fill="#737373">
+        0%
+      </text>
+    );
+  }
+  const inside = barWidth >= 28;
+  const cx = inside ? (x ?? 0) + barWidth / 2 : (x ?? 0) + barWidth + 4;
+  return (
+    <text
+      x={cx}
+      y={cy}
+      textAnchor={inside ? "middle" : "start"}
+      dominantBaseline="middle"
+      fontSize={9}
+      fontWeight={600}
+      fill={inside ? "#ffffff" : utilBarColor(pct)}
+    >
+      {pct}%
     </text>
   );
 }
@@ -251,9 +327,11 @@ export default function VenueAnalyticsPage() {
     rows.push(["Court", "Bookings", "Hours", ""]);
     for (const c of data.courtBookings.perCourt) rows.push([c.label, String(c.bookings), String(Math.round(c.hours * 10) / 10), ""]);
     rows.push(["", "", "", ""]);
-    rows.push(["--- Bookings by Date ---", "", "", ""]);
-    rows.push(["Date", "Bookings", "", ""]);
-    for (const [d, n] of Object.entries(data.courtBookings.bookingsByDate).sort(([a], [b]) => a.localeCompare(b))) rows.push([d, String(n), "", ""]);
+    rows.push(["--- Utilization by Date ---", "", "", ""]);
+    rows.push(["Date", "Utilization %", "Hours", ""]);
+    for (const d of data.courtBookings.dailyUtilization) {
+      rows.push([d.date, `${d.utilizationPct}%`, String(d.hours), ""]);
+    }
     downloadCSV(`court-bookings_${venueName}_${rangeLabel}.csv`, ["Metric", "Value", "Col3", "Col4"], rows);
   }, [data, venueName, rangeLabel]);
 
@@ -332,11 +410,15 @@ export default function VenueAnalyticsPage() {
   }, [data, venueName, rangeLabel]);
 
   // --- CHART DATA ---
-  const bookingChartData = useMemo(() => {
+  const dailyUtilChartData = useMemo(() => {
     if (!data) return [];
-    return Object.entries(data.courtBookings.bookingsByDate)
-      .sort(([a], [b]) => a.localeCompare(b))
-      .map(([date, count]) => ({ date: date.slice(5), bookings: count }));
+    return data.courtBookings.dailyUtilization.map((d) => ({
+      date: d.date.slice(5),
+      fullDate: d.date,
+      utilizationPct: d.utilizationPct,
+      hours: d.hours,
+      availableHours: d.availableHours,
+    }));
   }, [data]);
 
   const courtChartData = useMemo(() => {
@@ -365,11 +447,13 @@ export default function VenueAnalyticsPage() {
     return data.coaching.perCoach.map((c) => ({ name: c.name.split(" ")[0], lessons: c.lessons }));
   }, [data]);
 
-  const lessonChartData = useMemo(() => {
-    if (!data) return [];
-    return Object.entries(data.coaching.lessonsByDate)
+  const { lessonChartData, lessonsMedian } = useMemo(() => {
+    if (!data) return { lessonChartData: [], lessonsMedian: 0 };
+    const lessonChartData = Object.entries(data.coaching.lessonsByDate)
       .sort(([a], [b]) => a.localeCompare(b))
       .map(([date, count]) => ({ date: date.slice(5), lessons: count }));
+    const lessonsMedian = median(lessonChartData.map((d) => d.lessons));
+    return { lessonChartData, lessonsMedian };
   }, [data]);
 
   const skillChartData = useMemo(() => {
@@ -377,11 +461,13 @@ export default function VenueAnalyticsPage() {
     return Object.entries(data.players.skillBreakdown).map(([level, count]) => ({ name: level, count }));
   }, [data]);
 
-  const regChartData = useMemo(() => {
-    if (!data) return [];
-    return Object.entries(data.players.registrationsByDate)
+  const { regChartData, registrationsMedian } = useMemo(() => {
+    if (!data) return { regChartData: [], registrationsMedian: 0 };
+    const regChartData = Object.entries(data.players.registrationsByDate)
       .sort(([a], [b]) => a.localeCompare(b))
       .map(([date, count]) => ({ date: date.slice(5), registrations: count }));
+    const registrationsMedian = median(regChartData.map((d) => d.registrations));
+    return { regChartData, registrationsMedian };
   }, [data]);
 
   const peakMax = useMemo(() => {
@@ -393,10 +479,12 @@ export default function VenueAnalyticsPage() {
     return max;
   }, [data]);
 
-  const dowChartData = useMemo(() => {
-    if (!data) return [];
+  const { dowChartData, dowRevenueMedian } = useMemo(() => {
+    if (!data) return { dowChartData: [], dowRevenueMedian: 0 };
     const labels = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
-    return labels.map((name, i) => ({ name, revenue: data.courtBookings.revenueByDow[i] || 0 }));
+    const dowChartData = labels.map((name, i) => ({ name, revenue: data.courtBookings.revenueByDow[i] || 0 }));
+    const dowRevenueMedian = median(dowChartData.map((d) => d.revenue));
+    return { dowChartData, dowRevenueMedian };
   }, [data]);
 
   const momData = useMemo(() => {
@@ -495,30 +583,35 @@ export default function VenueAnalyticsPage() {
             </div>
 
             <div className="grid gap-4 md:grid-cols-2 mt-4">
-              {bookingChartData.length > 0 && (
+              {dailyUtilChartData.length > 0 && (
                 <ChartCard title={t("venueAnalytics.bookingsPerDay")}>
                   <ResponsiveContainer width="100%" height={200}>
-                    <BarChart data={bookingChartData}>
+                    <BarChart data={dailyUtilChartData}>
                       <XAxis dataKey="date" tick={{ fill: "#737373", fontSize: 10 }} tickLine={false} axisLine={false} />
-                      <YAxis tick={{ fill: "#737373", fontSize: 10 }} tickLine={false} axisLine={false} allowDecimals={false} width={28} />
-                      <Tooltip content={<ChartTooltip />} cursor={{ fill: "rgba(139,92,246,0.08)" }} />
-                      <Bar dataKey="bookings" radius={[4, 4, 0, 0]} maxBarSize={32}>
-                        {bookingChartData.map((_, i) => <Cell key={i} fill="#8b5cf6" />)}
+                      <YAxis domain={[0, 100]} tick={{ fill: "#737373", fontSize: 10 }} tickLine={false} axisLine={false} allowDecimals={false} width={32} tickFormatter={(v: number) => `${v}%`} />
+                      <Tooltip content={<DailyUtilTooltip />} cursor={{ fill: "rgba(139,92,246,0.08)" }} />
+                      <Bar dataKey="utilizationPct" radius={[4, 4, 0, 0]} maxBarSize={32} label={<UtilPctVerticalLabel />}>
+                        {dailyUtilChartData.map((d, i) => <Cell key={i} fill={utilBarColor(d.utilizationPct)} />)}
                       </Bar>
                     </BarChart>
                   </ResponsiveContainer>
+                  <div className="flex items-center gap-4 mt-2 text-[10px] text-neutral-500">
+                    <span className="flex items-center gap-1"><span className="inline-block h-2 w-2 rounded-sm bg-emerald-500" />≥70%</span>
+                    <span className="flex items-center gap-1"><span className="inline-block h-2 w-2 rounded-sm bg-amber-500" />40–69%</span>
+                    <span className="flex items-center gap-1"><span className="inline-block h-2 w-2 rounded-sm bg-red-500" />&lt;40%</span>
+                  </div>
                 </ChartCard>
               )}
               {courtChartData.length > 0 && (
                 <ChartCard title={t("venueAnalytics.hoursPerCourt")}>
                   <ResponsiveContainer width="100%" height={Math.max(160, courtChartData.length * 44)}>
                     <BarChart data={courtChartData} layout="vertical">
-                      <XAxis type="number" tick={{ fill: "#737373", fontSize: 10 }} tickLine={false} axisLine={false} />
+                      <XAxis type="number" domain={[0, 100]} tick={{ fill: "#737373", fontSize: 10 }} tickLine={false} axisLine={false} tickFormatter={(v: number) => `${v}%`} />
                       <YAxis dataKey="name" type="category" tick={{ fill: "#a3a3a3", fontSize: 11 }} tickLine={false} axisLine={false} width={60} />
                       <Tooltip content={<CourtUtilTooltip />} cursor={{ fill: "rgba(99,102,241,0.08)" }} />
-                      <Bar dataKey="hours" radius={[0, 4, 4, 0]} maxBarSize={24} label={<CourtUtilLabel />}>
+                      <Bar dataKey="utilizationPct" radius={[0, 4, 4, 0]} maxBarSize={24} label={<UtilPctHorizontalLabel />}>
                         {courtChartData.map((c, i) => (
-                          <Cell key={i} fill={c.utilizationPct >= 70 ? "#10b981" : c.utilizationPct >= 40 ? "#f59e0b" : "#ef4444"} />
+                          <Cell key={i} fill={utilBarColor(c.utilizationPct)} />
                         ))}
                       </Bar>
                     </BarChart>
@@ -592,6 +685,20 @@ export default function VenueAnalyticsPage() {
                     <YAxis tick={{ fill: "#737373", fontSize: 10 }} tickLine={false} axisLine={false} width={40}
                       tickFormatter={(v: number) => v >= 100000 ? `${Math.round(v / 100000)}k` : v >= 1000 ? `${Math.round(v / 1000)}` : String(v)} />
                     <Tooltip content={<ChartTooltip />} cursor={{ fill: "rgba(6,182,212,0.08)" }} />
+                    {dowRevenueMedian > 0 && (
+                      <ReferenceLine
+                        y={dowRevenueMedian}
+                        stroke="#a78bfa"
+                        strokeDasharray="5 4"
+                        strokeWidth={1.5}
+                        label={{
+                          value: `${t("venueAnalytics.revenueMedian")}: ${fmtPrice(dowRevenueMedian)}`,
+                          position: "insideTopRight",
+                          fill: "#a78bfa",
+                          fontSize: 10,
+                        }}
+                      />
+                    )}
                     <Bar dataKey="revenue" radius={[4, 4, 0, 0]} maxBarSize={48}>
                       {dowChartData.map((_, i) => <Cell key={i} fill={["#ef4444", "#3b82f6", "#3b82f6", "#3b82f6", "#3b82f6", "#3b82f6", "#ef4444"][i]} />)}
                     </Bar>
@@ -657,6 +764,20 @@ export default function VenueAnalyticsPage() {
                       <XAxis dataKey="date" tick={{ fill: "#737373", fontSize: 10 }} tickLine={false} axisLine={false} />
                       <YAxis tick={{ fill: "#737373", fontSize: 10 }} tickLine={false} axisLine={false} allowDecimals={false} width={28} />
                       <Tooltip content={<ChartTooltip />} cursor={{ fill: "rgba(249,115,22,0.08)" }} />
+                      {lessonsMedian > 0 && (
+                        <ReferenceLine
+                          y={lessonsMedian}
+                          stroke="#a78bfa"
+                          strokeDasharray="5 4"
+                          strokeWidth={1.5}
+                          label={{
+                            value: `${t("venueAnalytics.revenueMedian")}: ${fmtMedianCount(lessonsMedian)}`,
+                            position: "insideTopRight",
+                            fill: "#a78bfa",
+                            fontSize: 10,
+                          }}
+                        />
+                      )}
                       <Bar dataKey="lessons" radius={[4, 4, 0, 0]} maxBarSize={32}>
                         {lessonChartData.map((_, i) => <Cell key={i} fill="#f97316" />)}
                       </Bar>
@@ -797,6 +918,20 @@ export default function VenueAnalyticsPage() {
                       <XAxis dataKey="date" tick={{ fill: "#737373", fontSize: 10 }} tickLine={false} axisLine={false} />
                       <YAxis tick={{ fill: "#737373", fontSize: 10 }} tickLine={false} axisLine={false} allowDecimals={false} width={28} />
                       <Tooltip content={<ChartTooltip />} cursor={{ fill: "rgba(59,130,246,0.08)" }} />
+                      {registrationsMedian > 0 && (
+                        <ReferenceLine
+                          y={registrationsMedian}
+                          stroke="#a78bfa"
+                          strokeDasharray="5 4"
+                          strokeWidth={1.5}
+                          label={{
+                            value: `${t("venueAnalytics.revenueMedian")}: ${fmtMedianCount(registrationsMedian)}`,
+                            position: "insideTopRight",
+                            fill: "#a78bfa",
+                            fontSize: 10,
+                          }}
+                        />
+                      )}
                       <Bar dataKey="registrations" radius={[4, 4, 0, 0]} maxBarSize={32}>
                         {regChartData.map((_, i) => <Cell key={i} fill="#3b82f6" />)}
                       </Bar>

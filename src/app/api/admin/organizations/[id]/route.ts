@@ -65,6 +65,10 @@ export async function PATCH(
       country?: string;
       currency?: string;
       venueId?: string;
+      legalCompanyName?: string | null;
+      registrationNumber?: string | null;
+      taxId?: string | null;
+      registeredAddress?: string | null;
     }>(request);
 
     const data: Record<string, unknown> = {};
@@ -74,6 +78,18 @@ export async function PATCH(
       data.paymentRegion = PAYMENT_REGION_MAP[body.country.trim()] ?? "OTHER";
     }
     if (body.currency?.trim()) data.currency = body.currency.trim();
+    if (body.legalCompanyName !== undefined) {
+      data.legalCompanyName = body.legalCompanyName?.trim() || null;
+    }
+    if (body.registrationNumber !== undefined) {
+      data.registrationNumber = body.registrationNumber?.trim() || null;
+    }
+    if (body.taxId !== undefined) {
+      data.taxId = body.taxId?.trim() || null;
+    }
+    if (body.registeredAddress !== undefined) {
+      data.registeredAddress = body.registeredAddress?.trim() || null;
+    }
 
     const org = await prisma.organization.update({
       where: { id },

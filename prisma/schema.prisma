@@ -9,15 +9,19 @@ datasource db {
 }
 
 model Organization {
-  id            String   @id @default(cuid())
-  name          String
-  slug          String   @unique
-  country       String
-  paymentRegion String   @default("SEA") @map("payment_region")
-  currency      String   @default("VND")
-  createdAt     DateTime @default(now()) @map("created_at")
-  updatedAt     DateTime @updatedAt @map("updated_at")
-  venues        Venue[]
+  id                  String   @id @default(cuid())
+  name                String
+  slug                String   @unique
+  country             String
+  paymentRegion       String   @default("SEA") @map("payment_region")
+  currency            String   @default("VND")
+  createdAt           DateTime @default(now()) @map("created_at")
+  updatedAt           DateTime @updatedAt @map("updated_at")
+  legalCompanyName    String?  @map("legal_company_name")
+  registrationNumber  String?  @map("registration_number")
+  taxId               String?  @map("tax_id")
+  registeredAddress   String?  @map("registered_address")
+  venues              Venue[]
 
   @@map("organizations")
 }
@@ -1449,18 +1453,18 @@ model InvoiceSequence {
 }
 
 model PricingGroup {
-  id               String   @id @default(cuid())
-  venueId          String   @map("venue_id")
-  name             String
-  sortOrder        Int      @default(0) @map("sort_order")
-  isDefault        Boolean  @default(false) @map("is_default")
-  isUnconfigured   Boolean  @default(false) @map("is_unconfigured")
-  defaultPriceValue Int     @default(0) @map("default_price_value")
-  pricingRules     Json     @default("[]") @map("pricing_rules")
-  createdAt        DateTime @default(now()) @map("created_at")
-  updatedAt        DateTime @updatedAt @map("updated_at")
-  courts           Court[]
-  venue            Venue    @relation(fields: [venueId], references: [id], onDelete: Cascade)
+  id                String   @id @default(cuid())
+  venueId           String   @map("venue_id")
+  name              String
+  sortOrder         Int      @default(0) @map("sort_order")
+  isDefault         Boolean  @default(false) @map("is_default")
+  isUnconfigured    Boolean  @default(false) @map("is_unconfigured")
+  defaultPriceValue Int      @default(0) @map("default_price_value")
+  pricingRules      Json     @default("[]") @map("pricing_rules")
+  createdAt         DateTime @default(now()) @map("created_at")
+  updatedAt         DateTime @updatedAt @map("updated_at")
+  courts            Court[]
+  venue             Venue    @relation(fields: [venueId], references: [id], onDelete: Cascade, onUpdate: NoAction)
 
   @@index([venueId])
   @@map("pricing_groups")

@@ -1121,7 +1121,11 @@ CREATE TABLE public.organizations (
     payment_region text DEFAULT 'SEA'::text NOT NULL,
     currency text DEFAULT 'VND'::text NOT NULL,
     created_at timestamp(3) without time zone DEFAULT CURRENT_TIMESTAMP NOT NULL,
-    updated_at timestamp(3) without time zone NOT NULL
+    updated_at timestamp(3) without time zone NOT NULL,
+    legal_company_name text,
+    registration_number text,
+    tax_id text,
+    registered_address text
 );
 
 
@@ -5385,4 +5389,5 @@ INSERT INTO public.schema_migrations (version) VALUES
     ('20260706055400'),
     ('20260706074030'),
     ('20260706080327'),
-    ('20260707015817');
+    ('20260707015817'),
+    ('20260708013950');

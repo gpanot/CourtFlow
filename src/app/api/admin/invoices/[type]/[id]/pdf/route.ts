@@ -7,6 +7,42 @@ import { InvoicePDF, type InvoiceData } from "@/components/pdf/InvoicePDF";
 
 export const dynamic = "force-dynamic";
 
+const VENUE_WITH_ORG_SELECT = {
+  name: true,
+  location: true,
+  logoUrl: true,
+  bankAccount: true,
+  bankName: true,
+  bankOwnerName: true,
+  contactPhone: true,
+  organization: {
+    select: {
+      legalCompanyName: true,
+      registrationNumber: true,
+      taxId: true,
+      registeredAddress: true,
+    },
+  },
+} as const;
+
+function orgLegalFields(
+  venue: {
+    organization: {
+      legalCompanyName: string | null;
+      registrationNumber: string | null;
+      taxId: string | null;
+      registeredAddress: string | null;
+    } | null;
+  }
+) {
+  return {
+    legalCompanyName: venue.organization?.legalCompanyName ?? null,
+    registrationNumber: venue.organization?.registrationNumber ?? null,
+    taxId: venue.organization?.taxId ?? null,
+    registeredAddress: venue.organization?.registeredAddress ?? null,
+  };
+}
+
 export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ type: string; id: string }> }
@@ -35,17 +71,7 @@ export async function GET(
               invoicedAt: true,
             },
           },
-          venue: {
-            select: {
-              name: true,
-              location: true,
-              logoUrl: true,
-              bankAccount: true,
-              bankName: true,
-              bankOwnerName: true,
-              contactPhone: true,
-            },
-          },
+          venue: { select: VENUE_WITH_ORG_SELECT },
         },
       });
 
@@ -85,23 +111,14 @@ export async function GET(
         venueBankName: booking.venue.bankName,
         venueBankOwnerName: booking.venue.bankOwnerName,
         venuePhone: booking.venue.contactPhone,
+        ...orgLegalFields(booking.venue),
       };
     } else if (type === "openplay") {
       const reg = await prisma.openPlayRegistration.findUnique({
         where: { id },
         include: {
           player: { select: { name: true, phone: true } },
-          venue: {
-            select: {
-              name: true,
-              location: true,
-              logoUrl: true,
-              bankAccount: true,
-              bankName: true,
-              bankOwnerName: true,
-              contactPhone: true,
-            },
-          },
+          venue: { select: VENUE_WITH_ORG_SELECT },
         },
       });
 
@@ -133,6 +150,7 @@ export async function GET(
         venueBankName: reg.venue.bankName,
         venueBankOwnerName: reg.venue.bankOwnerName,
         venuePhone: reg.venue.contactPhone,
+        ...orgLegalFields(reg.venue),
       };
     } else {
       // lesson
@@ -143,17 +161,7 @@ export async function GET(
           player: { select: { name: true, phone: true } },
           package: { select: { name: true, lessonType: true } },
           court: { select: { label: true } },
-          venue: {
-            select: {
-              name: true,
-              location: true,
-              logoUrl: true,
-              bankAccount: true,
-              bankName: true,
-              bankOwnerName: true,
-              contactPhone: true,
-            },
-          },
+          venue: { select: VENUE_WITH_ORG_SELECT },
         },
       });
 
@@ -190,6 +198,7 @@ export async function GET(
         venueBankName: lesson.venue.bankName,
         venueBankOwnerName: lesson.venue.bankOwnerName,
         venuePhone: lesson.venue.contactPhone,
+        ...orgLegalFields(lesson.venue),
       };
     }
 

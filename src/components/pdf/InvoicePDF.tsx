@@ -294,6 +294,11 @@ export interface InvoiceData {
   venueBankName: string | null;
   venueBankOwnerName: string | null;
   venuePhone: string | null;
+  // organization legal entity (optional — used when venue belongs to an org)
+  legalCompanyName?: string | null;
+  registrationNumber?: string | null;
+  taxId?: string | null;
+  registeredAddress?: string | null;
 }
 
 // ── Component ────────────────────────────────────────────────────────────────
@@ -306,13 +311,19 @@ export function InvoicePDF({ data }: { data: InvoiceData }) {
       ? "Open Play"
       : "Coaching Lesson";
 
+  const issuerName = data.legalCompanyName?.trim() || data.venueName;
+  const issuerAddress = data.registeredAddress?.trim() || data.venueLocation;
+  const showVenueLine =
+    Boolean(data.legalCompanyName?.trim()) &&
+    data.legalCompanyName!.trim() !== data.venueName;
+
   const hasBankInfo =
     data.venueBankAccount || data.venueBankName || data.venueBankOwnerName;
 
   return (
     <Document
       title={`Invoice ${data.invoiceNumber}`}
-      author={data.venueName}
+      author={issuerName}
       subject={`${typeLabel} Invoice`}
     >
       <Page size="A4" style={styles.page}>
@@ -322,9 +333,20 @@ export function InvoicePDF({ data }: { data: InvoiceData }) {
             {data.venueLogoUrl ? (
               <Image src={data.venueLogoUrl} style={styles.logo} />
             ) : null}
-            <Text style={styles.venueName}>{data.venueName}</Text>
-            {data.venueLocation ? (
-              <Text style={styles.venueDetail}>{data.venueLocation}</Text>
+            <Text style={styles.venueName}>{issuerName}</Text>
+            {showVenueLine ? (
+              <Text style={styles.venueDetail}>Venue: {data.venueName}</Text>
+            ) : null}
+            {issuerAddress ? (
+              <Text style={styles.venueDetail}>{issuerAddress}</Text>
+            ) : null}
+            {data.registrationNumber ? (
+              <Text style={styles.venueDetail}>
+                Reg. No.: {data.registrationNumber}
+              </Text>
+            ) : null}
+            {data.taxId ? (
+              <Text style={styles.venueDetail}>Tax ID: {data.taxId}</Text>
             ) : null}
             {data.venuePhone ? (
               <Text style={styles.venueDetail}>{data.venuePhone}</Text>
@@ -451,7 +473,7 @@ export function InvoicePDF({ data }: { data: InvoiceData }) {
         {/* ── Footer ── */}
         <View style={styles.footer} fixed>
           <Text style={styles.footerText}>
-            {data.venueName} · {data.invoiceNumber}
+            {issuerName} · {data.invoiceNumber}
           </Text>
           <Text
             style={styles.footerText}

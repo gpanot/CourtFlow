@@ -49,6 +49,10 @@ interface OrgSummary {
   country: string;
   currency: string;
   paymentRegion: string;
+  legalCompanyName: string | null;
+  registrationNumber: string | null;
+  taxId: string | null;
+  registeredAddress: string | null;
   createdAt: string;
   _count: { venues: number };
 }
@@ -67,6 +71,8 @@ interface VenueSummary {
 
 const inputClass =
   "w-full rounded-lg border border-neutral-700 bg-neutral-800 px-3 py-1.5 text-sm text-white placeholder:text-neutral-500 focus:border-purple-500 focus:outline-none";
+const textareaClass =
+  "w-full rounded-lg border border-neutral-700 bg-neutral-800 px-3 py-1.5 text-sm text-white placeholder:text-neutral-500 focus:border-purple-500 focus:outline-none resize-y min-h-[72px]";
 const selectClass =
   "w-full rounded-lg border border-neutral-700 bg-neutral-800 px-3 py-1.5 text-sm text-white focus:border-purple-500 focus:outline-none";
 
@@ -95,6 +101,10 @@ export default function OrganizationsPage() {
   const [editName, setEditName] = useState("");
   const [editCountry, setEditCountry] = useState("");
   const [editCurrency, setEditCurrency] = useState("");
+  const [editLegalCompanyName, setEditLegalCompanyName] = useState("");
+  const [editRegistrationNumber, setEditRegistrationNumber] = useState("");
+  const [editTaxId, setEditTaxId] = useState("");
+  const [editRegisteredAddress, setEditRegisteredAddress] = useState("");
   const [saving, setSaving] = useState(false);
   const [saveMsg, setSaveMsg] = useState<{ type: "ok" | "err"; text: string } | null>(null);
 
@@ -132,6 +142,10 @@ export default function OrganizationsPage() {
       setEditName(data.name);
       setEditCountry(data.country);
       setEditCurrency(data.currency);
+      setEditLegalCompanyName(data.legalCompanyName ?? "");
+      setEditRegistrationNumber(data.registrationNumber ?? "");
+      setEditTaxId(data.taxId ?? "");
+      setEditRegisteredAddress(data.registeredAddress ?? "");
       setSaveMsg(null);
       setLinkVenueId("");
       setDeleteConfirm(false);
@@ -148,9 +162,22 @@ export default function OrganizationsPage() {
     return (
       editName.trim() !== orgDetail.name ||
       editCountry !== orgDetail.country ||
-      editCurrency !== orgDetail.currency
+      editCurrency !== orgDetail.currency ||
+      editLegalCompanyName.trim() !== (orgDetail.legalCompanyName ?? "") ||
+      editRegistrationNumber.trim() !== (orgDetail.registrationNumber ?? "") ||
+      editTaxId.trim() !== (orgDetail.taxId ?? "") ||
+      editRegisteredAddress.trim() !== (orgDetail.registeredAddress ?? "")
     );
-  }, [orgDetail, editName, editCountry, editCurrency]);
+  }, [
+    orgDetail,
+    editName,
+    editCountry,
+    editCurrency,
+    editLegalCompanyName,
+    editRegistrationNumber,
+    editTaxId,
+    editRegisteredAddress,
+  ]);
 
   const handleCreate = async () => {
     if (!newName.trim() || !newCountry) return;
@@ -182,6 +209,10 @@ export default function OrganizationsPage() {
         name: editName.trim(),
         country: editCountry,
         currency: editCurrency.trim() || undefined,
+        legalCompanyName: editLegalCompanyName.trim() || null,
+        registrationNumber: editRegistrationNumber.trim() || null,
+        taxId: editTaxId.trim() || null,
+        registeredAddress: editRegisteredAddress.trim() || null,
       });
       setSaveMsg({ type: "ok", text: "Saved" });
       await fetchOrgs();
@@ -399,6 +430,55 @@ export default function OrganizationsPage() {
                         <option key={currency} value={currency}>{currency}</option>
                       ))}
                   </select>
+                </div>
+
+                <div className="sm:col-span-2 pt-2">
+                  <h4 className="text-xs font-semibold uppercase tracking-wide text-neutral-500">
+                    Legal Entity (Invoicing)
+                  </h4>
+                  <p className="mt-1 text-xs text-neutral-600">
+                    Used on PDF invoices across all venues in this organization.
+                  </p>
+                </div>
+                <div className="sm:col-span-2">
+                  <label className="block text-xs font-medium text-neutral-400 mb-1">Legal company name</label>
+                  <input
+                    type="text"
+                    value={editLegalCompanyName}
+                    onChange={(e) => setEditLegalCompanyName(e.target.value)}
+                    placeholder="e.g. Papaya Sports Co., Ltd."
+                    className={inputClass}
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-neutral-400 mb-1">Business registration number</label>
+                  <input
+                    type="text"
+                    value={editRegistrationNumber}
+                    onChange={(e) => setEditRegistrationNumber(e.target.value)}
+                    placeholder="e.g. 0312345678"
+                    className={inputClass}
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-neutral-400 mb-1">Tax ID (VAT / GST)</label>
+                  <input
+                    type="text"
+                    value={editTaxId}
+                    onChange={(e) => setEditTaxId(e.target.value)}
+                    placeholder="e.g. 0312345678"
+                    className={inputClass}
+                  />
+                </div>
+                <div className="sm:col-span-2">
+                  <label className="block text-xs font-medium text-neutral-400 mb-1">Registered address</label>
+                  <textarea
+                    value={editRegisteredAddress}
+                    onChange={(e) => setEditRegisteredAddress(e.target.value)}
+                    placeholder="Full legal registration address"
+                    className={textareaClass}
+                    rows={3}
+                  />
                 </div>
                 {(hasEditChanges || saveMsg) && (
                   <div className="sm:col-span-2 flex items-center gap-2 pt-1">
