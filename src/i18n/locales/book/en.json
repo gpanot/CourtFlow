@@ -218,6 +218,7 @@
     "startTime": "START TIME",
     "availableCourtsFor": "Available courts for {{date}} · {{duration}} · from {{time}}",
     "availableCourts": "AVAILABLE COURTS",
+    "availableCourtsNext3": "AVAILABLE COURTS (Next 3)",
     "openPlayPlayersJoined": "{{joined}}/{{max}} players joined",
     "openPlayJoin": "Join",
     "noOpenPlay": "No open play sessions on this date.",

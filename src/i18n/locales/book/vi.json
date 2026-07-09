@@ -218,6 +218,7 @@
     "startTime": "GIỜ BẮT ĐẦU",
     "availableCourtsFor": "Sân trống {{date}} · {{duration}} · từ {{time}}",
     "availableCourts": "SÂN TRỐNG",
+    "availableCourtsNext3": "SÂN TRỐNG (3 giờ tiếp theo)",
     "openPlayPlayersJoined": "{{joined}}/{{max}} người đã tham gia",
     "openPlayJoin": "Tham gia",
     "noOpenPlay": "Không có buổi chơi tự do vào ngày này.",
