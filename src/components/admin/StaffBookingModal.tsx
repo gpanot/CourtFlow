@@ -980,7 +980,10 @@ export function StaffBookingModal({
   return (
     <div className="fixed inset-0 z-50 flex items-stretch bg-black/60" onClick={onClose}>
       <div
-        className="flex flex-col md:flex-row w-full max-w-5xl mx-auto my-4 md:my-8 rounded-2xl border border-neutral-700 bg-neutral-900 overflow-hidden"
+        className={cn(
+          "flex flex-col md:flex-row w-full mx-auto my-4 md:my-8 rounded-2xl border border-neutral-700 bg-neutral-900 overflow-hidden",
+          showGrid ? "max-w-[80vw]" : "max-w-5xl",
+        )}
         onClick={(e) => e.stopPropagation()}
       >
         {/* ── Left panel ─────────────────────────────────────────────────── */}

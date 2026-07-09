@@ -15,6 +15,11 @@ import {
 } from "@/lib/booking";
 import { generatePaymentRef } from "@/modules/courtpay/lib/payment-reference";
 import { buildVietQRUrl } from "@/lib/vietqr";
+import {
+  getPlayerOpenBillAccount,
+  attachBookingToOpenBill,
+  getOpenBillVenueSettings,
+} from "@/lib/open-bill";
 
 export const dynamic = "force-dynamic";
 
@@ -78,8 +83,27 @@ export async function POST(request: NextRequest) {
     });
     const totalPrice = resolveCourtBookingPrice(matrix, startTime, slotCount * GRID_GRANULARITY_MINUTES, venueTimezone);
 
-    const paymentRef = await generatePaymentRef("booking");
-    const holdExpiresAt = new Date(Date.now() + HOLD_MINUTES * 60 * 1000);
+    // Check if the player has an active Open Bill account at this venue
+    const openBillAccount = await getPlayerOpenBillAccount(playerId, venueId);
+
+    // Overdue block: if venue settings enable blocking and the player has unpaid bills
+    if (openBillAccount) {
+      const openBillSettings = getOpenBillVenueSettings(venue.settings as Record<string, unknown>);
+      if (openBillSettings.blockOnOverdue) {
+        const overdueCount = await prisma.companyOpenBill.count({
+          where: {
+            companyAccountId: openBillAccount.companyAccountId,
+            status: "overdue",
+          },
+        });
+        if (overdueCount > 0) {
+          return error("Your account has an overdue balance. Please contact the venue.", 402);
+        }
+      }
+    }
+
+    const paymentRef = openBillAccount ? null : await generatePaymentRef("booking");
+    const holdExpiresAt = openBillAccount ? null : new Date(Date.now() + HOLD_MINUTES * 60 * 1000);
 
     try {
       const booking = await prisma.$transaction(async (tx) => {
@@ -120,7 +144,7 @@ export async function POST(request: NextRequest) {
             status: "confirmed",
             priceValue: totalPrice,
             coPlayerIds: [],
-            paymentStatus: "pending",
+            paymentStatus: openBillAccount ? "open_bill" : "pending",
             holdExpiresAt,
             paymentRef,
           },
@@ -128,12 +152,32 @@ export async function POST(request: NextRequest) {
         });
       });
 
+      // Attach open-bill booking to the current bill (outside the main tx — idempotent)
+      if (openBillAccount) {
+        await attachBookingToOpenBill(
+          booking.id,
+          openBillAccount.companyAccountId,
+          venueId
+        );
+
+        return json(
+          {
+            booking,
+            payment: {
+              mode: "open_bill",
+              companyAccountId: openBillAccount.companyAccountId,
+            },
+          },
+          201
+        );
+      }
+
       const qrUrl = buildVietQRUrl({
         bankBin: venue.bankName || "",
         accountNumber: venue.bankAccount || "",
         accountName: venue.bankOwnerName || "",
         amount: totalPrice,
-        description: paymentRef,
+        description: paymentRef!,
       });
 
       return json(
@@ -141,7 +185,7 @@ export async function POST(request: NextRequest) {
           booking,
           payment: {
             paymentRef,
-            holdExpiresAt: holdExpiresAt.toISOString(),
+            holdExpiresAt: holdExpiresAt!.toISOString(),
             qrUrl,
             amount: totalPrice,
             bankName: venue.bankName,

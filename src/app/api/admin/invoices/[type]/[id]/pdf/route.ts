@@ -1,29 +1,15 @@
 import { NextRequest } from "next/server";
-import { renderToStream } from "@react-pdf/renderer";
-import React from "react";
 import { prisma } from "@/lib/db";
 import { requireAdminAccess } from "@/lib/auth";
-import { InvoicePDF, type InvoiceData } from "@/components/pdf/InvoicePDF";
+import type { InvoiceData } from "@/components/pdf/InvoicePDF";
+import {
+  invoicePdfResponse,
+  loadBookingInvoiceData,
+  renderInvoicePdfBuffer,
+  VENUE_WITH_ORG_SELECT,
+} from "@/lib/invoice-pdf-data";
 
 export const dynamic = "force-dynamic";
-
-const VENUE_WITH_ORG_SELECT = {
-  name: true,
-  location: true,
-  logoUrl: true,
-  bankAccount: true,
-  bankName: true,
-  bankOwnerName: true,
-  contactPhone: true,
-  organization: {
-    select: {
-      legalCompanyName: true,
-      registrationNumber: true,
-      taxId: true,
-      registeredAddress: true,
-    },
-  },
-} as const;
 
 function orgLegalFields(
   venue: {
@@ -59,60 +45,13 @@ export async function GET(
     let data: InvoiceData;
 
     if (type === "booking") {
-      const booking = await prisma.booking.findUnique({
-        where: { id },
-        include: {
-          court: { select: { label: true } },
-          player: { select: { name: true, phone: true } },
-          bookingGroup: {
-            select: {
-              paymentRef: true,
-              invoiceNumber: true,
-              invoicedAt: true,
-            },
-          },
-          venue: { select: VENUE_WITH_ORG_SELECT },
-        },
-      });
-
-      if (!booking) return new Response("Booking not found", { status: 404 });
-
-      const invoiceNumber =
-        booking.invoiceNumber ?? booking.bookingGroup?.invoiceNumber;
-      const invoicedAt =
-        booking.invoicedAt ?? booking.bookingGroup?.invoicedAt;
-      const paymentRef =
-        booking.paymentRef ?? booking.bookingGroup?.paymentRef;
-
-      if (!invoiceNumber || !invoicedAt) {
+      const bookingData = await loadBookingInvoiceData(id);
+      if (!bookingData) {
         return new Response("Invoice not yet generated for this booking", {
           status: 404,
         });
       }
-
-      data = {
-        invoiceNumber,
-        invoicedAt: invoicedAt.toISOString(),
-        type: "booking",
-        description: `Court Booking – ${booking.court.label}`,
-        date: booking.date.toISOString(),
-        startTime: booking.startTime.toISOString(),
-        endTime: booking.endTime.toISOString(),
-        quantity: 1,
-        priceValue: booking.priceValue,
-        playerName: booking.player.name,
-        playerPhone: booking.player.phone,
-        paymentMethod: booking.paymentMethod,
-        paymentRef: paymentRef ?? null,
-        venueName: booking.venue.name,
-        venueLocation: booking.venue.location,
-        venueLogoUrl: booking.venue.logoUrl,
-        venueBankAccount: booking.venue.bankAccount,
-        venueBankName: booking.venue.bankName,
-        venueBankOwnerName: booking.venue.bankOwnerName,
-        venuePhone: booking.venue.contactPhone,
-        ...orgLegalFields(booking.venue),
-      };
+      data = bookingData;
     } else if (type === "openplay") {
       const reg = await prisma.openPlayRegistration.findUnique({
         where: { id },
@@ -153,7 +92,6 @@ export async function GET(
         ...orgLegalFields(reg.venue),
       };
     } else {
-      // lesson
       const lesson = await prisma.coachLesson.findUnique({
         where: { id },
         include: {
@@ -202,29 +140,8 @@ export async function GET(
       };
     }
 
-    const filename = `${data.invoiceNumber}.pdf`;
-
-    // renderToStream requires a Document element as root — render via InvoicePDF
-    // which already wraps content in <Document>
-    const element = React.createElement(InvoicePDF, { data });
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const stream = await renderToStream(element as any);
-
-    const chunks: Uint8Array[] = [];
-    for await (const chunk of stream as AsyncIterable<Uint8Array>) {
-      chunks.push(typeof chunk === "string" ? Buffer.from(chunk) : chunk);
-    }
-    const buffer = Buffer.concat(chunks);
-
-    return new Response(buffer, {
-      status: 200,
-      headers: {
-        "Content-Type": "application/pdf",
-        "Content-Disposition": `attachment; filename="${filename}"`,
-        "Content-Length": buffer.length.toString(),
-        "Cache-Control": "no-store",
-      },
-    });
+    const buffer = await renderInvoicePdfBuffer(data);
+    return invoicePdfResponse(buffer, `${data.invoiceNumber}.pdf`);
   } catch (e) {
     console.error("[invoice-pdf]", e);
     return new Response((e as Error).message, { status: 500 });

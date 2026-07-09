@@ -629,7 +629,8 @@ CREATE TABLE public.bookings (
     payment_method text,
     invoice_number text,
     invoiced_at timestamp with time zone,
-    cancellation_reason text
+    cancellation_reason text,
+    company_open_bill_id text
 );
 
 
@@ -817,6 +818,101 @@ CREATE TABLE public.coach_packages (
     min_players integer,
     max_players integer,
     price_per_additional_player integer
+);
+
+
+--
+-- Name: company_account_players; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.company_account_players (
+    id text NOT NULL,
+    company_account_id text NOT NULL,
+    player_id text NOT NULL,
+    added_by text NOT NULL,
+    added_at timestamp(3) without time zone DEFAULT CURRENT_TIMESTAMP NOT NULL
+);
+
+
+--
+-- Name: company_accounts; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.company_accounts (
+    id text NOT NULL,
+    venue_id text NOT NULL,
+    name text NOT NULL,
+    billing_email text,
+    tax_id text,
+    billing_address text,
+    vat_percent integer DEFAULT 10 NOT NULL,
+    price_vat_mode text DEFAULT 'excluded'::text NOT NULL,
+    fixed_discount_percent integer DEFAULT 0 NOT NULL,
+    payment_terms_days integer,
+    open_bill_credit_limit integer,
+    credit_limit_mode text DEFAULT 'warn_only'::text NOT NULL,
+    primary_player_id text,
+    contact_phone text,
+    is_solo boolean DEFAULT false NOT NULL,
+    is_active boolean DEFAULT true NOT NULL,
+    created_at timestamp(3) without time zone DEFAULT CURRENT_TIMESTAMP NOT NULL,
+    updated_at timestamp(3) without time zone DEFAULT CURRENT_TIMESTAMP NOT NULL,
+    CONSTRAINT company_accounts_credit_limit_mode_check CHECK ((credit_limit_mode = ANY (ARRAY['warn_only'::text, 'block'::text]))),
+    CONSTRAINT company_accounts_fixed_discount_percent_check CHECK (((fixed_discount_percent >= 0) AND (fixed_discount_percent <= 100))),
+    CONSTRAINT company_accounts_price_vat_mode_check CHECK ((price_vat_mode = ANY (ARRAY['excluded'::text, 'included'::text])))
+);
+
+
+--
+-- Name: company_open_bill_events; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.company_open_bill_events (
+    id text NOT NULL,
+    bill_id text NOT NULL,
+    event text NOT NULL,
+    actor_id text,
+    actor_type text,
+    note text,
+    meta jsonb,
+    created_at timestamp(3) without time zone DEFAULT CURRENT_TIMESTAMP NOT NULL
+);
+
+
+--
+-- Name: company_open_bills; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.company_open_bills (
+    id text NOT NULL,
+    venue_id text NOT NULL,
+    company_account_id text NOT NULL,
+    period_start date NOT NULL,
+    period_end date,
+    status text DEFAULT 'open'::text NOT NULL,
+    subtotal integer DEFAULT 0 NOT NULL,
+    discount_amount integer DEFAULT 0 NOT NULL,
+    taxable_base integer DEFAULT 0 NOT NULL,
+    vat_amount integer DEFAULT 0 NOT NULL,
+    total_amount integer DEFAULT 0 NOT NULL,
+    vat_percent integer DEFAULT 0 NOT NULL,
+    price_vat_mode text DEFAULT 'excluded'::text NOT NULL,
+    notes text,
+    payment_ref text,
+    invoice_number text,
+    pdf_url text,
+    due_date date,
+    issued_at timestamp(3) without time zone,
+    issued_by text,
+    paid_at timestamp(3) without time zone,
+    paid_by text,
+    paid_method text,
+    voided_at timestamp(3) without time zone,
+    voided_by text,
+    void_reason text,
+    created_at timestamp(3) without time zone DEFAULT CURRENT_TIMESTAMP NOT NULL,
+    updated_at timestamp(3) without time zone DEFAULT CURRENT_TIMESTAMP NOT NULL,
+    CONSTRAINT company_open_bills_status_check CHECK ((status = ANY (ARRAY['open'::text, 'issued'::text, 'paid'::text, 'overdue'::text, 'void'::text])))
 );
 
 
@@ -2456,6 +2552,70 @@ ALTER TABLE ONLY public.coach_packages
 
 
 --
+-- Name: company_account_players company_account_players_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.company_account_players
+    ADD CONSTRAINT company_account_players_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: company_account_players company_account_players_unique; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.company_account_players
+    ADD CONSTRAINT company_account_players_unique UNIQUE (company_account_id, player_id);
+
+
+--
+-- Name: company_accounts company_accounts_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.company_accounts
+    ADD CONSTRAINT company_accounts_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: company_open_bill_events company_open_bill_events_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.company_open_bill_events
+    ADD CONSTRAINT company_open_bill_events_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: company_open_bills company_open_bills_invoice_number_key; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.company_open_bills
+    ADD CONSTRAINT company_open_bills_invoice_number_key UNIQUE (invoice_number);
+
+
+--
+-- Name: company_open_bills company_open_bills_payment_ref_key; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.company_open_bills
+    ADD CONSTRAINT company_open_bills_payment_ref_key UNIQUE (payment_ref);
+
+
+--
+-- Name: company_open_bills company_open_bills_period_unique; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.company_open_bills
+    ADD CONSTRAINT company_open_bills_period_unique UNIQUE (company_account_id, period_start);
+
+
+--
+-- Name: company_open_bills company_open_bills_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.company_open_bills
+    ADD CONSTRAINT company_open_bills_pkey PRIMARY KEY (id);
+
+
+--
 -- Name: court_assignments court_assignments_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -3198,6 +3358,13 @@ CREATE INDEX bookings_booking_group_id ON public.bookings USING btree (booking_g
 
 
 --
+-- Name: bookings_company_open_bill_id_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX bookings_company_open_bill_id_idx ON public.bookings USING btree (company_open_bill_id);
+
+
+--
 -- Name: bookings_payment_ref_key; Type: INDEX; Schema: public; Owner: -
 --
 
@@ -3391,6 +3558,76 @@ CREATE INDEX coach_packages_coach_id_idx ON public.coach_packages USING btree (c
 --
 
 CREATE INDEX coach_packages_venue_id_idx ON public.coach_packages USING btree (venue_id);
+
+
+--
+-- Name: company_account_players_company_id_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX company_account_players_company_id_idx ON public.company_account_players USING btree (company_account_id);
+
+
+--
+-- Name: company_account_players_player_id_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX company_account_players_player_id_idx ON public.company_account_players USING btree (player_id);
+
+
+--
+-- Name: company_accounts_primary_player_id_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX company_accounts_primary_player_id_idx ON public.company_accounts USING btree (primary_player_id);
+
+
+--
+-- Name: company_accounts_venue_id_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX company_accounts_venue_id_idx ON public.company_accounts USING btree (venue_id);
+
+
+--
+-- Name: company_open_bill_events_bill_id_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX company_open_bill_events_bill_id_idx ON public.company_open_bill_events USING btree (bill_id);
+
+
+--
+-- Name: company_open_bill_events_created_at_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX company_open_bill_events_created_at_idx ON public.company_open_bill_events USING btree (created_at);
+
+
+--
+-- Name: company_open_bills_company_id_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX company_open_bills_company_id_idx ON public.company_open_bills USING btree (company_account_id);
+
+
+--
+-- Name: company_open_bills_period_start_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX company_open_bills_period_start_idx ON public.company_open_bills USING btree (period_start);
+
+
+--
+-- Name: company_open_bills_status_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX company_open_bills_status_idx ON public.company_open_bills USING btree (status);
+
+
+--
+-- Name: company_open_bills_venue_id_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX company_open_bills_venue_id_idx ON public.company_open_bills USING btree (venue_id);
 
 
 --
@@ -4241,6 +4478,14 @@ ALTER TABLE ONLY public.bookings
 
 
 --
+-- Name: bookings bookings_company_open_bill_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.bookings
+    ADD CONSTRAINT bookings_company_open_bill_id_fkey FOREIGN KEY (company_open_bill_id) REFERENCES public.company_open_bills(id) ON DELETE SET NULL;
+
+
+--
 -- Name: bookings bookings_court_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -4462,6 +4707,62 @@ ALTER TABLE ONLY public.coach_packages
 
 ALTER TABLE ONLY public.coach_packages
     ADD CONSTRAINT coach_packages_venue_id_fkey FOREIGN KEY (venue_id) REFERENCES public.venues(id) ON UPDATE CASCADE ON DELETE RESTRICT;
+
+
+--
+-- Name: company_account_players company_account_players_company_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.company_account_players
+    ADD CONSTRAINT company_account_players_company_fkey FOREIGN KEY (company_account_id) REFERENCES public.company_accounts(id) ON DELETE CASCADE;
+
+
+--
+-- Name: company_account_players company_account_players_player_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.company_account_players
+    ADD CONSTRAINT company_account_players_player_fkey FOREIGN KEY (player_id) REFERENCES public.players(id) ON DELETE CASCADE;
+
+
+--
+-- Name: company_accounts company_accounts_primary_player_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.company_accounts
+    ADD CONSTRAINT company_accounts_primary_player_id_fkey FOREIGN KEY (primary_player_id) REFERENCES public.players(id) ON DELETE SET NULL;
+
+
+--
+-- Name: company_accounts company_accounts_venue_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.company_accounts
+    ADD CONSTRAINT company_accounts_venue_id_fkey FOREIGN KEY (venue_id) REFERENCES public.venues(id) ON DELETE CASCADE;
+
+
+--
+-- Name: company_open_bill_events company_open_bill_events_bill_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.company_open_bill_events
+    ADD CONSTRAINT company_open_bill_events_bill_fkey FOREIGN KEY (bill_id) REFERENCES public.company_open_bills(id) ON DELETE CASCADE;
+
+
+--
+-- Name: company_open_bills company_open_bills_company_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.company_open_bills
+    ADD CONSTRAINT company_open_bills_company_fkey FOREIGN KEY (company_account_id) REFERENCES public.company_accounts(id) ON DELETE CASCADE;
+
+
+--
+-- Name: company_open_bills company_open_bills_venue_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.company_open_bills
+    ADD CONSTRAINT company_open_bills_venue_fkey FOREIGN KEY (venue_id) REFERENCES public.venues(id) ON DELETE CASCADE;
 
 
 --
@@ -5396,4 +5697,6 @@ INSERT INTO public.schema_migrations (version) VALUES
     ('20260707015817'),
     ('20260708013950'),
     ('20260708235206'),
-    ('20260709001329');
+    ('20260709001329'),
+    ('20260709081528'),
+    ('20260709091207');

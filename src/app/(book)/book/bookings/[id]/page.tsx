@@ -1,11 +1,12 @@
 "use client";
 export const dynamic = "force-dynamic";
 
-import { useParams, useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useParams, useRouter, useSearchParams } from "next/navigation";
+import { useCallback, useEffect, useState } from "react";
 import { usePlayerVenue } from "../../components/PlayerVenueContext";
 import { usePlayerSession } from "../../components/usePlayerSession";
 import { portalFetch } from "@/lib/portal-fetch";
+import { getPlayerToken } from "@/lib/player-token";
 import { resolveUploadUrl } from "@/lib/resolve-upload-url";
 import { useTranslation } from "react-i18next";
 import { useBookFormatters } from "../../lib/useBookFormatters";
@@ -26,6 +27,7 @@ import {
 export default function BookingDetailPage() {
   const { id } = useParams<{ id: string }>();
   const router = useRouter();
+  const searchParams = useSearchParams();
   const { status } = usePlayerSession();
   const { t } = useTranslation();
   const { formatDateField, formatTime, formatPrice } = useBookFormatters();
@@ -34,6 +36,32 @@ export default function BookingDetailPage() {
   const [venueContact, setVenueContact] = useState<VenueContact | null>(null);
   const [cancelling, setCancelling] = useState(false);
   const [showConfirm, setShowConfirm] = useState(false);
+  const [downloadingInvoice, setDownloadingInvoice] = useState(false);
+
+  const downloadInvoice = useCallback(async (invoiceNumber: string) => {
+    setDownloadingInvoice(true);
+    try {
+      const token = getPlayerToken();
+      const res = await fetch(`/api/public/invoices/booking/${id}/pdf`, {
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+      });
+      if (!res.ok) {
+        const text = await res.text();
+        throw new Error(text || "Download failed");
+      }
+      const blob = await res.blob();
+      const objectUrl = URL.createObjectURL(blob);
+      const anchor = document.createElement("a");
+      anchor.href = objectUrl;
+      anchor.download = `${invoiceNumber}.pdf`;
+      anchor.click();
+      URL.revokeObjectURL(objectUrl);
+    } catch (err) {
+      alert((err as Error).message || t("bookingDetail.invoiceDownloadFailed"));
+    } finally {
+      setDownloadingInvoice(false);
+    }
+  }, [id, t]);
 
   useEffect(() => {
     if (status === "unauthenticated") router.replace("/book/login");
@@ -57,6 +85,23 @@ export default function BookingDetailPage() {
         .catch(() => {});
     }
   }, [status, id, router, playerVenueId]);
+
+  useEffect(() => {
+    if (!booking) return;
+    const siblings =
+      (booking.siblingBookings as { id: string }[] | undefined) ?? [];
+    const isGrp = siblings.length > 0;
+    const effStatus = (isGrp
+      ? (booking.groupPaymentStatus as string | null)
+      : (booking.paymentStatus as string | null)) ?? "";
+    if (!isPaid(effStatus)) return;
+    const inv = isGrp
+      ? (booking.groupInvoiceNumber as string | null | undefined)
+      : (booking.invoiceNumber as string | null | undefined);
+    if (!inv || searchParams.get("invoice") !== "1") return;
+    void downloadInvoice(inv);
+    router.replace(`/book/bookings/${id}`, { scroll: false });
+  }, [booking, searchParams, downloadInvoice, router, id]);
 
   async function handleCancel() {
     setCancelling(true);
@@ -98,6 +143,9 @@ export default function BookingDetailPage() {
   const bookingDate = booking.date as string;
   const paymentInfo = resolvePaymentInfo(effectivePaymentStatus);
   const paid = isPaid(effectivePaymentStatus ?? "");
+  const invoiceNumber = isGroup
+    ? (booking.groupInvoiceNumber as string | null | undefined)
+    : (booking.invoiceNumber as string | null | undefined);
 
   const helpMessage = venueContact
     ? t("bookingDetail.helpMessage", {
@@ -150,7 +198,21 @@ export default function BookingDetailPage() {
         {effectivePaymentRef && !isCancelled && (
           <Row label={t("common.paymentRef")} value={effectivePaymentRef} valueClass="font-mono text-xs" />
         )}
+        {paid && invoiceNumber && !isCancelled && (
+          <Row label={t("bookingDetail.invoice")} value={invoiceNumber} valueClass="font-mono text-xs" />
+        )}
       </div>
+
+      {paid && !isCancelled && invoiceNumber && (
+        <button
+          type="button"
+          onClick={() => void downloadInvoice(invoiceNumber)}
+          disabled={downloadingInvoice}
+          className="w-full py-3 bg-emerald-600 text-white rounded-xl font-medium text-sm mb-3 disabled:opacity-60"
+        >
+          {downloadingInvoice ? t("common.loading") : t("bookingDetail.downloadInvoice")}
+        </button>
+      )}
 
       {paid && !isCancelled && <ConfirmedBanner />}
       {paymentStatus === "proof_submitted" && !isCancelled && <VerifyingBanner />}

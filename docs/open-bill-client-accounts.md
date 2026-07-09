@@ -1,18 +1,20 @@
 # Open Bill Client Accounts — Product Specification
 
-**Version:** 1.0  
-**Last updated:** 7 July 2026  
-**Status:** Approved for development (pending client sign-off)
+**Version:** 2.0 (B2B)
+**Last updated:** 9 July 2026
+**Status:** Approved for development
 
 ---
 
 ## 1. Summary
 
-Open Bill is a deferred-payment mode for selected **Player accounts** in CourtPass. Typical clients are external coaches, academies, or other regular renters who book court time throughout the month and pay **once** at month-end instead of after each booking.
+Open Bill is a deferred-payment mode for business and individual clients in CourtPass. Typical clients are external academies, coaches booking regularly, or any business client who prefers to pay once at month-end rather than per-booking.
 
-The venue **Manager** enables Open Bill on a player profile. That player books courts normally in CourtPass without immediate payment. Bookings accumulate on a monthly statement. At month-end (automatically on the 1st, or on demand), the system generates an **itemized PDF**, emails it to the client, and collects payment via **VietQR / SePay** or **manual bank transfer** confirmed by venue staff.
+CourtPass uses a **company-first ownership model**: billing is owned by a **Company Account**, not directly by a player. A single company account can have multiple linked players. Solo external coaches are a degenerate case of the same model with simplified display.
 
-This feature applies to **court bookings only**. It is not linked to internal staff coaches, coach lessons, or open play.
+**Important: the venue Manager creates Company Accounts and links players. Clients do not self-register.**
+
+This feature applies to **court bookings only**.
 
 ---
 
@@ -20,84 +22,59 @@ This feature applies to **court bookings only**. It is not linked to internal st
 
 | Role | Responsibility |
 |------|----------------|
-| **Player (Open Bill client)** | Books courts via CourtPass; receives monthly statement; pays the consolidated bill |
-| **Manager** | Enables/disables Open Bill on a player profile; can issue statements manually; can mark bills paid |
+| **Manager / Superadmin** | Creates company accounts, links/unlinks players, configures billing terms, issues statements, marks bills paid, voids bills |
 | **Staff (with CourtPass admin access)** | Can issue statements and mark bills paid (same as manager for payment actions) |
-| **System (cron)** | Auto-issues statements on the 1st of each month for the previous period |
-
-**Important:** Staff members and internal coaches are **not** the billed party. Billing is always to the **Player account** (e.g. an academy or external coach operating as a business client).
-
----
-
-## 3. Agreed business rules
-
-| Topic | Decision |
-|-------|----------|
-| **Who books** | The player themselves via CourtPass (self-service) |
-| **Who enables Open Bill** | Manager (admin panel → CourtPass Players → player profile) |
-| **What is billed** | Court bookings only |
-| **Payment methods** | VietQR / SePay auto-match **and** manual transfer + staff/manager confirmation |
-| **Statement format** | Itemized (one line per booking); PDF generated and emailed to client |
-| **Auto-issue** | Yes — statements auto-issued on the **1st of each month** for the closed period (configurable per venue) |
-| **Running balance** | Player sees current-month total in CourtPass while the bill is still open |
-| **First bill period** | If Open Bill is enabled mid-month, the first period **starts from the enable date** (not the 1st of the month) |
-| **Cancelled bookings** | Remain on the statement as a **0 VND line** (not removed) |
-| **Overdue blocking** | **Off by default**; venue can enable blocking new bookings after N days unpaid (default: 14 days) |
-| **Who can mark paid** | Manager, superadmin, and staff with CourtPass admin access |
-| **Scope** | Per-player flag only — any player can be an Open Bill client; not tied to coach/staff records |
+| **Player (Open Bill client)** | Books courts normally via CourtPass; bookings are automatically added to the company's open bill; receives and pays consolidated monthly statement |
+| **System (cron)** | Auto-issues statements on the 1st of each month for all open bills from the previous period (when venue setting enabled) |
 
 ---
 
-## 4. Enabling an Open Bill client
+## 3. Locked Product Rules
 
-### 4.1 Turn on
+- **Manager provisions everything.** Company accounts and player linkages are created and maintained exclusively by the venue manager. Clients cannot self-create accounts.
+- **Company-first ownership.** Every bill is owned by a `company_account`, not a player. Multiple players can be linked to one account (e.g. a whole academy).
+- **Solo players use the same model.** An external coach with a solo account gets a `company_account` record with `is_solo = true`. The PDF and admin UI suppress the company/VAT fields for solo accounts.
+- **Binary settlement.** Payment status is `open → issued → paid` (or `overdue` if late, `void` if cancelled). Partial payments and credit carry-forward are out of scope for this version.
+- **Court bookings only.** Open Bill does not apply to coach lessons, open play, or staff-created sessions.
 
-1. Manager opens **Admin → CourtPass Players** and selects the player.
-2. Manager toggles **“Open Bill client”** on the player profile.
-3. System records when and by whom it was enabled.
-4. From that moment, new court bookings by this player skip per-booking payment and attach to the current open bill.
+---
 
-### 4.2 Turn off (close account)
+## 4. Account types
 
-When the manager **disables** Open Bill:
+### 4.1 Business Account
 
-1. System checks whether there is an **open** bill with bookings for this player at this venue.
-2. **If there are bookings:** the system **immediately issues** the statement (PDF + email + payment reference), same as month-end. The manager sees a confirmation before disabling: *“This will issue and email the current statement immediately.”*
-3. **If the open bill is empty:** the empty bill is removed; nothing is sent.
-4. `Open Bill client` is set to **off**.
-5. **Future bookings** follow the normal pay-per-booking flow (VietQR, 5-minute hold, etc.).
+Used for companies, academies, or any entity with billing identity:
 
-This ensures no balance is left unbilled when an account is closed.
+- Company name, Tax ID, billing address, billing email
+- VAT % (default 10%) and VAT mode (excluded = added on top, included = derived from gross)
+- Fixed discount applied per statement (e.g. regular client discount in VND)
+- Multiple linked players — each player's bookings accumulate under the same statement
+- Statement PDF includes legal/billing block, VAT breakdown, and a **Booker** column for line-item reconciliation (showing which player made each booking)
+
+### 4.2 Solo Player Account
+
+Used for individual external coaches:
+
+- Account name = player name
+- No tax ID, no billing address, no VAT
+- Single linked player
+- Statement PDF uses simplified layout (no company block, no Booker column, no VAT)
 
 ---
 
 ## 5. Booking experience (player)
 
-### 5.1 Normal player vs Open Bill client
-
 | Step | Normal player | Open Bill client |
 |------|---------------|------------------|
 | Select court, date, time | Same | Same |
-| Confirm booking | VietQR + 5 min payment hold | **No payment** — booking confirmed immediately |
-| Court reserved | After payment or hold | **Immediately** |
-| Email | Pay-now link | Booking confirmed only (no pay link) |
-| Booking status | Pending payment → Paid | **On account** (billed monthly) |
+| Confirm booking | VietQR + 5 min hold | **No payment** — confirmed immediately |
+| Court reserved | After payment/hold | **Immediately** |
+| Booking status | Pending → Paid | **On account** |
+| CourtPass display | Pay now link | "On account · Added to {Account Name}" |
 
-### 5.2 What the player sees in CourtPass
+### Overdue block (optional, venue setting)
 
-- **My bookings:** each open-bill booking shows **“On account”** instead of “Pay now”.
-- **Open Bill page** (new section under account):
-  - Current period label (e.g. “July 2026” or “15 Jul – 31 Jul 2026” for a partial first month)
-  - List of bookings on the current bill (court, date, time, amount)
-  - **Running total** for the month so far
-  - History of past statements (status, PDF download, pay link when unpaid)
-
-### 5.3 Overdue block (optional, venue setting)
-
-If the venue enables **“Block new bookings if unpaid”** and the player has an unpaid statement past the due date by more than **N days** (default 14):
-
-- New court bookings are **rejected** with a clear message to contact the venue.
-- Default: **blocking is off** — players can keep booking even with an old unpaid bill.
+If the venue enables **"Block bookings when overdue"**, players on an account with an overdue unpaid statement will see an error at booking time and must contact the venue. Default: off.
 
 ---
 
@@ -105,16 +82,16 @@ If the venue enables **“Block new bookings if unpaid”** and the player has a
 
 ```mermaid
 flowchart TD
-    book["Player books court"] --> attach["Booking added to open bill"]
-    attach --> openBill["Bill status: Open"]
-    openBill --> issue["1st of month auto-issue\nOR manager Issue now\nOR disable Open Bill"]
-    issue --> pdf["Generate itemized PDF"]
-    pdf --> email["Email PDF + pay link to player"]
-    email --> issued["Bill status: Issued\nDue date set"]
-    issued --> sepay["SePay auto-match\nbank transfer"]
-    issued --> manual["Staff/Manager\nmarks paid"]
-    sepay --> paid["Bill status: Paid\nAll line items marked paid"]
-    manual --> paid
+    bookingCreated["Player books court"] --> attachBill["Booking attached to Company Open Bill"]
+    attachBill --> openState["Status: Open (accumulating)"]
+    openState --> issueStep["Issue statement\n(cron 1st / manager / account closure)"]
+    issueStep --> issuedState["Status: Issued\nPDF + email + payment ref generated"]
+    issuedState --> paidStep["Paid (SePay auto-match or manual confirm)"]
+    issuedState --> overdueStep["Daily aging cron → past due date"]
+    issuedState --> voidStep["Void (manager, with reason)"]
+    paidStep --> paidState["Status: Paid\nAll bookings marked paid"]
+    overdueStep --> overdueState["Status: Overdue"]
+    voidStep --> voidState["Status: Void\nBookings reverted to pending"]
 ```
 
 ### 6.1 Bill statuses
@@ -122,172 +99,159 @@ flowchart TD
 | Status | Meaning |
 |--------|---------|
 | **Open** | Month in progress; bookings still accumulating |
-| **Issued** | Statement sent; payment due |
+| **Issued** | Statement generated; payment due |
 | **Paid** | Full amount received and confirmed |
-| **Overdue** | Past due date and still unpaid (used for blocking logic if enabled) |
+| **Overdue** | Past due date, still unpaid; triggers optional block |
+| **Void** | Cancelled by manager (reason required) |
 
 ### 6.2 When a statement is issued
 
-A statement is generated when **any** of these happen:
+1. **Automatic:** 1st of each month (cron) for all open bills from the previous period (venue setting: `autoIssueOnFirst`, default on)
+2. **Manual:** Manager or staff clicks **"Issue statement now"**
+3. **Account closure:** Manager deactivates the company account — any open bill with bookings is immediately issued before closure
 
-1. **Automatic:** 1st of each month (cron) for all Open Bill clients with an open bill for the **previous** period.
-2. **Manual:** Manager or staff clicks **“Issue statement now”** on the player profile.
-3. **Account closure:** Manager disables Open Bill and there are unbilled bookings.
+### 6.3 Statement contents (PDF)
 
-### 6.3 Statement contents (PDF + email)
-
-Each statement includes:
-
-| Section | Content |
-|---------|---------|
-| Header | Venue name, logo, bank details |
-| Bill to | Player name, phone, email |
-| Period | Start and end dates (e.g. 1 Jul 2026 – 31 Jul 2026, or partial month from enable date) |
-| Line items | One row per booking: date, court, time slot, duration, amount |
-| Cancelled bookings | Shown with **0 VND** (line kept for audit) |
-| Total | Sum of non-cancelled lines |
-| Payment | Single transfer reference (e.g. `CF-OB-XXXXXX`), VietQR, due date |
-| Footer | Venue contact details |
-
-The PDF is attached or linked in the email sent to the player. A copy can be downloaded from the admin panel and the player portal.
-
-### 6.4 First period (mid-month enable)
-
-Example: Open Bill enabled on **15 July 2026**.
-
-- First bill period: **15 Jul – 31 Jul 2026** (not 1 Jul – 31 Jul).
-- Bookings from 15 Jul onward attach to this bill.
-- On **1 August**, this bill is auto-issued (if auto-issue is on).
-- The **next** open bill starts **1 Aug – 31 Aug 2026** (full calendar month).
+| Section | Business Account | Solo Account |
+|---------|-----------------|--------------|
+| Header | Venue name, logo, address, tax ID | Same |
+| Bill To | Company name, Tax ID, billing address, contact | Player name, contact |
+| Period | Start – end dates | Same |
+| Line items (per booking) | Date, Court, Time, **Booker name**, Amount | Date, Court, Time, Amount |
+| Cancelled bookings | 0 ₫ line (kept for audit) | Same |
+| Totals | Subtotal, Fixed Discount, Taxable Base, VAT%, VAT Amount, **Total Due** | Subtotal, **Total Due** |
+| Payment | Reference (CF-OB-XXXXXX), bank details, due date | Same |
 
 ---
 
-## 7. Payment
+## 7. B2B financial calculations
 
-### 7.1 Single payment per statement
+Calculation order per statement:
 
-The client pays **one amount** for the whole month, not per booking.
+1. **Subtotal** — sum of non-cancelled booking prices
+2. **Fixed Discount** — subtract fixed amount (clamped: discount ≤ subtotal)
+3. **Taxable Base** — subtotal − discount (minimum 0)
+4. **VAT** — applied based on mode:
+   - `excluded` (default): `vatAmount = taxableBase × vatPercent / 100`; `total = taxableBase + vatAmount`
+   - `included`: `vatAmount = taxableBase − taxableBase / (1 + vatPercent/100)`; `total = taxableBase`
 
-- **Payment reference:** one code per statement (e.g. `CF-OB-XXXXXX`) for bank transfer matching.
-- **VietQR:** player opens pay page from email or portal; scans QR for the **total** amount.
-
-### 7.2 SePay auto-confirmation
-
-If the venue has SePay auto-payment enabled:
-
-- Incoming transfer matching the statement reference and amount (within tolerance) marks the bill **Paid** automatically.
-- All bookings on that statement are marked paid at once.
-
-### 7.3 Manual confirmation
-
-If auto-match does not apply or the client paid outside SePay:
-
-- Manager or staff (with CourtPass access) opens the statement in admin.
-- Clicks **Mark paid**, enters method (cash, transfer, etc.), optional reference and proof.
-- Bill and all linked bookings are marked paid.
-
-### 7.4 Proof upload
-
-Player can upload payment proof from the pay page (same pattern as existing bookings). Statement stays **Issued** until staff/manager confirms.
+For **solo accounts**: VAT is always 0; total = subtotal − discount.
 
 ---
 
-## 8. Venue settings — Open Bill setup
+## 8. Payment
 
-New tab under **Admin → General Settings → Open Bill** (per venue):
+### 8.1 Payment reference
 
-| Setting | Default | Description |
-|---------|---------|-------------|
-| **Auto-issue on 1st of month** | On | Generate and email statements automatically on the 1st for the previous period |
-| **Payment due (days)** | 7 | Days after issue until payment is due |
-| **Block new bookings if unpaid** | Off | Prevent new court bookings when overdue |
-| **Block after (days)** | 14 | Only if blocking is on — days after due date before blocking applies |
+Each issued statement gets a unique reference: `CF-OB-XXXXXX` (6 alphanumeric characters).
+
+### 8.2 SePay auto-confirmation
+
+If the venue has SePay enabled, incoming transfers matching the reference and amount (±5,000 ₫ tolerance) automatically mark the bill **Paid** and all linked bookings paid.
+
+### 8.3 Manual confirmation
+
+Manager or staff (with CourtPass admin access) opens the statement in the admin panel, clicks **Mark Paid**, selects method (cash, transfer, etc.) and optionally adds a note.
 
 ---
 
-## 9. Manager / staff workflows
+## 9. Manager / Staff workflows
 
-### 9.1 CourtPass Players — player detail
+### 9.1 Admin → Open Bill Accounts
 
-When **Open Bill client** is enabled:
+New top-level admin page at `Admin → Open Bill Accounts`:
 
-- **Badge** “Open Bill” on player header and list (optional).
-- **Running total** for the current open period.
-- **Issue statement now** button.
-- **Bill history** table: period, total, status, issued date, paid date, PDF download, Mark paid.
+- Lists all company accounts for the venue
+- Shows current open bill running balance and any issued/overdue amounts
+- **Create** new account (company or solo)
+- **Edit** account details (billing info, VAT, discount, payment terms)
+- **Link / Unlink** players by Player ID
+- Per-bill actions: Issue, Mark Paid, Void, Download PDF
 
-When disabled:
+### 9.2 Account closure flow
 
-- Confirmation modal before closing account (triggers immediate issue if balance exists).
+When a manager deactivates an account:
+1. If the current open bill has any bookings → system issues it immediately (same as month-end)
+2. If the open bill is empty → it is voided silently
+3. Account status = inactive; existing bills remain accessible for audit
 
-### 9.2 Permissions
+### 9.3 Permissions
 
 | Action | Manager | Superadmin | Staff (CourtPass admin access) |
 |--------|---------|------------|-------------------------------|
-| Enable / disable Open Bill on player | Yes | Yes | No |
-| Issue statement manually | Yes | Yes | Yes |
-| Mark statement paid | Yes | Yes | Yes |
-| Configure Open Bill venue settings | Yes | Yes | Yes (if admin access) |
+| Create / edit company accounts | ✓ | ✓ | ✗ |
+| Link / unlink players | ✓ | ✓ | ✗ |
+| Issue statement | ✓ | ✓ | ✓ |
+| Mark statement paid | ✓ | ✓ | ✓ |
+| Void statement | ✓ | ✓ | ✗ |
+| Configure venue Open Bill settings | ✓ | ✓ | ✓ |
+| Download PDF | ✓ | ✓ | ✓ |
 
 ---
 
-## 10. Example scenario
+## 10. Venue settings (Admin → General Settings → Open Bill)
 
-**Client:** Academy “Pickle Pro” (Player account with email).
+| Setting | Default | Description |
+|---------|---------|-------------|
+| **Auto-issue on 1st of month** | On | Generate and email statements automatically on the 1st |
+| **Payment due (days)** | 7 | Days after issue until payment is due |
+| **Block bookings when overdue** | Off | Prevent new bookings when account has overdue balance |
+| **Block after (days)** | 14 | Days after due date before blocking applies |
 
-1. **1 July** — Manager enables Open Bill on Pickle Pro’s profile.
-2. **July** — Pickle Pro books Court 2 twenty-five times (1 hour each) via CourtPass. Each booking shows “On account”. Running total in portal: e.g. 12,500,000 VND.
-3. **1 August 00:00** — System auto-issues July statement: 25 line items, total 12,500,000 VND, PDF emailed with VietQR and ref `CF-OB-A1B2C3`.
-4. **3 August** — Academy transfers 12,500,000 VND with the reference. SePay marks bill Paid; all 25 bookings marked paid.
-5. **Alternative:** Transfer without auto-match → staff marks paid in admin with transfer ref.
-
-**Mid-month close example:**
-
-- Open Bill enabled 10 July; 8 bookings by 20 July.
-- Manager disables Open Bill on 20 July → system immediately issues statement for 10–20 July (8 lines), emails PDF, then turns off Open Bill.
-- Next booking by that player requires normal upfront payment.
+Account-level **Payment Terms (days)** override the venue default when set.
 
 ---
 
-## 11. Out of scope (v1)
+## 11. Example scenarios
 
-- Coach lessons, open play, or staff-created bookings as a separate flow (unless booked under the same Open Bill player account via portal).
-- Linking Open Bill to internal staff/coach records (`coachStaffId`).
-- Per-booking VietQR for Open Bill clients.
-- Mobile staff app changes (admin PWA + player portal only for v1).
-- Automatic blocking of new bookings when overdue (available as opt-in setting only).
+### 11.1 Business account (academy)
 
----
+1. **Manager** creates "Pickle Pro Academy" company account with Tax ID, 10% VAT excluded, 500,000 ₫ fixed discount.
+2. Manager links two players: **Coach A** and **Coach B**.
+3. During July: Coach A books 15 courts; Coach B books 10 courts.
+4. **1 August**: Cron auto-issues July statement. Statement shows 25 line items with a Booker column, subtotal X, discount 500,000 ₫, taxable base Y, VAT 10%, **Total Due Z**, payment ref `CF-OB-A1B2C3`.
+5. Academy transfers total with reference. SePay auto-matches → bill Paid, all 25 bookings marked paid.
 
-## 12. Implementation phases (estimate)
+### 11.2 Solo external coach
 
-| Phase | Deliverable | Estimate |
-|-------|-------------|----------|
-| 1 | Database + core booking logic (open bill attachment, no pay at booking) | 1–2 days |
-| 2 | Manager toggle + disable/close flow with immediate issue | 1 day |
-| 3 | Statement issue: itemized PDF + email | 1.5 days |
-| 4 | Payment: SePay + manual mark paid + player pay page | 1 day |
-| 5 | Admin UI: player profile, bill history, settings tab | 1.5 days |
-| 6 | Player portal: on-account status, running balance, history | 1 day |
-| 7 | Auto-issue cron (1st of month) + translations (EN/VI) | 0.5 day |
+1. Manager creates solo account "Nguyen Van A" (is_solo = true), links player Nguyen Van A.
+2. Coach books 20 courts in August.
+3. 1 September: Statement issued with 20 lines, no Booker column, no VAT. Total = subtotal.
+4. Coach pays via bank transfer; staff marks paid manually.
 
-**Total:** approximately **6–8 working days**
+### 11.3 Mid-month closure
 
----
-
-## 13. Sign-off checklist
-
-Please confirm before development starts:
-
-- [ ] Open Bill is per **Player account**, managed by **Manager**, billed to the **player/client**.
-- [ ] **Court bookings only**; player self-books in CourtPass.
-- [ ] **Auto-issue on 1st**; **itemized PDF + email**; **SePay + manual** payment.
-- [ ] **First period starts on enable date** if mid-month.
-- [ ] **Cancelled bookings = 0 VND line** on statement.
-- [ ] **Disable Open Bill** → immediate issue if balance exists.
-- [ ] **Overdue block** optional, default off, 14-day threshold configurable in General Settings.
-- [ ] **Mark paid:** Manager + staff with CourtPass admin access.
+1. Open Bill enabled for "Academy B" on 10 July; 8 bookings by 20 July.
+2. Manager deactivates account on 20 July.
+3. System immediately issues statement for 10–20 July (8 lines), then sets account inactive.
+4. Future bookings by linked players require normal upfront VietQR payment.
 
 ---
 
-*Document prepared for client review. Implementation will begin after sign-off.*
+## 12. Out of scope (v1)
+
+- Partial payments and line-level dispute settlement
+- Overpayment / credit carry-forward
+- Coach lessons, open play, or staff-created sessions under Open Bill
+- Mobile app (RN) changes — admin PWA and player portal only for v1
+- Email delivery of PDF (statement generation is implemented; email hook is a TODO)
+
+---
+
+## 13. Implementation phases
+
+| Phase | Deliverable |
+|-------|-------------|
+| 1 | Database schema (company_accounts, company_open_bills, company_account_players, company_open_bill_events) + migration |
+| 2 | Core business logic (issueBill, markBillPaid, voidBill, recalcOpenBill, attachBookingToOpenBill) |
+| 3 | Public booking flow: detect open-bill player, skip payment hold, attach to bill |
+| 4 | Admin API routes: CRUD accounts, link/unlink players, issue/mark-paid/void/pdf |
+| 5 | PDF generation: OpenBillStatementPDF with Booker column and VAT breakdown |
+| 6 | SePay handler: CF-OB- prefix matching |
+| 7 | Admin UI: Open Bill Accounts page |
+| 8 | Cron: daily overdue aging + 1st-of-month auto-issue |
+| 9 | Player portal API: /api/public/open-bill |
+
+---
+
+*Document updated for B2B company-first model with manager-controlled provisioning.*

@@ -6,7 +6,9 @@ import { checkInSubscriber } from "./check-in";
 import { allocateInvoiceNumber } from "@/lib/invoice-number";
 import { getActiveSubscription } from "./subscription";
 import { sendBookingEmail, buildLessonEmailContext, sendLessonEventEmails } from "@/lib/email/send";
+import { buildCourtBookingEmailDetails } from "@/lib/email/court-booking-details";
 import { createCalendarEvent } from "@/lib/google-calendar";
+import { markBillPaid } from "@/lib/open-bill";
 import type { SepayWebhookPayload } from "../types";
 
 /**
@@ -127,19 +129,25 @@ async function handlePortalBookingPayment(
       select: { name: true, email: true },
     });
     if (player?.email) {
-      const groupCourts = await prisma.booking.findMany({
+      const firstBooking = await prisma.booking.findFirst({
         where: { bookingGroupId: group.id },
-        include: { court: { select: { label: true } } },
+        orderBy: { startTime: "asc" },
+        select: { id: true },
       });
-      const courtName = groupCourts.map((b) => b.court.label).join(", ");
-      await sendBookingEmail({
-        to: player.email,
-        playerName: player.name,
-        bookingType: "court",
-        emailType: "auto_confirmed",
-        venueId: group.venueId,
-        details: { courtName },
-      });
+      if (firstBooking) {
+        const emailDetails = await buildCourtBookingEmailDetails(
+          firstBooking.id,
+          group.playerId
+        );
+        await sendBookingEmail({
+          to: player.email,
+          playerName: player.name,
+          bookingType: "court",
+          emailType: "auto_confirmed",
+          venueId: group.venueId,
+          details: emailDetails,
+        });
+      }
     }
 
     return { matched: true, paymentId: group.id };
@@ -165,13 +173,14 @@ async function handlePortalBookingPayment(
     select: { name: true, email: true },
   });
   if (player?.email) {
+    const emailDetails = await buildCourtBookingEmailDetails(booking.id, booking.playerId);
     await sendBookingEmail({
       to: player.email,
       playerName: player.name,
       bookingType: "court",
       emailType: "auto_confirmed",
       venueId: booking.venueId,
-      details: { courtName: booking.court.label },
+      details: emailDetails,
     });
   }
 
@@ -319,6 +328,38 @@ async function handlePortalCreditPayment(
   return { matched: true, paymentId: credit.id };
 }
 
+async function handleOpenBillPayment(
+  payload: SepayWebhookPayload,
+  ref: string
+): Promise<{ matched: boolean; paymentId?: string }> {
+  const bill = await prisma.companyOpenBill.findFirst({ where: { paymentRef: ref } });
+
+  if (!bill || (bill.status !== "issued" && bill.status !== "overdue")) {
+    return { matched: false };
+  }
+
+  const tolerance = 5000;
+  if (payload.transferAmount < bill.totalAmount - tolerance) {
+    return { matched: false };
+  }
+
+  // Check that the venue has SePay auto-payment enabled
+  const venue = await prisma.venue.findUnique({
+    where: { id: bill.venueId },
+    select: { settings: true },
+  });
+  const venueSettings = (venue?.settings ?? {}) as Record<string, unknown>;
+  if (!venueSettings.autoPaymentEnabled || !venueSettings.sepayEnabled) {
+    return { matched: false };
+  }
+
+  await markBillPaid(bill.id, "sepay", "sepay", "vietqr", {
+    note: `SePay auto-match: ${payload.transferAmount} VND, ref ${ref}`,
+  });
+
+  return { matched: true, paymentId: bill.id };
+}
+
 /**
  * Process a SePay webhook payload: match payment, confirm, and activate subscription if applicable.
  * Returns true if a payment was matched and processed.
@@ -354,6 +395,9 @@ export async function processSepayWebhook(
   }
   if (ref.startsWith("CF-OP-")) {
     return handlePortalOpenPlayPayment(payload, ref);
+  }
+  if (ref.startsWith("CF-OB-")) {
+    return handleOpenBillPayment(payload, ref);
   }
 
   const pending = await prisma.pendingPayment.findUnique({

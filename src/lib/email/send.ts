@@ -41,6 +41,10 @@ export interface SendBookingEmailParams {
     endTimeISO?: string;
     /** Payment link for staff-created bookings pending payment */
     paymentUrl?: string;
+    /** Invoice reference shown after payment is confirmed */
+    invoiceNumber?: string;
+    /** Magic-link URL to download the invoice PDF */
+    invoiceUrl?: string;
   };
 }
 
@@ -176,16 +180,13 @@ function buildEmail(params: SendBookingEmailParams): { subject: string; html: st
   const amountLine = details.amount !== undefined
     ? `<p><strong>Amount:</strong> ${details.amount.toLocaleString()} VND</p>`
     : "";
+  const invoiceLine = details.invoiceNumber
+    ? `<p><strong>Invoice:</strong> ${escapeHtml(details.invoiceNumber)}</p>`
+    : "";
   const coachLine = details.coachName ? `<p><strong>Coach:</strong> ${details.coachName}</p>` : "";
   const studentLine = details.studentName ? `<p><strong>Student:</strong> ${details.studentName}</p>` : "";
   const approvedByLine = details.approvedBy ? `<p><strong>Approved by:</strong> ${details.approvedBy}</p>` : "";
-  const detailsBlock = [venueLine, courtLine, dateLine, timeLine, amountLine, coachLine, studentLine, approvedByLine].filter(Boolean).join("\n");
-  const footer = emailFooter(
-    details.venueName,
-    details.venueContact,
-    recipientRole === "student"
-  );
-
+  const detailsBlock = [venueLine, courtLine, dateLine, timeLine, amountLine, invoiceLine, coachLine, studentLine, approvedByLine].filter(Boolean).join("\n");
   const paymentHoldNotice = (() => {
     if (emailType !== "staff_confirmed" || recipientRole !== "student") return "";
     if (bookingType === "court") {
@@ -196,6 +197,31 @@ function buildEmail(params: SendBookingEmailParams): { subject: string; html: st
     }
     return "";
   })();
+
+  const footer = emailFooter(
+    details.venueName,
+    details.venueContact,
+    recipientRole === "student"
+  );
+
+  const invoiceDownloadButton =
+    bookingType === "court" &&
+    recipientRole === "student" &&
+    details.invoiceUrl &&
+    (emailType === "approved" || emailType === "auto_confirmed")
+      ? `
+<table width="100%" cellpadding="0" cellspacing="0" style="margin-top:24px;">
+  <tr>
+    <td align="center">
+      <a href="${details.invoiceUrl}"
+         style="display:inline-block;background:#059669;color:#fff;font-size:15px;font-weight:700;
+                padding:14px 32px;border-radius:10px;text-decoration:none;letter-spacing:0.01em;">
+        Download invoice
+      </a>
+    </td>
+  </tr>
+</table>`
+      : "";
 
   // Add-to-Calendar links (only for student/coach on confirmed events)
   const calendarButtons = (() => {
@@ -288,7 +314,7 @@ function buildEmail(params: SendBookingEmailParams): { subject: string; html: st
       if (recipientRole === "student") {
         return {
           subject: `${refPrefix}Payment approved — your ${label} is confirmed`,
-          html: `<p>${greeting}</p><p>Great news! Your payment for your <strong>${label}</strong> has been approved and your booking is confirmed.</p>${detailsBlock}${calendarButtons}<p style="margin-top:20px;">We look forward to seeing you on the court!</p>${footer}`,
+          html: `<p>${greeting}</p><p>Great news! Your payment for your <strong>${label}</strong> has been approved and your booking is confirmed.</p>${detailsBlock}${invoiceDownloadButton}${calendarButtons}<p style="margin-top:20px;">We look forward to seeing you on the court!</p>${footer}`,
         };
       }
       if (recipientRole === "coach") {
@@ -346,7 +372,7 @@ function buildEmail(params: SendBookingEmailParams): { subject: string; html: st
       if (recipientRole === "student") {
         return {
           subject: `${refPrefix}Payment confirmed — your ${label} is booked`,
-          html: `<p>${greeting}</p><p>Your payment has been automatically confirmed and your <strong>${label}</strong> is now booked.</p>${detailsBlock}${calendarButtons}<p style="margin-top:20px;">We look forward to seeing you on the court!</p>${footer}`,
+          html: `<p>${greeting}</p><p>Your payment has been automatically confirmed and your <strong>${label}</strong> is now booked.</p>${detailsBlock}${invoiceDownloadButton}${calendarButtons}<p style="margin-top:20px;">We look forward to seeing you on the court!</p>${footer}`,
         };
       }
       if (recipientRole === "coach") {

@@ -16,7 +16,7 @@ function randomSuffix(length = 6): string {
  * Retries if collision detected (extremely unlikely with 6-char alphanumeric).
  */
 export async function generatePaymentRef(
-  type: "subscription" | "session" | "booking" | "coach-lesson" | "credit" | "open-play"
+  type: "subscription" | "session" | "booking" | "coach-lesson" | "credit" | "open-play" | "open-bill"
 ): Promise<string> {
   const prefixMap: Record<string, string> = {
     subscription: "CF-SUB",
@@ -25,6 +25,7 @@ export async function generatePaymentRef(
     "coach-lesson": "CF-CL",
     credit: "CF-CR",
     "open-play": "CF-OP",
+    "open-bill": "CF-OB",
   };
   const prefix = prefixMap[type] || "CF-REF";
 
@@ -42,6 +43,9 @@ export async function generatePaymentRef(
     } else if (type === "open-play") {
       const existing = await prisma.openPlayRegistration.findFirst({ where: { paymentRef: ref } });
       if (!existing) return ref;
+    } else if (type === "open-bill") {
+      const existing = await prisma.companyOpenBill.findFirst({ where: { paymentRef: ref } });
+      if (!existing) return ref;
     } else {
       const existing = await prisma.pendingPayment.findUnique({ where: { paymentRef: ref } });
       if (!existing) return ref;
@@ -53,16 +57,20 @@ export async function generatePaymentRef(
 
 /**
  * Extracts payment reference from SePay content/description string.
- * Matches CF-SUB, CF-SES, CF-BK, CF-CL, CF-CR, CF-BILL references.
+ * Matches CF-SUB, CF-SES, CF-BK, CF-CL, CF-CR, CF-OP, CF-OB, CF-BILL references.
  */
 export function extractPaymentRef(content: string): string | null {
   const billMatch = content.match(/CF-BILL-[A-Z0-9]{1,8}-\d{4}W\d{1,2}/);
   if (billMatch) return billMatch[0];
 
-  const flexMatch = content.match(/CF[-\s]?(SUB|SES|BK|CL|CR|OP)[-\s]?([A-Z0-9]{6,8})/);
+  const flexMatch = content.match(/CF[-\s]?(SUB|SES|BK|CL|CR|OP|OB)[-\s]?([A-Z0-9]{6,8})/);
   if (flexMatch) return `CF-${flexMatch[1]}-${flexMatch[2]}`;
 
   return null;
+}
+
+export function isOpenBillRef(ref: string): boolean {
+  return ref.startsWith("CF-OB-");
 }
 
 export function isSubscriptionRef(ref: string): boolean {

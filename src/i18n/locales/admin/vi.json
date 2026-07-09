@@ -28,7 +28,8 @@
     "logsErrors": "Nhật ký & Lỗi",
     "courtpassPlayers": "Người chơi CourtPass",
     "organizations": "Tổ chức",
-    "programPasses": "Thẻ Chương Trình"
+    "programPasses": "Thẻ Chương Trình",
+    "companyAccounts": "Tài Khoản Open Bill"
   },
   "layout": {
     "adminPanel": "Bảng quản trị",
@@ -675,7 +676,7 @@
     "deleting": "Đang xoá...",
     "yesDelete": "Xoá",
     "allCoachesOption": "Tất cả HLV",
-    "searchPlayerPhone": "Tìm tên người chơi hoặc SĐT…",
+    "searchPlayerPhone": "Tìm tên, SĐT, mã đặt sân hoặc hoá đơn…",
     "noLessonsFilters": "Không tìm thấy buổi học nào với bộ lọc này",
     "colPackage": "Gói học",
     "colPayment": "Thanh toán",

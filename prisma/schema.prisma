@@ -63,6 +63,8 @@ model Venue {
   programPasses         ProgramPass[]
   coachLessons          CoachLesson[]
   coachPackages         CoachPackage[]
+  companyAccounts       CompanyAccount[]
+  companyOpenBills      CompanyOpenBill[]
   courtBlocks           CourtBlock[]
   courts                Court[]
   faceRecognitionLogs   FaceRecognitionLog[]
@@ -136,6 +138,8 @@ model Player {
   bookings              Booking[]
   programPasses         ProgramPass[]
   coachLessons          CoachLesson[]
+  companyMemberships    CompanyAccountPlayer[]
+  primaryCompanyAccount CompanyAccount[]           @relation("CompanyAccountPrimaryPlayer")
   faceAttempts          FaceAttempt[]
   faceRecognitionLogs   FaceRecognitionLog[]
   memberships           Membership[]
@@ -496,37 +500,40 @@ model CourtBlock {
 }
 
 model Booking {
-  id                 String        @id @default(cuid())
-  courtId            String        @map("court_id")
-  venueId            String        @map("venue_id")
-  playerId           String        @map("player_id")
-  date               DateTime      @db.Date
-  startTime          DateTime      @map("start_time")
-  endTime            DateTime      @map("end_time")
-  status             BookingStatus @default(confirmed)
-  priceValue         Int           @map("price_value")
-  coPlayerIds        String[]      @map("co_player_ids")
-  createdAt          DateTime      @default(now()) @map("created_at")
-  cancelledAt        DateTime?     @map("cancelled_at")
-  paymentStatus      String?       @map("payment_status")
-  paymentProofUrl    String?       @map("payment_proof_url")
-  holdExpiresAt      DateTime?     @map("hold_expires_at")
-  paymentRef         String?       @unique @map("payment_ref")
-  rejectedAt         DateTime?     @map("rejected_at")
-  rejectedBy         String?       @map("rejected_by")
-  rejectionReason    String?       @map("rejection_reason")
-  bookingGroupId     String?       @map("booking_group_id")
-  paymentMethod      String?       @map("payment_method")
-  invoiceNumber      String?       @unique @map("invoice_number")
-  invoicedAt         DateTime?     @map("invoiced_at") @db.Timestamptz(6)
-  cancellationReason String?       @map("cancellation_reason")
-  bookingGroup       BookingGroup? @relation(fields: [bookingGroupId], references: [id], onDelete: NoAction, onUpdate: NoAction)
-  court              Court         @relation(fields: [courtId], references: [id])
-  player             Player        @relation(fields: [playerId], references: [id])
-  venue              Venue         @relation(fields: [venueId], references: [id])
+  id                 String           @id @default(cuid())
+  courtId            String           @map("court_id")
+  venueId            String           @map("venue_id")
+  playerId           String           @map("player_id")
+  date               DateTime         @db.Date
+  startTime          DateTime         @map("start_time")
+  endTime            DateTime         @map("end_time")
+  status             BookingStatus    @default(confirmed)
+  priceValue         Int              @map("price_value")
+  coPlayerIds        String[]         @map("co_player_ids")
+  createdAt          DateTime         @default(now()) @map("created_at")
+  cancelledAt        DateTime?        @map("cancelled_at")
+  paymentStatus      String?          @map("payment_status")
+  paymentProofUrl    String?          @map("payment_proof_url")
+  holdExpiresAt      DateTime?        @map("hold_expires_at")
+  paymentRef         String?          @unique @map("payment_ref")
+  rejectedAt         DateTime?        @map("rejected_at")
+  rejectedBy         String?          @map("rejected_by")
+  rejectionReason    String?          @map("rejection_reason")
+  bookingGroupId     String?          @map("booking_group_id")
+  paymentMethod      String?          @map("payment_method")
+  invoiceNumber      String?          @unique @map("invoice_number")
+  invoicedAt         DateTime?        @map("invoiced_at") @db.Timestamptz(6)
+  cancellationReason String?          @map("cancellation_reason")
+  companyOpenBillId  String?          @map("company_open_bill_id")
+  bookingGroup       BookingGroup?    @relation(fields: [bookingGroupId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  companyOpenBill    CompanyOpenBill? @relation(fields: [companyOpenBillId], references: [id], onUpdate: NoAction)
+  court              Court            @relation(fields: [courtId], references: [id])
+  player             Player           @relation(fields: [playerId], references: [id])
+  venue              Venue            @relation(fields: [venueId], references: [id])
 
   @@index([venueId, date])
   @@index([playerId])
+  @@index([companyOpenBillId])
   @@map("bookings")
 }
 
@@ -569,39 +576,39 @@ model CoachPackage {
 }
 
 model CoachLesson {
-  id                  String            @id @default(cuid())
-  venueId             String            @map("venue_id")
-  coachId             String            @map("coach_id")
-  playerId            String            @map("player_id")
-  courtId             String?           @map("court_id")
-  packageId           String            @map("package_id")
-  date                DateTime          @db.Date
-  startTime           DateTime          @map("start_time")
-  endTime             DateTime          @map("end_time")
-  status              CoachLessonStatus @default(confirmed)
-  priceValue          Int               @map("price_value")
-  note                String?
-  createdAt           DateTime          @default(now()) @map("created_at")
-  cancelledAt         DateTime?         @map("cancelled_at")
-  paidAt              DateTime?         @map("paid_at")
-  paymentMethod       String?           @map("payment_method")
-  paymentNote         String?           @map("payment_note")
-  proofUrl            String?           @map("proof_url")
-  paymentStatus       String            @default("UNPAID") @map("payment_status")
-  playerCount         Int?              @map("player_count")
-  paymentRef          String?           @unique @map("payment_ref")
-  rejectedAt          DateTime?         @map("rejected_at")
-  rejectedBy          String?           @map("rejected_by")
-  rejectionReason     String?           @map("rejection_reason")
-  googleEventId       String?           @map("google_event_id")
-  invoiceNumber       String?           @unique @map("invoice_number")
-  invoicedAt          DateTime?         @map("invoiced_at") @db.Timestamptz(6)
-  cancellationReason  String?           @map("cancellation_reason")
-  coach               StaffMember       @relation(fields: [coachId], references: [id])
-  court               Court?            @relation(fields: [courtId], references: [id])
-  package             CoachPackage      @relation(fields: [packageId], references: [id])
-  player              Player            @relation(fields: [playerId], references: [id])
-  venue               Venue             @relation(fields: [venueId], references: [id])
+  id                 String            @id @default(cuid())
+  venueId            String            @map("venue_id")
+  coachId            String            @map("coach_id")
+  playerId           String            @map("player_id")
+  courtId            String?           @map("court_id")
+  packageId          String            @map("package_id")
+  date               DateTime          @db.Date
+  startTime          DateTime          @map("start_time")
+  endTime            DateTime          @map("end_time")
+  status             CoachLessonStatus @default(confirmed)
+  priceValue         Int               @map("price_value")
+  note               String?
+  createdAt          DateTime          @default(now()) @map("created_at")
+  cancelledAt        DateTime?         @map("cancelled_at")
+  paidAt             DateTime?         @map("paid_at")
+  paymentMethod      String?           @map("payment_method")
+  paymentNote        String?           @map("payment_note")
+  proofUrl           String?           @map("proof_url")
+  paymentStatus      String            @default("UNPAID") @map("payment_status")
+  playerCount        Int?              @map("player_count")
+  paymentRef         String?           @unique @map("payment_ref")
+  rejectedAt         DateTime?         @map("rejected_at")
+  rejectedBy         String?           @map("rejected_by")
+  rejectionReason    String?           @map("rejection_reason")
+  googleEventId      String?           @map("google_event_id")
+  invoiceNumber      String?           @unique @map("invoice_number")
+  invoicedAt         DateTime?         @map("invoiced_at") @db.Timestamptz(6)
+  cancellationReason String?           @map("cancellation_reason")
+  coach              StaffMember       @relation(fields: [coachId], references: [id])
+  court              Court?            @relation(fields: [courtId], references: [id])
+  package            CoachPackage      @relation(fields: [packageId], references: [id])
+  player             Player            @relation(fields: [playerId], references: [id])
+  venue              Venue             @relation(fields: [venueId], references: [id])
 
   @@index([venueId, date])
   @@index([coachId, date])
@@ -1183,31 +1190,31 @@ model PlayerCoachCredit {
 }
 
 model OpenPlayRegistration {
-  id                  String    @id @default(cuid())
-  venueId             String    @map("venue_id")
-  scheduleEntryId     String    @map("schedule_entry_id")
-  date                DateTime  @map("date") @db.Date
-  startTime           DateTime  @map("start_time")
-  endTime             DateTime  @map("end_time")
-  playerId            String    @map("player_id")
-  priceValue          Int       @map("price_value")
-  paymentStatus       String    @default("pending") @map("payment_status")
-  holdExpiresAt       DateTime? @map("hold_expires_at")
-  paymentProofUrl     String?   @map("payment_proof_url")
-  paymentRef          String?   @unique @map("payment_ref")
-  status              String    @default("confirmed") @map("status")
-  createdAt           DateTime  @default(now()) @map("created_at")
-  cancelledAt         DateTime? @map("cancelled_at")
-  rejectedAt          DateTime? @map("rejected_at")
-  rejectedBy          String?   @map("rejected_by")
-  rejectionReason     String?   @map("rejection_reason")
-  expiredAt           DateTime? @map("expired_at") @db.Timestamptz(6)
-  paymentMethod       String?   @map("payment_method")
-  invoiceNumber       String?   @unique @map("invoice_number")
-  invoicedAt          DateTime? @map("invoiced_at") @db.Timestamptz(6)
-  cancellationReason  String?   @map("cancellation_reason")
-  player              Player    @relation(fields: [playerId], references: [id])
-  venue               Venue     @relation(fields: [venueId], references: [id])
+  id                 String    @id @default(cuid())
+  venueId            String    @map("venue_id")
+  scheduleEntryId    String    @map("schedule_entry_id")
+  date               DateTime  @map("date") @db.Date
+  startTime          DateTime  @map("start_time")
+  endTime            DateTime  @map("end_time")
+  playerId           String    @map("player_id")
+  priceValue         Int       @map("price_value")
+  paymentStatus      String    @default("pending") @map("payment_status")
+  holdExpiresAt      DateTime? @map("hold_expires_at")
+  paymentProofUrl    String?   @map("payment_proof_url")
+  paymentRef         String?   @unique @map("payment_ref")
+  status             String    @default("confirmed") @map("status")
+  createdAt          DateTime  @default(now()) @map("created_at")
+  cancelledAt        DateTime? @map("cancelled_at")
+  rejectedAt         DateTime? @map("rejected_at")
+  rejectedBy         String?   @map("rejected_by")
+  rejectionReason    String?   @map("rejection_reason")
+  expiredAt          DateTime? @map("expired_at") @db.Timestamptz(6)
+  paymentMethod      String?   @map("payment_method")
+  invoiceNumber      String?   @unique @map("invoice_number")
+  invoicedAt         DateTime? @map("invoiced_at") @db.Timestamptz(6)
+  cancellationReason String?   @map("cancellation_reason")
+  player             Player    @relation(fields: [playerId], references: [id])
+  venue              Venue     @relation(fields: [venueId], references: [id])
 
   @@unique([scheduleEntryId, date, playerId])
   @@index([scheduleEntryId, date])
@@ -1472,6 +1479,123 @@ model PricingGroup {
 
   @@index([venueId])
   @@map("pricing_groups")
+}
+
+/// Join table: many players → one company account. Manager-controlled linkage only.
+model CompanyAccountPlayer {
+  id               String         @id
+  companyAccountId String         @map("company_account_id")
+  playerId         String         @map("player_id")
+  /// staff_id of the manager who linked this player
+  addedBy          String         @map("added_by")
+  addedAt          DateTime       @default(now()) @map("added_at")
+  companyAccount   CompanyAccount @relation(fields: [companyAccountId], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "company_account_players_company_fkey")
+  player           Player         @relation(fields: [playerId], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "company_account_players_player_fkey")
+
+  @@unique([companyAccountId, playerId], map: "company_account_players_unique")
+  @@index([companyAccountId], map: "company_account_players_company_id_idx")
+  @@index([playerId])
+  @@map("company_account_players")
+}
+
+/// Top-level billing entity for Open Bill. Covers both B2B business accounts
+/// and solo players (is_solo = true). Provisioned exclusively by venue managers.
+model CompanyAccount {
+  id                   String                 @id
+  venueId              String                 @map("venue_id")
+  name                 String
+  billingEmail         String?                @map("billing_email")
+  taxId                String?                @map("tax_id")
+  billingAddress       String?                @map("billing_address")
+  vatPercent           Int                    @default(10) @map("vat_percent")
+  /// 'excluded': VAT added on top; 'included': VAT derived from gross
+  priceVatMode         String                 @default("excluded") @map("price_vat_mode")
+  fixedDiscountPercent Int                    @default(0) @map("fixed_discount_percent")
+  /// Per-account payment due days; falls back to venue.settings.openBill.defaultDueDays
+  paymentTermsDays     Int?                   @map("payment_terms_days")
+  openBillCreditLimit  Int?                   @map("open_bill_credit_limit")
+  /// 'warn_only' | 'block'
+  creditLimitMode      String                 @default("warn_only") @map("credit_limit_mode")
+  /// Main contact player (auto-set when creating from a player profile)
+  primaryPlayerId      String?                @map("primary_player_id")
+  contactPhone         String?                @map("contact_phone")
+  /// Suppresses company/VAT fields on PDF and UI for solo single-player accounts
+  isSolo               Boolean                @default(false) @map("is_solo")
+  isActive             Boolean                @default(true) @map("is_active")
+  createdAt            DateTime               @default(now()) @map("created_at")
+  updatedAt            DateTime               @default(now()) @map("updated_at")
+  players              CompanyAccountPlayer[]
+  primaryPlayer        Player?                @relation("CompanyAccountPrimaryPlayer", fields: [primaryPlayerId], references: [id], onUpdate: NoAction)
+  venue                Venue                  @relation(fields: [venueId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  bills                CompanyOpenBill[]
+
+  @@index([primaryPlayerId])
+  @@index([venueId])
+  @@map("company_accounts")
+}
+
+/// Append-only audit log for all bill lifecycle events.
+model CompanyOpenBillEvent {
+  id        String          @id
+  billId    String          @map("bill_id")
+  /// 'created' | 'issued' | 'paid' | 'overdue' | 'void' | 'reminder_sent' | 'proof_submitted' | 'note_added'
+  event     String
+  actorId   String?         @map("actor_id")
+  /// 'staff' | 'system' | 'sepay'
+  actorType String?         @map("actor_type")
+  note      String?
+  meta      Json?
+  createdAt DateTime        @default(now()) @map("created_at")
+  bill      CompanyOpenBill @relation(fields: [billId], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "company_open_bill_events_bill_fkey")
+
+  @@index([billId])
+  @@index([createdAt])
+  @@map("company_open_bill_events")
+}
+
+/// Monthly statement owned by a CompanyAccount.
+/// status: 'open' | 'issued' | 'paid' | 'overdue' | 'void'
+model CompanyOpenBill {
+  id               String                 @id
+  venueId          String                 @map("venue_id")
+  companyAccountId String                 @map("company_account_id")
+  periodStart      DateTime               @map("period_start") @db.Date
+  periodEnd        DateTime?              @map("period_end") @db.Date
+  status           String                 @default("open")
+  subtotal         Int                    @default(0)
+  discountAmount   Int                    @default(0) @map("discount_amount")
+  taxableBase      Int                    @default(0) @map("taxable_base")
+  vatAmount        Int                    @default(0) @map("vat_amount")
+  totalAmount      Int                    @default(0) @map("total_amount")
+  /// Snapshot of VAT rate at time of issue
+  vatPercent       Int                    @default(0) @map("vat_percent")
+  priceVatMode     String                 @default("excluded") @map("price_vat_mode")
+  notes            String?
+  paymentRef       String?                @unique @map("payment_ref")
+  invoiceNumber    String?                @unique @map("invoice_number")
+  pdfUrl           String?                @map("pdf_url")
+  dueDate          DateTime?              @map("due_date") @db.Date
+  issuedAt         DateTime?              @map("issued_at")
+  issuedBy         String?                @map("issued_by")
+  paidAt           DateTime?              @map("paid_at")
+  paidBy           String?                @map("paid_by")
+  paidMethod       String?                @map("paid_method")
+  voidedAt         DateTime?              @map("voided_at")
+  voidedBy         String?                @map("voided_by")
+  voidReason       String?                @map("void_reason")
+  createdAt        DateTime               @default(now()) @map("created_at")
+  updatedAt        DateTime               @default(now()) @map("updated_at")
+  bookings         Booking[]
+  events           CompanyOpenBillEvent[]
+  companyAccount   CompanyAccount         @relation(fields: [companyAccountId], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "company_open_bills_company_fkey")
+  venue            Venue                  @relation(fields: [venueId], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "company_open_bills_venue_fkey")
+
+  @@unique([companyAccountId, periodStart], map: "company_open_bills_period_unique")
+  @@index([companyAccountId], map: "company_open_bills_company_id_idx")
+  @@index([periodStart])
+  @@index([status])
+  @@index([venueId])
+  @@map("company_open_bills")
 }
 
 enum SkillLevel {

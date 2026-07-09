@@ -28,7 +28,8 @@
     "logsErrors": "Logs & Errors",
     "courtpassPlayers": "CourtPass Players",
     "organizations": "Organizations",
-    "programPasses": "Program Passes"
+    "programPasses": "Program Passes",
+    "companyAccounts": "Open Bill Accounts"
   },
   "layout": {
     "adminPanel": "Admin Panel",
@@ -683,7 +684,7 @@
     "deleting": "Deleting...",
     "yesDelete": "Yes, Delete",
     "allCoachesOption": "All coaches",
-    "searchPlayerPhone": "Search player name or phone…",
+    "searchPlayerPhone": "Search player, phone, ref or invoice…",
     "noLessonsFilters": "No lessons found for these filters",
     "colPackage": "Package",
     "colPayment": "Payment",

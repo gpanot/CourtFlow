@@ -5,6 +5,7 @@ import { requirePortalAuth } from "@/lib/portal-auth";
 import { checkCancellationPolicy } from "@/lib/booking";
 import { sendBookingEmail } from "@/lib/email/send";
 import { toDateKey } from "@/lib/date";
+import { recalcOpenBill } from "@/lib/open-bill";
 
 export const dynamic = "force-dynamic";
 
@@ -29,6 +30,7 @@ export async function GET(
     let groupPaymentStatus: string | null = null;
     let groupPaymentRef: string | null = null;
     let groupTotalPrice: number | null = null;
+    let groupInvoiceNumber: string | null = null;
     if (booking.bookingGroupId) {
       const siblings = await prisma.booking.findMany({
         where: { bookingGroupId: booking.bookingGroupId, id: { not: id }, playerId },
@@ -41,11 +43,12 @@ export async function GET(
       }));
       const group = await prisma.bookingGroup.findUnique({
         where: { id: booking.bookingGroupId },
-        select: { paymentStatus: true, totalPriceValue: true, paymentRef: true },
+        select: { paymentStatus: true, totalPriceValue: true, paymentRef: true, invoiceNumber: true },
       });
       groupPaymentStatus = group?.paymentStatus ?? null;
       groupPaymentRef = group?.paymentRef ?? null;
       groupTotalPrice = group?.totalPriceValue ?? null;
+      groupInvoiceNumber = group?.invoiceNumber ?? null;
     }
 
     return json({
@@ -56,6 +59,7 @@ export async function GET(
       groupPaymentRef,
       groupTotalPrice,
       groupPaymentStatus,
+      groupInvoiceNumber,
     });
   } catch (e) {
     const msg = (e as Error).message;
@@ -193,6 +197,11 @@ export async function DELETE(
       where: { id },
       data: { status: "cancelled", cancelledAt: new Date() },
     });
+
+    // Recalculate open bill so the cancelled booking shows as $0 line item
+    if (booking.companyOpenBillId) {
+      await recalcOpenBill(booking.companyOpenBillId);
+    }
 
     const player = await prisma.player.findUnique({
       where: { id: playerId },

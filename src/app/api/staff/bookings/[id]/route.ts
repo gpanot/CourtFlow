@@ -9,6 +9,7 @@ import {
   paidCancellationUpdate,
   requirePaidCancellationReason,
 } from "@/lib/paid-cancellation";
+import { recalcOpenBill } from "@/lib/open-bill";
 
 export const dynamic = "force-dynamic";
 
@@ -111,6 +112,11 @@ export async function PATCH(
               player: { select: { id: true, name: true, phone: true, email: true } },
             },
           });
+
+          // Recalculate open bill so the cancelled booking shows as $0 line item
+          if (existing.companyOpenBillId) {
+            await recalcOpenBill(existing.companyOpenBillId);
+          }
 
           if (booking.player.email) {
             const dateStr = booking.date.toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" });

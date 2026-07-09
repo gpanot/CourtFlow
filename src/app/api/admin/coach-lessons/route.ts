@@ -58,12 +58,17 @@ export async function GET(request: NextRequest) {
       }
 
       if (search && search.trim().length >= 2) {
-        where.player = {
-          OR: [
-            { name: { contains: search.trim(), mode: "insensitive" } },
-            { phone: { contains: search.trim() } },
-          ],
-        };
+        const q = search.trim();
+        where.AND = [
+          {
+            OR: [
+              { player: { name: { contains: q, mode: "insensitive" } } },
+              { player: { phone: { contains: q } } },
+              { paymentRef: { contains: q, mode: "insensitive" } },
+              { invoiceNumber: { contains: q, mode: "insensitive" } },
+            ],
+          },
+        ];
       }
 
       const [total, lessons] = await Promise.all([

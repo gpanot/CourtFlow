@@ -3,6 +3,7 @@ import { prisma } from "@/lib/db";
 import { json, error, parseBody } from "@/lib/api-helpers";
 import { requireAuth } from "@/lib/auth";
 import { sendBookingEmail } from "@/lib/email/send";
+import { buildCourtBookingEmailDetails } from "@/lib/email/court-booking-details";
 import { allocateInvoiceNumber } from "@/lib/invoice-number";
 
 export const dynamic = "force-dynamic";
@@ -80,21 +81,14 @@ export async function PATCH(
 
     // Send confirmation email
     if (updated.player.email) {
-      let courtName = updated.court.label;
-      if (booking.bookingGroupId) {
-        const groupCourts = await prisma.booking.findMany({
-          where: { bookingGroupId: booking.bookingGroupId },
-          include: { court: { select: { label: true } } },
-        });
-        courtName = groupCourts.map((b) => b.court.label).join(", ");
-      }
+      const emailDetails = await buildCourtBookingEmailDetails(id, booking.playerId);
       await sendBookingEmail({
         to: updated.player.email,
         playerName: updated.player.name,
         bookingType: "court",
         emailType: "approved",
         venueId: booking.venueId,
-        details: { courtName },
+        details: emailDetails,
       });
     }
 

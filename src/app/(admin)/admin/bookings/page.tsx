@@ -2483,7 +2483,7 @@ function AllBookingsTab({
             <Search className="h-3.5 w-3.5 text-neutral-500 shrink-0" />
             <input
               type="text"
-              placeholder="Search player name or phone…"
+              placeholder="Search player, phone, ref or invoice…"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               className="flex-1 bg-transparent py-2 text-sm text-white placeholder:text-neutral-500 focus:outline-none"

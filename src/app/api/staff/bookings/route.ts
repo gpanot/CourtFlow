@@ -9,6 +9,7 @@ import {
   validateBookingDuration,
   GRID_GRANULARITY_MINUTES,
 } from "@/lib/booking";
+import { attachBookingToOpenBill, getPlayerOpenBillAccount } from "@/lib/open-bill";
 import { sendBookingEmail, wrapPaymentUrlWithMagicLogin } from "@/lib/email/send";
 
 export const dynamic = "force-dynamic";
@@ -105,11 +106,16 @@ export async function POST(request: NextRequest) {
     });
     const totalPrice = resolveCourtBookingPrice(matrix, startTime, durationMinutes, venueTimezone);
 
-    // Apply optional staff discount
+    const openBillAccount = await getPlayerOpenBillAccount(body.playerId, body.venueId);
+
+    // Apply optional staff discount for regular bookings only.
+    // Open-bill clients get their configured percent discount at statement issue time.
     const discountPct = typeof body.discountPct === "number" && body.discountPct > 0 && body.discountPct <= 100
       ? body.discountPct
       : 0;
-    const finalPrice = discountPct > 0
+    const finalPrice = openBillAccount
+      ? totalPrice
+      : discountPct > 0
       ? Math.round(totalPrice * (100 - discountPct) / 100)
       : totalPrice;
 
@@ -136,7 +142,7 @@ export async function POST(request: NextRequest) {
         status: "confirmed",
         priceValue: finalPrice,
         coPlayerIds: body.coPlayerIds || [],
-        paymentStatus: "pending",
+        paymentStatus: openBillAccount ? "open_bill" : "pending",
       },
       include: {
         court: { select: { id: true, label: true } },
@@ -145,9 +151,16 @@ export async function POST(request: NextRequest) {
       },
     });
 
-    // Send confirmation email with payment link (non-fatal)
-    console.log(`[staffBooking] created bookingId=${booking.id} player="${booking.player.name}" email=${booking.player.email ?? "NONE"} paymentStatus=pending`);
-    if (booking.player.email) {
+    if (openBillAccount) {
+      await attachBookingToOpenBill(booking.id, openBillAccount.companyAccountId, body.venueId);
+    }
+
+    // Send confirmation email with payment link (non-fatal) for regular bookings.
+    // Open-bill bookings are settled by monthly statement, so no payment link.
+    console.log(
+      `[staffBooking] created bookingId=${booking.id} player="${booking.player.name}" email=${booking.player.email ?? "NONE"} paymentStatus=${openBillAccount ? "open_bill" : "pending"}`
+    );
+    if (booking.player.email && !openBillAccount) {
       const appUrl = process.env.APP_URL ?? "";
       const rawPaymentUrl = `${appUrl}/book/pay/${booking.id}`;
       const paymentUrl = await wrapPaymentUrlWithMagicLogin(booking.player.id, rawPaymentUrl);

@@ -4,6 +4,7 @@ import { json, error, notFound } from "@/lib/api-helpers";
 import { requireAuth } from "@/lib/auth";
 import { checkCancellationPolicy } from "@/lib/booking";
 import { sendBookingEmail } from "@/lib/email/send";
+import { recalcOpenBill } from "@/lib/open-bill";
 
 export const dynamic = "force-dynamic";
 export async function DELETE(
@@ -40,6 +41,10 @@ export async function DELETE(
       where: { id },
       data: { status: "cancelled", cancelledAt: new Date() },
     });
+
+    if (booking.companyOpenBillId) {
+      await recalcOpenBill(booking.companyOpenBillId);
+    }
 
     const player = await prisma.player.findUnique({
       where: { id: auth.id },

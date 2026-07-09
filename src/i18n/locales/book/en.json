@@ -328,7 +328,10 @@
     "cancelConfirmBody": "This cannot be undone.",
     "cancelling": "Cancelling...",
     "cancelFailed": "Failed to cancel",
-    "helpMessage": "Hi, I have a booking (ref: {{ref}}) at {{venue}}. Could you help me with it?"
+    "helpMessage": "Hi, I have a booking (ref: {{ref}}) at {{venue}}. Could you help me with it?",
+    "invoice": "Invoice",
+    "downloadInvoice": "Download invoice",
+    "invoiceDownloadFailed": "Could not download invoice"
   },
   "payment": {
     "loadError": "Could not load booking.",

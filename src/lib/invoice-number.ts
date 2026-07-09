@@ -1,6 +1,6 @@
 import { prisma } from "./db";
 
-type InvoiceType = "BK" | "OP" | "CL";
+type InvoiceType = "BK" | "OP" | "CL" | "OB";
 
 /**
  * Atomically increments the sequence counter for (venueId, type, year)

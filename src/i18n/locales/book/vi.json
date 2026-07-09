@@ -328,7 +328,10 @@
     "cancelConfirmBody": "Không thể hoàn tác.",
     "cancelling": "Đang hủy...",
     "cancelFailed": "Hủy thất bại",
-    "helpMessage": "Xin chào, tôi có đặt sân (mã: {{ref}}) tại {{venue}}. Bạn có thể giúp tôi không?"
+    "helpMessage": "Xin chào, tôi có đặt sân (mã: {{ref}}) tại {{venue}}. Bạn có thể giúp tôi không?",
+    "invoice": "Hóa đơn",
+    "downloadInvoice": "Tải hóa đơn",
+    "invoiceDownloadFailed": "Không thể tải hóa đơn"
   },
   "payment": {
     "loadError": "Không thể tải thông tin đặt sân.",
