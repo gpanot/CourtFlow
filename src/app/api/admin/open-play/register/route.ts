@@ -61,6 +61,7 @@ export async function POST(request: NextRequest) {
         playerName: player.name,
         bookingType: "open_play",
         emailType: "staff_confirmed",
+        venueId: body.venueId,
         details: {
           venueName: venue?.name,
           date: dateStr,

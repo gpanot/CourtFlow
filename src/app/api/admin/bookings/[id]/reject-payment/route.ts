@@ -68,6 +68,7 @@ export async function PATCH(
         playerName: updated.player.name,
         bookingType: "court",
         emailType: "rejected",
+        venueId: booking.venueId,
         details: { courtName, rejectionReason: reason },
       });
     }

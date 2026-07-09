@@ -68,6 +68,7 @@ export async function DELETE(
         playerName: player.name,
         bookingType: "open_play",
         emailType: "cancelled",
+        venueId: reg.venueId,
         details: {},
       });
     }

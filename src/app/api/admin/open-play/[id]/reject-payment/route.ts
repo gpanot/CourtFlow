@@ -44,6 +44,7 @@ export async function PATCH(
         playerName: updated.player.name,
         bookingType: "open_play",
         emailType: "rejected",
+        venueId: reg.venueId,
         details: { rejectionReason: reason },
       });
     }

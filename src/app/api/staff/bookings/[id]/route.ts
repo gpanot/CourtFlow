@@ -120,6 +120,7 @@ export async function PATCH(
               playerName: booking.player.name,
               bookingType: "court",
               emailType: "cancelled",
+              venueId: existing.venueId,
               details: {
                 venueName: venue?.name,
                 courtName: booking.court.label,
@@ -166,6 +167,7 @@ export async function PATCH(
             playerName: booking.player.name,
             bookingType: "court",
             emailType: "cancelled",
+            venueId: existing.venueId,
             details: {
               venueName: venue?.name,
               courtName: booking.court.label,
@@ -282,6 +284,7 @@ export async function PATCH(
         playerName: booking.player.name,
         bookingType: "court",
         emailType: "staff_confirmed",
+        venueId: existing.venueId,
         details: {
           venueName: booking.venue.name,
           courtName: booking.court.label,

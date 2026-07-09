@@ -68,6 +68,7 @@ export async function POST(
         playerName: player.name,
         bookingType: "open_play",
         emailType: "pending",
+        venueId: reg.venueId,
         details: {},
       });
     }

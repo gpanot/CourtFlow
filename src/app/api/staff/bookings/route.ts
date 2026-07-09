@@ -160,6 +160,7 @@ export async function POST(request: NextRequest) {
         bookingType: "court",
         emailType: "staff_confirmed",
         recipientRole: "student",
+        venueId: booking.venueId,
         details: {
           venueName: booking.venue.name,
           courtName: booking.court.label,

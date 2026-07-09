@@ -51,6 +51,7 @@ export async function PATCH(
         playerName: updated.player.name,
         bookingType: "open_play",
         emailType: "approved",
+        venueId: reg.venueId,
         details: {},
       });
     }

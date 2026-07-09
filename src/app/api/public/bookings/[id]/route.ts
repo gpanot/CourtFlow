@@ -149,6 +149,7 @@ export async function DELETE(
           playerName: player.name,
           bookingType: "court",
           emailType: "cancelled",
+          venueId: booking.venueId,
           details: { courtName },
         });
       }
@@ -203,6 +204,7 @@ export async function DELETE(
         playerName: player.name,
         bookingType: "court",
         emailType: "cancelled",
+        venueId: booking.venueId,
         details: { courtName: booking.court.label },
       });
     }

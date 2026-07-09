@@ -93,6 +93,7 @@ export async function PATCH(
         playerName: updated.player.name,
         bookingType: "court",
         emailType: "approved",
+        venueId: booking.venueId,
         details: { courtName },
       });
     }

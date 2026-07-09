@@ -89,6 +89,7 @@ export async function POST(
         playerName: player.name,
         bookingType: "court",
         emailType: "pending",
+        venueId: booking.venueId,
         details: { courtName },
       });
     }

@@ -137,6 +137,7 @@ async function handlePortalBookingPayment(
         playerName: player.name,
         bookingType: "court",
         emailType: "auto_confirmed",
+        venueId: group.venueId,
         details: { courtName },
       });
     }
@@ -169,6 +170,7 @@ async function handlePortalBookingPayment(
       playerName: player.name,
       bookingType: "court",
       emailType: "auto_confirmed",
+      venueId: booking.venueId,
       details: { courtName: booking.court.label },
     });
   }
@@ -262,6 +264,7 @@ async function handlePortalOpenPlayPayment(
       playerName: player.name,
       bookingType: "open_play",
       emailType: "auto_confirmed",
+      venueId: reg.venueId,
       details: {},
     });
   }
@@ -307,6 +310,7 @@ async function handlePortalCreditPayment(
         bookingType: "coach",
         emailType: "auto_confirmed",
         recipientRole: role,
+        venueId: credit.venueId,
         details: { studentName: player?.name, coachName: coach?.name },
       });
     }
