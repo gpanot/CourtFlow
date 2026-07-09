@@ -3,7 +3,7 @@ export const dynamic = "force-dynamic";
 
 import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useState, useRef } from "react";
-import { bankNameFromBin } from "@/lib/vietqr";
+import { bankNameFromBin, buildVietQRUrl } from "@/lib/vietqr";
 import { usePlayerVenue } from "../../../components/PlayerVenueContext";
 import { usePlayerSession } from "../../../components/usePlayerSession";
 import { portalFetch } from "@/lib/portal-fetch";
@@ -131,7 +131,14 @@ export default function CreditPaymentPage() {
 
   let qrUrl: string | null = null;
   if (bank && bank.bankName && bank.bankAccount && credit.paymentRef) {
-    qrUrl = `https://img.vietqr.io/image/${bank.bankName}-${bank.bankAccount}-compact2.png?amount=${credit.priceValue}&addInfo=${encodeURIComponent(credit.paymentRef)}&accountName=${encodeURIComponent(bank.bankOwnerName)}`;
+    qrUrl = buildVietQRUrl({
+      bankBin: bank.bankName,
+      accountNumber: bank.bankAccount,
+      accountName: bank.bankOwnerName,
+      amount: credit.priceValue,
+      description: credit.paymentRef,
+      template: "compact",
+    });
   }
 
   return (

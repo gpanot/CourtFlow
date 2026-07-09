@@ -7,12 +7,16 @@
 
 const VIETQR_BASE = "https://img.vietqr.io/image";
 
+export type VietQRTemplate = "compact2" | "compact" | "qr_only" | "print";
+
 export interface VietQRParams {
   bankBin: string;
   accountNumber: string;
   accountName: string;
   amount: number;
   description: string;
+  /** Image layout from img.vietqr.io — default compact2 (includes transfer info text). */
+  template?: VietQRTemplate;
 }
 
 /**
@@ -24,7 +28,8 @@ export function buildVietQRUrl(params: VietQRParams): string | null {
 
   const desc = encodeURIComponent(params.description.slice(0, 50));
   const name = encodeURIComponent(params.accountName || "");
-  return `${VIETQR_BASE}/${params.bankBin}-${params.accountNumber}-compact2.png?amount=${params.amount}&addInfo=${desc}&accountName=${name}`;
+  const template = params.template ?? "compact2";
+  return `${VIETQR_BASE}/${params.bankBin}-${params.accountNumber}-${template}.png?amount=${params.amount}&addInfo=${desc}&accountName=${name}`;
 }
 
 export interface BankOption {

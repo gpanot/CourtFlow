@@ -3,7 +3,7 @@ export const dynamic = "force-dynamic";
 
 import { useParams, useRouter } from "next/navigation";
 import { useEffect, useState, useRef, useCallback } from "react";
-import { bankNameFromBin } from "@/lib/vietqr";
+import { buildVietQRUrl } from "@/lib/vietqr";
 import { usePlayerVenue } from "../../components/PlayerVenueContext";
 import { usePlayerSession } from "../../components/usePlayerSession";
 import { portalFetch } from "@/lib/portal-fetch";
@@ -214,7 +214,14 @@ export default function PaymentPage() {
 
   let qrUrl: string | null = null;
   if (venueInfo && venueInfo.bankName && venueInfo.bankAccount && booking.paymentRef) {
-    qrUrl = `https://img.vietqr.io/image/${venueInfo.bankName}-${venueInfo.bankAccount}-compact2.png?amount=${booking.priceValue}&addInfo=${encodeURIComponent(booking.paymentRef)}&accountName=${encodeURIComponent(venueInfo.bankOwnerName)}`;
+    qrUrl = buildVietQRUrl({
+      bankBin: venueInfo.bankName,
+      accountNumber: venueInfo.bankAccount,
+      accountName: venueInfo.bankOwnerName,
+      amount: booking.priceValue,
+      description: booking.paymentRef,
+      template: "compact",
+    });
   }
 
   const minutes = Math.floor(secondsLeft / 60);
@@ -268,7 +275,7 @@ export default function PaymentPage() {
         <div className="flex gap-3">
           {qrUrl && (
             <div className="bg-white rounded-xl p-2 shrink-0">
-              <img src={qrUrl} alt="VietQR" className="w-36 h-36 rounded" />
+              <img src={qrUrl} alt="VietQR" className="w-40 h-40 rounded" />
               <button
                 type="button"
                 onClick={async () => {
@@ -295,7 +302,7 @@ export default function PaymentPage() {
           {!isAutoPayment && (
             <button
               onClick={() => fileInputRef.current?.click()}
-              className="flex-1 border-2 border-dashed border-[var(--cm-border)] rounded-xl flex flex-col items-center justify-center p-3 hover:border-[var(--cm-accent)]/50 transition-colors min-h-[144px]"
+              className="flex-1 border-2 border-dashed border-[var(--cm-border)] rounded-xl flex flex-col items-center justify-center p-3 hover:border-[var(--cm-accent)]/50 transition-colors min-h-[168px]"
             >
               {proofPreview ? (
                 <img src={proofPreview} alt="Proof" className="w-full h-full object-contain rounded-lg max-h-[128px]" />
@@ -313,7 +320,7 @@ export default function PaymentPage() {
           )}
 
           {venueInfo?.autoPayment && !showProofUpload && (
-            <div className="flex-1 border border-[var(--cm-border)] rounded-xl flex flex-col items-center justify-center p-3 min-h-[144px]">
+            <div className="flex-1 border border-[var(--cm-border)] rounded-xl flex flex-col items-center justify-center p-3 min-h-[168px]">
               <svg className="animate-spin h-6 w-6 text-[var(--cm-accent)] mb-2" viewBox="0 0 24 24">
                 <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
                 <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
