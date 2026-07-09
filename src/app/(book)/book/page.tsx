@@ -1,7 +1,7 @@
 "use client";
 export const dynamic = "force-dynamic";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { usePlayerSession } from "./components/usePlayerSession";
 import Link from "next/link";
@@ -74,6 +74,34 @@ const GRID_GRANULARITY_MINUTES = 30;
 const DEFAULT_MAX_SLOTS = 16; // 8h default — server enforces the real limit
 
 type BookingType = "court" | "open_play";
+type CourtViewMode = "quick" | "group";
+
+// Quick-view duration options (minutes)
+const QUICK_DURATIONS = [60, 90, 120, 150, 180] as const;
+type QuickDuration = (typeof QUICK_DURATIONS)[number];
+
+function fmtQuickDuration(min: number): string {
+  const h = Math.floor(min / 60);
+  const m = min % 60;
+  if (m === 0) return `${h}h`;
+  return `${h}h${m}`;
+}
+
+function fmtHour(h: number): string {
+  if (h === 0) return "12am";
+  if (h < 12) return `${h}am`;
+  if (h === 12) return "12pm";
+  return `${h - 12}pm`;
+}
+
+function fmtSlotTimeShort(iso: string): string {
+  const d = new Date(iso);
+  const h = d.getHours();
+  const m = d.getMinutes();
+  const suffix = h < 12 ? "am" : "pm";
+  const h12 = h === 0 ? 12 : h > 12 ? h - 12 : h;
+  return m === 0 ? `${h12}${suffix}` : `${h12}:${String(m).padStart(2, "0")}${suffix}`;
+}
 
 function formatSlotTime(iso: string, tz?: string): string {
   return new Date(iso).toLocaleTimeString([], {
@@ -137,8 +165,31 @@ export default function VenueHomePage() {
   // Slot granularity toggle — default 1h, 30min shows all half-hour columns
   const [gridView, setGridView] = useState<"1h" | "30min">("1h");
 
+  // Quick vs Group court view
+  const [courtViewMode, setCourtViewMode] = useState<CourtViewMode>("group");
+
+  // Quick-view state
+  const [quickDuration, setQuickDuration] = useState<QuickDuration>(60);
+  const [quickStartHour, setQuickStartHour] = useState<number>(() => new Date().getHours());
+  // quickSelection: { courtId, courtLabel, startTime, endTime } | null
+  const [quickSelection, setQuickSelection] = useState<{
+    courtId: string;
+    courtLabel: string;
+    startTime: string;
+    endTime: string;
+  } | null>(null);
+
   const [selectedDate, setSelectedDate] = useState<Date | null>(null);
   const [dates, setDates] = useState<Date[]>([]);
+
+  // Ref to auto-scroll the selected start-hour chip into view
+  const startTimeRowRef = useRef<HTMLDivElement>(null);
+  const selectedHourRef = useRef<HTMLButtonElement>(null);
+
+  // Scroll selected hour chip into view whenever it changes
+  useEffect(() => {
+    selectedHourRef.current?.scrollIntoView({ behavior: "smooth", block: "nearest", inline: "center" });
+  }, [quickStartHour]);
 
   // Compute dates client-side only to avoid SSR/hydration mismatch when
   // the server's UTC clock is behind the client's local date (e.g. UTC+7).
@@ -161,6 +212,7 @@ export default function VenueHomePage() {
     setSelectedCourtId(null);
     setSelectedSlots([]);
     setAdditionalCourtIds([]);
+    setQuickSelection(null);
     try {
       const dateStr = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
       const res = await fetch(`/api/public/availability?date=${dateStr}${vq}`);
@@ -429,19 +481,53 @@ export default function VenueHomePage() {
   const totalPrice = sortedSelected.reduce((sum, s) => sum + s.priceValue, 0);
   const hasSelection = sortedSelected.length > 0 && selectedCourtId;
 
+  // Quick view derived values
+  const quickCourt = quickSelection ? grid.find((c) => c.courtId === quickSelection.courtId) : null;
+  const quickStartIdx = quickCourt && quickSelection
+    ? quickCourt.slots.findIndex((s) => s.startTime === quickSelection.startTime)
+    : -1;
+  const quickPriceSum = quickCourt && quickStartIdx >= 0
+    ? quickCourt.slots.slice(quickStartIdx, quickStartIdx + quickDuration / GRID_GRANULARITY_MINUTES).reduce((sum, s) => sum + s.priceValue, 0)
+    : 0;
+
+  // Venue open/close hours derived from grid
+  const venueHours: number[] = grid.length > 0
+    ? grid[0].slots
+        .filter((s) => new Date(s.startTime).getMinutes() === 0)
+        .map((s) => new Date(s.startTime).getHours())
+    : [];
+
   function handleBook() {
-    if (!hasSelection) return;
     if (status !== "authenticated") {
       router.push(`/book/login?callbackUrl=/book`);
       return;
     }
-    // Enforce minimum duration for players
+    if (!selectedDate) return;
+    const localDate = `${selectedDate.getFullYear()}-${String(selectedDate.getMonth() + 1).padStart(2, "0")}-${String(selectedDate.getDate()).padStart(2, "0")}`;
+
+    // Quick view booking
+    if (courtViewMode === "quick" && quickSelection) {
+      const slotCount = quickDuration / GRID_GRANULARITY_MINUTES;
+      const court = grid.find((c) => c.courtId === quickSelection.courtId);
+      const startIdx = court?.slots.findIndex((s) => s.startTime === quickSelection.startTime) ?? 0;
+      const priceSum = court?.slots.slice(startIdx, startIdx + slotCount).reduce((sum, s) => sum + s.priceValue, 0) ?? 0;
+      const params = new URLSearchParams({
+        courtId: quickSelection.courtId,
+        date: localDate,
+        startTime: quickSelection.startTime,
+        slotCount: String(slotCount),
+        price: String(priceSum),
+      });
+      router.push(`/book/confirm?${params.toString()}`);
+      return;
+    }
+
+    // Group view booking (existing logic)
+    if (!hasSelection) return;
     const allow30Min = venue?.bookingConfig?.allow30MinBookings ?? false;
     const minCells = allow30Min ? 1 : 2;
     if (sortedSelected.length < minCells) return;
     const first = sortedSelected[0];
-    if (!selectedDate) return;
-    const localDate = `${selectedDate.getFullYear()}-${String(selectedDate.getMonth() + 1).padStart(2, "0")}-${String(selectedDate.getDate()).padStart(2, "0")}`;
 
     const allCourtIds = [selectedCourtId!, ...additionalCourtIds];
     const multiTotal = totalPrice * allCourtIds.length;
@@ -481,14 +567,94 @@ export default function VenueHomePage() {
     if (type === "open_play") {
       setSelectedCourtId(null);
       setSelectedSlots([]);
+      setQuickSelection(null);
+    }
+  }
+
+  // ── Quick view helpers ──────────────────────────────────────────────────────
+
+  /**
+   * Returns all start times (ISO strings) on a given court where:
+   * - The slot starts at or after `fromHour` (local hour)
+   * - A consecutive block of `durationMin` minutes is fully available
+   */
+  function getQuickAvailableStarts(courtSlots: Slot[], fromHour: number, durationMin: number): string[] {
+    const cellsNeeded = durationMin / GRID_GRANULARITY_MINUTES;
+    const results: string[] = [];
+    for (let i = 0; i <= courtSlots.length - cellsNeeded; i++) {
+      const first = courtSlots[i];
+      // Only show starts >= fromHour
+      if (new Date(first.startTime).getHours() < fromHour) continue;
+      // Must start exactly on the hour (whole-hour start times only)
+      if (new Date(first.startTime).getMinutes() !== 0) continue;
+      // Check the whole block is available
+      let allAvail = true;
+      for (let j = 0; j < cellsNeeded; j++) {
+        if (!courtSlots[i + j]?.available) { allAvail = false; break; }
+      }
+      if (allAvail) results.push(first.startTime);
+    }
+    return results;
+  }
+
+  /**
+   * Given a court's slots, a start ISO string, and duration, return the end ISO string.
+   */
+  function getQuickEndTime(courtSlots: Slot[], startTime: string, durationMin: number): string {
+    const cellsNeeded = durationMin / GRID_GRANULARITY_MINUTES;
+    const startIdx = courtSlots.findIndex((s) => s.startTime === startTime);
+    if (startIdx < 0) return startTime;
+    const lastCell = courtSlots[startIdx + cellsNeeded - 1];
+    return lastCell?.endTime ?? startTime;
+  }
+
+  /** Set the default quick selection: first available slot across all courts */
+  function applyDefaultQuickSelection(
+    gridData: CourtSlot[],
+    fromHour: number,
+    durationMin: number
+  ) {
+    for (const court of gridData) {
+      const starts = getQuickAvailableStarts(court.slots, fromHour, durationMin);
+      if (starts.length > 0) {
+        const endTime = getQuickEndTime(court.slots, starts[0], durationMin);
+        setQuickSelection({ courtId: court.courtId, courtLabel: court.courtLabel, startTime: starts[0], endTime });
+        return;
+      }
+    }
+    setQuickSelection(null);
+  }
+
+  function handleQuickDurationChange(d: QuickDuration) {
+    setQuickDuration(d);
+    applyDefaultQuickSelection(grid, quickStartHour, d);
+  }
+
+  function handleQuickStartHourChange(h: number) {
+    setQuickStartHour(h);
+    applyDefaultQuickSelection(grid, h, quickDuration);
+  }
+
+  function handleQuickSlotSelect(courtId: string, courtLabel: string, startTime: string) {
+    const court = grid.find((c) => c.courtId === courtId);
+    if (!court) return;
+    const endTime = getQuickEndTime(court.slots, startTime, quickDuration);
+    setQuickSelection({ courtId, courtLabel, startTime, endTime });
+  }
+
+  // Auto-apply default when switching to Quick view or when grid loads
+  function switchCourtViewMode(mode: CourtViewMode) {
+    setCourtViewMode(mode);
+    if (mode === "quick" && grid.length > 0) {
+      applyDefaultQuickSelection(grid, quickStartHour, quickDuration);
     }
   }
 
   const courtLabel = hasSelection
     ? grid.find((c) => c.courtId === selectedCourtId)?.courtLabel ?? ""
     : "";
-  const firstSlotStart = sortedSelected.length > 0 ? formatSlotTime(sortedSelected[0].startTime) : "";
-  const lastSlotEnd = sortedSelected.length > 0 ? formatSlotTime(sortedSelected[sortedSelected.length - 1].endTime) : "";
+  const firstSlotStart = sortedSelected.length > 0 ? fmtSlotTimeShort(sortedSelected[0].startTime) : "";
+  const lastSlotEnd = sortedSelected.length > 0 ? fmtSlotTimeShort(sortedSelected[sortedSelected.length - 1].endTime) : "";
   const selectionDurationMin = sortedSelected.length * GRID_GRANULARITY_MINUTES;
   const allow30Min = venue?.bookingConfig?.allow30MinBookings ?? false;
   const minCells = allow30Min ? 1 : 2;
@@ -501,27 +667,61 @@ export default function VenueHomePage() {
 
       <div className="px-4 pb-4">
         <h2 className="text-base font-semibold mb-3">{t("home.whatToBook")}</h2>
-        <div className="grid grid-cols-2 gap-2 mb-4">
-          {(["court", "open_play"] as const).map((type) => {
-            const active = bookingType === type;
-            return (
+        {/* Only show Court/Open Play tabs when open play sessions exist (or still loading) */}
+        {(loading || openPlaySessions.length > 0) && (
+          <div className="grid grid-cols-2 gap-2 mb-4">
+            {(["court", "open_play"] as const).map((type) => {
+              const active = bookingType === type;
+              return (
+                <button
+                  key={type}
+                  type="button"
+                  onClick={() => selectBookingType(type)}
+                  className={`rounded-xl border px-3 py-2 text-sm font-semibold transition-colors ${
+                    active
+                      ? "bg-[var(--cm-accent)] text-black border-[var(--cm-accent)]"
+                      : "bg-[var(--cm-bg-card)] text-[var(--cm-text-sec)] border-[var(--cm-border)] hover:border-[var(--cm-accent)]/40"
+                  }`}
+                >
+                  {type === "court" ? t("home.bookingTypeCourt") : t("home.bookingTypeOpenPlay")}
+                </button>
+              );
+            })}
+          </div>
+        )}
+
+        {/* When header + Quick/Group toggle — only for court booking */}
+        {bookingType === "court" ? (
+          <div className="flex items-center justify-between mb-2">
+            <h3 className="text-sm font-medium text-[var(--cm-text-sec)]">{t("home.when")}</h3>
+            <div className="flex items-center bg-[var(--cm-bg-surface)] border border-[var(--cm-border)] rounded-lg p-0.5">
               <button
-                key={type}
                 type="button"
-                onClick={() => selectBookingType(type)}
-                className={`rounded-xl border px-3 py-3 text-sm font-semibold transition-colors ${
-                  active
-                    ? "bg-[var(--cm-accent)] text-black border-[var(--cm-accent)]"
-                    : "bg-[var(--cm-bg-card)] text-[var(--cm-text-sec)] border-[var(--cm-border)] hover:border-[var(--cm-accent)]/40"
+                onClick={() => switchCourtViewMode("quick")}
+                className={`px-2.5 py-1 rounded-md text-[11px] font-semibold transition-colors ${
+                  courtViewMode === "quick"
+                    ? "bg-[var(--cm-accent)] text-black shadow-sm"
+                    : "text-[var(--cm-text-sec)] hover:text-[var(--cm-text)]"
                 }`}
               >
-                {type === "court" ? t("home.bookingTypeCourt") : t("home.bookingTypeOpenPlay")}
+                {t("home.quickView")}
               </button>
-            );
-          })}
-        </div>
-
-        <h3 className="text-sm font-medium text-[var(--cm-text-sec)] mb-2">{t("home.selectDate")}</h3>
+              <button
+                type="button"
+                onClick={() => switchCourtViewMode("group")}
+                className={`px-2.5 py-1 rounded-md text-[11px] font-semibold transition-colors ${
+                  courtViewMode === "group"
+                    ? "bg-[var(--cm-accent)] text-black shadow-sm"
+                    : "text-[var(--cm-text-sec)] hover:text-[var(--cm-text)]"
+                }`}
+              >
+                {t("home.groupView")}
+              </button>
+            </div>
+          </div>
+        ) : (
+          <h3 className="text-sm font-medium text-[var(--cm-text-sec)] mb-2">{t("home.selectDate")}</h3>
+        )}
         <div className="flex gap-2 overflow-x-auto pb-2 scrollbar-hide">
           {dates.map((d) => {
             const isActive = selectedDate ? d.toDateString() === selectedDate.toDateString() : false;
@@ -550,7 +750,116 @@ export default function VenueHomePage() {
             <p className="text-sm text-[var(--cm-text-sec)] text-center py-8">
               {t("home.noCourts")}
             </p>
+          ) : courtViewMode === "quick" ? (
+            /* ── QUICK VIEW ─────────────────────────────────────── */
+            <div className="space-y-5">
+              {/* DURATION */}
+              <div>
+                <p className="text-[10px] font-semibold tracking-widest text-[var(--cm-text-muted)] mb-2">
+                  {t("home.duration")}
+                </p>
+                <div className="flex gap-2 flex-wrap">
+                  {QUICK_DURATIONS.map((d) => (
+                    <button
+                      key={d}
+                      type="button"
+                      onClick={() => handleQuickDurationChange(d)}
+                      className={`px-3.5 py-2 rounded-xl text-sm font-semibold border transition-colors ${
+                        quickDuration === d
+                          ? "bg-[var(--cm-accent)] text-black border-[var(--cm-accent)]"
+                          : "bg-[var(--cm-bg-card)] text-[var(--cm-text-sec)] border-[var(--cm-border)] hover:border-[var(--cm-accent)]/40"
+                      }`}
+                    >
+                      {fmtQuickDuration(d)}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* START TIME */}
+              <div>
+                <p className="text-[10px] font-semibold tracking-widest text-[var(--cm-text-muted)] mb-2">
+                  {t("home.startTime")}
+                </p>
+                <div ref={startTimeRowRef} className="flex gap-2 overflow-x-auto pb-1 scrollbar-hide">
+                  {venueHours.map((h) => {
+                    const now = new Date();
+                    const isToday = selectedDate
+                      ? selectedDate.toDateString() === now.toDateString()
+                      : false;
+                    const isPast = isToday && h < now.getHours();
+                    const isSelected = quickStartHour === h;
+                    return (
+                      <button
+                        key={h}
+                        ref={isSelected ? selectedHourRef : null}
+                        type="button"
+                        onClick={() => handleQuickStartHourChange(h)}
+                        className={`flex-shrink-0 px-3 py-2 rounded-xl text-xs font-medium border transition-colors ${
+                          isSelected
+                            ? "bg-[var(--cm-accent)] text-black border-[var(--cm-accent)]"
+                            : isPast
+                            ? "bg-[var(--cm-bg-surface)] text-[var(--cm-text-muted)] border-[var(--cm-border)] opacity-50"
+                            : "bg-[var(--cm-bg-card)] text-[var(--cm-text-sec)] border-[var(--cm-border)] hover:border-[var(--cm-accent)]/40"
+                        }`}
+                      >
+                        {fmtHour(h)}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Available courts */}
+              <div>
+                <p className="text-xs text-[var(--cm-text-muted)] mb-3">
+                  {t("home.availableCourtsFor", {
+                    date: selectedDate ? formatDate(selectedDate) : "",
+                    duration: fmtQuickDuration(quickDuration),
+                    time: fmtHour(quickStartHour),
+                  })}
+                </p>
+                <div className="space-y-2">
+                  {grid.map((court) => {
+                    const availableStarts = getQuickAvailableStarts(court.slots, quickStartHour, quickDuration);
+                    if (availableStarts.length === 0) return null;
+                    return (
+                      <div key={court.courtId} className="bg-[var(--cm-bg-card)] border border-[var(--cm-border)] rounded-xl px-3 py-2.5">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span className="text-xs font-semibold text-[var(--cm-text)] shrink-0 mr-1">{court.courtLabel}</span>
+                          {availableStarts.map((st) => {
+                            const isSelected =
+                              quickSelection?.courtId === court.courtId &&
+                              quickSelection?.startTime === st;
+                            return (
+                              <button
+                                key={st}
+                                type="button"
+                                onClick={() => handleQuickSlotSelect(court.courtId, court.courtLabel, st)}
+                                className={`px-2.5 py-1 rounded-lg text-xs font-semibold border transition-colors ${
+                                  isSelected
+                                    ? "bg-[var(--cm-accent)] text-black border-[var(--cm-accent)]"
+                                    : "bg-[var(--cm-green)]/10 text-[var(--cm-green)] border-[var(--cm-green)]/20 hover:bg-[var(--cm-green)]/20"
+                                }`}
+                              >
+                                {fmtSlotTimeShort(st)}
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    );
+                  })}
+                  {grid.every((court) => getQuickAvailableStarts(court.slots, quickStartHour, quickDuration).length === 0) && (
+                    <p className="text-sm text-[var(--cm-text-sec)] text-center py-4">
+                      {t("home.noCourts")}
+                    </p>
+                  )}
+                </div>
+              </div>
+            </div>
           ) : (
+            /* ── GROUP VIEW (unchanged) ─────────────────────────── */
             <>
               <div className="overflow-x-auto rounded-xl border border-[var(--cm-border)]">
                 <table className="w-full text-xs">
@@ -561,7 +870,7 @@ export default function VenueHomePage() {
                       </th>
                       {getDisplayedSlots(grid[0]?.slots ?? []).map((s) => (
                         <th key={s.startTime} className="px-2 py-2 text-center font-medium text-[var(--cm-text-sec)] min-w-[48px]">
-                          {formatSlotTime(s.startTime)}
+                          {fmtSlotTimeShort(s.startTime)}
                         </th>
                       ))}
                     </tr>
@@ -589,7 +898,7 @@ export default function VenueHomePage() {
                                       : "bg-[var(--cm-green)]/15 text-[var(--cm-green)] hover:bg-[var(--cm-green)]/25"
                                   }`}
                                 >
-                                  {available ? formatSlotTime(slot.startTime) : "—"}
+                                  {available ? fmtSlotTimeShort(slot.startTime) : "—"}
                                 </button>
                               </td>
                             );
@@ -613,7 +922,7 @@ export default function VenueHomePage() {
                                     : "bg-[var(--cm-green)]/15 text-[var(--cm-green)] hover:bg-[var(--cm-green)]/25"
                                 }`}
                               >
-                                {!slot.available || isLonely ? "—" : formatSlotTime(slot.startTime)}
+                                {!slot.available || isLonely ? "—" : fmtSlotTimeShort(slot.startTime)}
                               </button>
                             </td>
                           );
@@ -882,7 +1191,7 @@ export default function VenueHomePage() {
         </div>
       )}
 
-      {hasSelection && bookingType === "court" && (
+      {bookingType === "court" && (courtViewMode === "quick" ? quickSelection : hasSelection) && (
         <div className="fixed bottom-0 left-0 right-0 z-40 max-w-lg mx-auto pointer-events-none">
           <div
             className="pointer-events-auto px-4 pt-3 pb-[calc(0.75rem+3.625rem+env(safe-area-inset-bottom))]"
@@ -892,25 +1201,39 @@ export default function VenueHomePage() {
               WebkitBackdropFilter: "blur(12px)",
             }}
           >
-            <button
-              onClick={handleBook}
-              disabled={!canBook}
-              className={`w-full py-3 rounded-xl shadow-[var(--cm-shadow)] flex flex-col items-center gap-0.5 transition-opacity ${
-                canBook ? "bg-[var(--cm-accent)] text-black" : "bg-[var(--cm-bg-surface)] text-[var(--cm-text-muted)] opacity-60 cursor-not-allowed"
-              }`}
-            >
-              <span className="font-semibold text-sm leading-tight">
-                {canBook
-                  ? `${t("home.bookNow")} · ${formatPrice(additionalCourtIds.length > 0 ? totalPrice * (1 + additionalCourtIds.length) : totalPrice)}`
-                  : `Min. ${fmtDuration(minCells * GRID_GRANULARITY_MINUTES)}`}
-              </span>
-              <span className="text-[11px] font-medium opacity-75 leading-tight">
-                {additionalCourtIds.length > 0
-                  ? `${1 + additionalCourtIds.length} courts · `
-                  : `${courtLabel} · `}
-                {selectedDate ? formatDate(selectedDate) : ""} · {fmtDuration(selectionDurationMin)} · {firstSlotStart}–{lastSlotEnd}
-              </span>
-            </button>
+            {courtViewMode === "quick" && quickSelection ? (
+              <button
+                onClick={handleBook}
+                className="w-full py-3 rounded-xl shadow-[var(--cm-shadow)] flex flex-col items-center gap-0.5 bg-[var(--cm-accent)] text-black"
+              >
+                <span className="font-semibold text-sm leading-tight">
+                  {t("home.bookNow")} · {formatPrice(quickPriceSum)}
+                </span>
+                <span className="text-[11px] font-medium opacity-75 leading-tight">
+                  {quickSelection.courtLabel} · {selectedDate ? formatDate(selectedDate) : ""} · {fmtQuickDuration(quickDuration)} · {fmtSlotTimeShort(quickSelection.startTime)}–{fmtSlotTimeShort(quickSelection.endTime)}
+                </span>
+              </button>
+            ) : (
+              <button
+                onClick={handleBook}
+                disabled={!canBook}
+                className={`w-full py-3 rounded-xl shadow-[var(--cm-shadow)] flex flex-col items-center gap-0.5 transition-opacity ${
+                  canBook ? "bg-[var(--cm-accent)] text-black" : "bg-[var(--cm-bg-surface)] text-[var(--cm-text-muted)] opacity-60 cursor-not-allowed"
+                }`}
+              >
+                <span className="font-semibold text-sm leading-tight">
+                  {canBook
+                    ? `${t("home.bookNow")} · ${formatPrice(additionalCourtIds.length > 0 ? totalPrice * (1 + additionalCourtIds.length) : totalPrice)}`
+                    : `Min. ${fmtDuration(minCells * GRID_GRANULARITY_MINUTES)}`}
+                </span>
+                <span className="text-[11px] font-medium opacity-75 leading-tight">
+                  {additionalCourtIds.length > 0
+                    ? `${1 + additionalCourtIds.length} courts · `
+                    : `${courtLabel} · `}
+                  {selectedDate ? formatDate(selectedDate) : ""} · {fmtDuration(selectionDurationMin)} · {firstSlotStart}–{lastSlotEnd}
+                </span>
+              </button>
+            )}
           </div>
         </div>
       )}
