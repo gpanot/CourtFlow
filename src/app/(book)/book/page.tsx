@@ -181,15 +181,10 @@ export default function VenueHomePage() {
 
   const [selectedDate, setSelectedDate] = useState<Date | null>(null);
   const [dates, setDates] = useState<Date[]>([]);
-
-  // Ref to auto-scroll the selected start-hour chip into view
   const startTimeRowRef = useRef<HTMLDivElement>(null);
   const selectedHourRef = useRef<HTMLButtonElement>(null);
 
-  // Scroll selected hour chip into view whenever it changes
-  useEffect(() => {
-    selectedHourRef.current?.scrollIntoView({ behavior: "smooth", block: "nearest", inline: "center" });
-  }, [quickStartHour]);
+
 
   // Compute dates client-side only to avoid SSR/hydration mismatch when
   // the server's UTC clock is behind the client's local date (e.g. UTC+7).
@@ -497,6 +492,27 @@ export default function VenueHomePage() {
         .map((s) => new Date(s.startTime).getHours())
     : [];
 
+  const isSelectedDateToday = selectedDate
+    ? selectedDate.toDateString() === new Date().toDateString()
+    : false;
+
+  // Keep natural order (open -> close). We only auto-scroll so current hour
+  // appears first in view for today.
+  const orderedVenueHours: number[] = venueHours;
+
+  useEffect(() => {
+    if (courtViewMode !== "quick") return;
+    const selectedChip = selectedHourRef.current;
+    if (!selectedChip) return;
+    const snapToSelected = () => {
+      selectedChip.scrollIntoView({ behavior: "auto", block: "nearest", inline: "start" });
+    };
+    // Immediate + post-layout pass for mobile WebView consistency.
+    snapToSelected();
+    const raf = requestAnimationFrame(snapToSelected);
+    return () => cancelAnimationFrame(raf);
+  }, [courtViewMode, quickStartHour, orderedVenueHours.length, selectedDate]);
+
   function handleBook() {
     if (status !== "authenticated") {
       router.push(`/book/login?callbackUrl=/book`);
@@ -646,7 +662,9 @@ export default function VenueHomePage() {
   function switchCourtViewMode(mode: CourtViewMode) {
     setCourtViewMode(mode);
     if (mode === "quick" && grid.length > 0) {
-      applyDefaultQuickSelection(grid, quickStartHour, quickDuration);
+      const nowHour = new Date().getHours();
+      setQuickStartHour(nowHour);
+      applyDefaultQuickSelection(grid, nowHour, quickDuration);
     }
   }
 
@@ -666,7 +684,6 @@ export default function VenueHomePage() {
 
 
       <div className="px-4 pb-4">
-        <h2 className="text-base font-semibold mb-3">{t("home.whatToBook")}</h2>
         {/* Only show Court/Open Play tabs when open play sessions exist (or still loading) */}
         {(loading || openPlaySessions.length > 0) && (
           <div className="grid grid-cols-2 gap-2 mb-4">
@@ -782,12 +799,8 @@ export default function VenueHomePage() {
                   {t("home.startTime")}
                 </p>
                 <div ref={startTimeRowRef} className="flex gap-2 overflow-x-auto pb-1 scrollbar-hide">
-                  {venueHours.map((h) => {
-                    const now = new Date();
-                    const isToday = selectedDate
-                      ? selectedDate.toDateString() === now.toDateString()
-                      : false;
-                    const isPast = isToday && h < now.getHours();
+                  {orderedVenueHours.map((h) => {
+                    const isPast = isSelectedDateToday && h < new Date().getHours();
                     const isSelected = quickStartHour === h;
                     return (
                       <button
@@ -807,17 +820,15 @@ export default function VenueHomePage() {
                       </button>
                     );
                   })}
+                  {/* Trailing spacer lets late-day hours (e.g. 7pm) align as first visible chip. */}
+                  <div className="w-56 shrink-0" aria-hidden="true" />
                 </div>
               </div>
 
               {/* Available courts */}
               <div>
-                <p className="text-xs text-[var(--cm-text-muted)] mb-3">
-                  {t("home.availableCourtsFor", {
-                    date: selectedDate ? formatDate(selectedDate) : "",
-                    duration: fmtQuickDuration(quickDuration),
-                    time: fmtHour(quickStartHour),
-                  })}
+                <p className="text-[10px] font-semibold tracking-widest text-[var(--cm-text-muted)] mb-3">
+                  {t("home.availableCourts")}
                 </p>
                 <div className="space-y-2">
                   {grid.map((court) => {
