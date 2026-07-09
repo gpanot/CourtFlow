@@ -129,7 +129,7 @@ export async function GET(request: NextRequest) {
           player: { select: { name: true, phone: true, avatar: true, avatarPhotoPath: true, facePhotoPath: true } },
           court: { select: { label: true } },
           venue: { select: { name: true } },
-          bookingGroup: { select: { id: true, paymentStatus: true, totalPriceValue: true, paymentRef: true } },
+          bookingGroup: { select: { id: true, paymentStatus: true, totalPriceValue: true, paymentRef: true, cancellationReason: true } },
         },
         orderBy: { createdAt: "desc" },
         take: 20,
@@ -346,11 +346,22 @@ export async function GET(request: NextRequest) {
           paymentMethod: string | null;
           holdExpiresAt: Date | null; priceValue: number; createdAt: Date;
           bookingGroupId: string | null; groupPaymentStatus: string | null; groupTotalPrice: number | null;
+          cancellationReason: string | null;
           isGroup: boolean;
         }> = [];
 
         for (const b of recentBookings) {
-          const bid = b as typeof b & { bookingGroupId?: string | null; bookingGroup?: { id: string; paymentStatus: string; totalPriceValue: number; paymentRef: string } | null };
+          const bid = b as typeof b & {
+            bookingGroupId?: string | null;
+            cancellationReason?: string | null;
+            bookingGroup?: {
+              id: string;
+              paymentStatus: string;
+              totalPriceValue: number;
+              paymentRef: string;
+              cancellationReason?: string | null;
+            } | null;
+          };
           if (bid.bookingGroupId) {
             if (seenGroups.has(bid.bookingGroupId)) continue;
             seenGroups.add(bid.bookingGroupId);
@@ -375,6 +386,7 @@ export async function GET(request: NextRequest) {
               bookingGroupId: bid.bookingGroupId,
               groupPaymentStatus: bid.bookingGroup?.paymentStatus ?? null,
               groupTotalPrice: bid.bookingGroup?.totalPriceValue ?? null,
+              cancellationReason: bid.bookingGroup?.cancellationReason ?? bid.cancellationReason ?? null,
               isGroup: true,
             });
           } else {
@@ -390,6 +402,7 @@ export async function GET(request: NextRequest) {
               holdExpiresAt: b.holdExpiresAt,
               priceValue: b.priceValue, createdAt: b.createdAt,
               bookingGroupId: null, groupPaymentStatus: null, groupTotalPrice: null,
+              cancellationReason: bid.cancellationReason ?? null,
               isGroup: false,
             });
           }
@@ -410,6 +423,7 @@ export async function GET(request: NextRequest) {
           })?.toISOString() ?? null,
           priceValue: b.priceValue, createdAt: b.createdAt,
           bookingGroupId: b.bookingGroupId,
+          cancellationReason: b.cancellationReason,
           isGroup: b.isGroup,
         }));
       })(),
@@ -439,6 +453,7 @@ export async function GET(request: NextRequest) {
         })?.toISOString() ?? null,
         priceValue: l.priceValue,
         createdAt: l.createdAt,
+        cancellationReason: l.cancellationReason ?? null,
       })),
       // Build "Open Play Today" from schedule slots (includes empty sessions)
       openPlayToday: await (async () => {
@@ -507,6 +522,7 @@ export async function GET(request: NextRequest) {
         })?.toISOString() ?? null,
         priceValue: r.priceValue,
         createdAt: r.createdAt,
+        cancellationReason: r.cancellationReason ?? null,
       })),
     });
   } catch (e) {

@@ -9,7 +9,10 @@ import { api } from "@/lib/api-client";
 import { useSessionStore } from "@/stores/session-store";
 import { cn } from "@/lib/cn";
 import { AdminVenuePicker, useAdminVenuePicker } from "@/components/admin/AdminVenuePicker";
-import { PaymentMethodBadge } from "@/components/admin/EditBookingModal";
+import { PaymentMethodBadge, PaymentStatusBadge } from "@/components/admin/EditBookingModal";
+import { BookingPriceDisplay } from "@/components/admin/BookingPriceDisplay";
+import { CancellationReasonBadge } from "@/components/admin/CancellationReasonBadge";
+import { isBookingWrittenOff } from "@/lib/booking-cancellation";
 import { hasGroupPlayerPricing, calculateSessionPrice } from "@/lib/coach-package-pricing";
 import {
   GraduationCap,
@@ -681,6 +684,7 @@ interface AllLessonRow {
   paymentNote: string | null;
   paymentRef: string | null;
   invoiceNumber: string | null;
+  cancellationReason: string | null;
   coach: { id: string; name: string; coachPhoto: string | null };
   player: { id: string; name: string; phone: string };
   court: { id: string; label: string } | null;
@@ -810,6 +814,7 @@ function AllLessonsTab({ venueId, initialPaymentFilter = "all" }: { venueId: str
       paymentMethod: row.paymentMethod,
       paymentProofUrl: row.proofUrl,
       bookingStatus: row.status,
+      cancellationReason: row.cancellationReason,
     });
   };
 
@@ -1010,6 +1015,11 @@ function AllLessonsTab({ venueId, initialPaymentFilter = "all" }: { venueId: str
                   const isPaid = row.paymentStatus === "paid" || row.paymentStatus === "PAID";
                   const isProof = row.paymentStatus === "proof_submitted";
                   const isPending = !row.paymentStatus || row.paymentStatus === "pending";
+                  const writtenOff = isBookingWrittenOff({
+                    status: row.status,
+                    paymentStatus: row.paymentStatus,
+                    cancellationReason: row.cancellationReason,
+                  });
                   return (
                     <tr
                       key={row.id}
@@ -1060,25 +1070,38 @@ function AllLessonsTab({ venueId, initialPaymentFilter = "all" }: { venueId: str
                       </td>
                       <td className="px-4 py-3 whitespace-nowrap">
                         <div>
-                          <button
-                            onClick={(e) => { e.stopPropagation(); openPaymentModal(row); }}
-                            className="flex flex-row flex-wrap items-center gap-1 group"
-                            title="Manage payment"
-                          >
-                            <span className={cn("rounded px-2 py-0.5 text-xs font-medium group-hover:ring-1 group-hover:ring-white/20 transition-all", LESSON_PAYMENT_COLORS[row.paymentStatus] ?? "bg-neutral-700/30 text-neutral-400")}>
-                              {LESSON_PAYMENT_LABELS[row.paymentStatus] ?? "Unpaid"}
-                            </span>
-                            {isPaid && row.paymentMethod && (
-                              <PaymentMethodBadge method={row.paymentMethod} size="md" />
-                            )}
-                          </button>
+                          {writtenOff ? (
+                            row.cancellationReason ? (
+                              <CancellationReasonBadge reason={row.cancellationReason} size="md" />
+                            ) : (
+                              <PaymentStatusBadge status="refunded" />
+                            )
+                          ) : row.status !== "cancelled" ? (
+                            <button
+                              onClick={(e) => { e.stopPropagation(); openPaymentModal(row); }}
+                              className="flex flex-row flex-wrap items-center gap-1 group"
+                              title="Manage payment"
+                            >
+                              <span className={cn("rounded px-2 py-0.5 text-xs font-medium group-hover:ring-1 group-hover:ring-white/20 transition-all", LESSON_PAYMENT_COLORS[row.paymentStatus] ?? "bg-neutral-700/30 text-neutral-400")}>
+                                {LESSON_PAYMENT_LABELS[row.paymentStatus] ?? "Unpaid"}
+                              </span>
+                              {isPaid && row.paymentMethod && (
+                                <PaymentMethodBadge method={row.paymentMethod} size="md" />
+                              )}
+                            </button>
+                          ) : null}
                           {row.invoiceNumber && (
                             <p className="text-[10px] text-neutral-500 mt-0.5 font-mono">{row.invoiceNumber}</p>
                           )}
                         </div>
                       </td>
                       <td className="px-4 py-3 text-right text-neutral-300 whitespace-nowrap">
-                        {formatPrice(row.priceValue)}
+                        <BookingPriceDisplay
+                          priceValue={row.priceValue}
+                          status={row.status}
+                          paymentStatus={row.paymentStatus}
+                          cancellationReason={row.cancellationReason}
+                        />
                       </td>
                       <td className="px-4 py-3 whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
                         <div className="flex items-center gap-1 justify-end">

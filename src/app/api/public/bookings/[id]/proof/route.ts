@@ -18,6 +18,7 @@ export async function POST(
 
     const booking = await prisma.booking.findFirst({
       where: { id, playerId, paymentStatus: "pending" },
+      include: { court: { select: { label: true } } },
     });
     if (!booking) return error("Booking not found or not pending payment", 404);
 
@@ -75,12 +76,20 @@ export async function POST(
       select: { name: true, email: true },
     });
     if (player?.email) {
+      let courtName = booking.court.label;
+      if (booking.bookingGroupId) {
+        const groupCourts = await prisma.booking.findMany({
+          where: { bookingGroupId: booking.bookingGroupId },
+          include: { court: { select: { label: true } } },
+        });
+        courtName = groupCourts.map((b) => b.court.label).join(", ");
+      }
       await sendBookingEmail({
         to: player.email,
         playerName: player.name,
         bookingType: "court",
         emailType: "pending",
-        details: {},
+        details: { courtName },
       });
     }
 

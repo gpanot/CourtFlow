@@ -127,12 +127,17 @@ async function handlePortalBookingPayment(
       select: { name: true, email: true },
     });
     if (player?.email) {
+      const groupCourts = await prisma.booking.findMany({
+        where: { bookingGroupId: group.id },
+        include: { court: { select: { label: true } } },
+      });
+      const courtName = groupCourts.map((b) => b.court.label).join(", ");
       await sendBookingEmail({
         to: player.email,
         playerName: player.name,
         bookingType: "court",
         emailType: "auto_confirmed",
-        details: {},
+        details: { courtName },
       });
     }
 
@@ -140,7 +145,10 @@ async function handlePortalBookingPayment(
   }
 
   // Fall back to single-court booking
-  const booking = await prisma.booking.findFirst({ where: { paymentRef: ref } });
+  const booking = await prisma.booking.findFirst({
+    where: { paymentRef: ref },
+    include: { court: { select: { label: true } } },
+  });
   if (!booking || booking.paymentStatus !== "pending") return { matched: false };
   if (payload.transferAmount < booking.priceValue) return { matched: false };
   if (!(await checkVenueAutoPayment(booking.venueId))) return { matched: false };
@@ -161,7 +169,7 @@ async function handlePortalBookingPayment(
       playerName: player.name,
       bookingType: "court",
       emailType: "auto_confirmed",
-      details: {},
+      details: { courtName: booking.court.label },
     });
   }
 

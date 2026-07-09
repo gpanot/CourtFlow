@@ -16,6 +16,7 @@ export interface SendBookingEmailParams {
   recipientRole?: RecipientRole;
   details: {
     venueName?: string;
+    courtName?: string;
     date?: string;
     time?: string;
     amount?: number;
@@ -56,6 +57,10 @@ function buildEmail(params: SendBookingEmailParams): { subject: string; html: st
   const label = bookingLabel(bookingType);
   const refPrefix = details.paymentRef ? `[${details.paymentRef}] ` : "";
   const venueLine = details.venueName ? `<p><strong>Venue:</strong> ${details.venueName}</p>` : "";
+  const courtLine =
+    bookingType === "court" && details.courtName
+      ? `<p><strong>Court:</strong> ${details.courtName}</p>`
+      : "";
   const dateLine = details.date ? `<p><strong>Date:</strong> ${details.date}</p>` : "";
   const timeLine = details.time ? `<p><strong>Time:</strong> ${details.time}</p>` : "";
   const amountLine = details.amount !== undefined
@@ -64,7 +69,18 @@ function buildEmail(params: SendBookingEmailParams): { subject: string; html: st
   const coachLine = details.coachName ? `<p><strong>Coach:</strong> ${details.coachName}</p>` : "";
   const studentLine = details.studentName ? `<p><strong>Student:</strong> ${details.studentName}</p>` : "";
   const approvedByLine = details.approvedBy ? `<p><strong>Approved by:</strong> ${details.approvedBy}</p>` : "";
-  const detailsBlock = [venueLine, dateLine, timeLine, amountLine, coachLine, studentLine, approvedByLine].filter(Boolean).join("\n");
+  const detailsBlock = [venueLine, courtLine, dateLine, timeLine, amountLine, coachLine, studentLine, approvedByLine].filter(Boolean).join("\n");
+
+  const paymentHoldNotice = (() => {
+    if (emailType !== "staff_confirmed" || recipientRole !== "student") return "";
+    if (bookingType === "court") {
+      return `<p style="margin-top:16px;padding:12px 16px;background:#fef3c7;border-left:4px solid #f59e0b;border-radius:4px;font-size:14px;color:#92400e;"><strong>⚠ Important:</strong> Your booking is on hold for one hour. Please make sure to pay within this timeframe or your booking may be cancelled automatically.</p>`;
+    }
+    if (bookingType === "open_play") {
+      return `<p style="margin-top:16px;padding:12px 16px;background:#fef3c7;border-left:4px solid #f59e0b;border-radius:4px;font-size:14px;color:#92400e;"><strong>⚠ Important:</strong> Your booking is on hold for 5 minutes. Please make sure to pay within this timeframe or your booking may be cancelled automatically.</p>`;
+    }
+    return "";
+  })();
 
   // Add-to-Calendar links (only for student/coach on confirmed events)
   const calendarButtons = (() => {
@@ -259,7 +275,7 @@ function buildEmail(params: SendBookingEmailParams): { subject: string; html: st
       }
       return {
         subject: `${refPrefix}Your ${label} is booked — payment pending`,
-        html: `<p>${greeting}</p><p>A staff member has created a <strong>${label}</strong> for you. Your spot is reserved and payment is pending.</p>${detailsBlock}${payButton}<p style="margin-top:24px;">If you have any questions, please contact the venue directly.</p>${signature(details.venueName)}`,
+        html: `<p>${greeting}</p><p>A staff member has created a <strong>${label}</strong> for you. Your spot is reserved and payment is pending.</p>${detailsBlock}${paymentHoldNotice}${payButton}<p style="margin-top:24px;">If you have any questions, please contact the venue directly.</p>${signature(details.venueName)}`,
       };
     }
   }

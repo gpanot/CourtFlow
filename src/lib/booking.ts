@@ -819,10 +819,13 @@ export interface GroupPriceResult {
  *
  * Rules:
  *  - At least 2 courts (if only 1, use the normal single-court path).
- *  - All courts share the same startTime and slotCount (aligned windows).
- *  - Per-court slotCount passes validateBookingDuration.
+ *  - Each court's slotCount passes validateBookingDuration independently.
  *  - court count <= config.maxCourtsPerBooking.
  *  - No duplicate courtIds.
+ *
+ * Courts may have independent startTime / slotCount (e.g. Court 1: 10-11am,
+ * Court 2: 1-3pm). The batch endpoint creates one booking per court grouped
+ * under a shared bookingGroup.
  */
 export function validateMultiCourtBooking(
   courts: MultiCourtEntry[],
@@ -841,15 +844,7 @@ export function validateMultiCourtBooking(
     return { valid: false, error: "Duplicate courts in group booking" };
   }
 
-  const refStart = courts[0].startTime;
-  const refSlotCount = courts[0].slotCount;
   for (const c of courts) {
-    if (c.startTime !== refStart) {
-      return { valid: false, error: "All courts in a group booking must share the same start time" };
-    }
-    if (c.slotCount !== refSlotCount) {
-      return { valid: false, error: "All courts in a group booking must have the same duration" };
-    }
     const durationCheck = validateBookingDuration(config, c.slotCount, context);
     if (!durationCheck.valid) return durationCheck;
   }

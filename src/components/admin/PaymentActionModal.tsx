@@ -12,10 +12,16 @@ import {
   type PaymentModalData,
   type PaymentConfirmResult,
 } from "@/components/admin/PaymentConfirmModal";
+import {
+  CancelPaidBookingModal,
+  type CancellationReason,
+} from "@/components/admin/CancelPaidBookingModal";
 
 export interface PaymentActionTarget {
   type: "booking" | "lesson" | "openplay";
   entityId: string;
+  /** For group bookings — the booking_groups.id */
+  groupId?: string | null;
   playerName: string;
   playerPhone?: string | null;
   playerAvatar?: string;
@@ -30,6 +36,7 @@ export interface PaymentActionTarget {
   paymentMethod?: string | null;
   paymentProofUrl: string | null;
   bookingStatus: string;
+  cancellationReason?: string | null;
 }
 
 interface Props {
@@ -63,6 +70,12 @@ const PAYMENT_LABEL_KEYS: Record<string, { key: string; color: string }> = {
   refunded: { key: "overview.statusRefunded", color: "text-blue-400" },
 };
 
+const CANCELLATION_REASON_COLORS: Record<string, string> = {
+  refund: "text-blue-400",
+  free_pass: "text-purple-400",
+  staff_mistake: "text-amber-400",
+};
+
 const METHOD_LABELS: Record<string, string> = {
   cash: "Cash",
   vietqr: "QR",
@@ -80,6 +93,12 @@ const BOOKING_STATUS_KEYS: Record<string, { key: string; cls: string }> = {
 
 type ConfirmingAction = "approve" | "cancel" | "no_show";
 
+const CANCELLATION_REASON_LABELS: Record<string, string> = {
+  refund: "Refund",
+  free_pass: "Free Pass",
+  staff_mistake: "Staff Mistake",
+};
+
 export function PaymentActionModal({ target, onClose, onUpdated }: Props) {
   const { t } = useTranslation("translation", { i18n: adminI18n });
   const normalizedPayment = normalizePaymentStatus(target.paymentStatus);
@@ -91,6 +110,7 @@ export function PaymentActionModal({ target, onClose, onUpdated }: Props) {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [showPaymentForm, setShowPaymentForm] = useState(false);
+  const [showCancelPaidModal, setShowCancelPaidModal] = useState(false);
 
   const isActive = target.bookingStatus !== "cancelled" && target.bookingStatus !== "no_show";
   const isLesson = target.type === "lesson";
@@ -113,6 +133,13 @@ export function PaymentActionModal({ target, onClose, onUpdated }: Props) {
   };
 
   async function executeAction(action: ConfirmingAction, method?: string) {
+    // Paid cancellation requires a reason — open the reason modal
+    if (action === "cancel" && normalizedPayment === "paid") {
+      setConfirmingAction(null);
+      setShowCancelPaidModal(true);
+      return;
+    }
+
     setSaving(true);
     setError(null);
     try {
@@ -148,6 +175,34 @@ export function PaymentActionModal({ target, onClose, onUpdated }: Props) {
     } finally {
       setSaving(false);
     }
+  }
+
+  async function handleCancelPaid(reason: CancellationReason) {
+    if (target.type === "booking") {
+      if (target.groupId) {
+        await api.patch(`/api/staff/bookings/batch/${target.groupId}`, {
+          action: "cancel",
+          cancellationReason: reason,
+        });
+      } else {
+        await api.patch(`/api/staff/bookings/${target.entityId}`, {
+          status: "cancelled",
+          cancellationReason: reason,
+        });
+      }
+    } else if (target.type === "lesson") {
+      await api.patch(`/api/admin/coach-lessons/${target.entityId}`, {
+        status: "cancelled",
+        cancellationReason: reason,
+      });
+    } else if (target.type === "openplay") {
+      await api.patch(`/api/admin/open-play/${target.entityId}`, {
+        action: "cancel",
+        cancellationReason: reason,
+      });
+    }
+    setShowCancelPaidModal(false);
+    onUpdated();
   }
 
   async function handlePaymentConfirm(entityId: string, result: PaymentConfirmResult) {
@@ -265,6 +320,11 @@ export function PaymentActionModal({ target, onClose, onUpdated }: Props) {
                     {METHOD_LABELS[target.paymentMethod] ?? target.paymentMethod}
                   </p>
                 )}
+                {normalizedPayment === "refunded" && target.cancellationReason && (
+                  <p className={cn("text-[10px] font-medium mt-0.5", CANCELLATION_REASON_COLORS[target.cancellationReason] ?? "text-neutral-400")}>
+                    {CANCELLATION_REASON_LABELS[target.cancellationReason] ?? target.cancellationReason}
+                  </p>
+                )}
               </div>
             </div>
 
@@ -302,6 +362,21 @@ export function PaymentActionModal({ target, onClose, onUpdated }: Props) {
                   {target.paymentMethod && (
                     <p className="text-xs text-emerald-400/70 mt-0.5">
                       {METHOD_LABELS[target.paymentMethod] ?? target.paymentMethod}
+                    </p>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {/* Refunded banner */}
+            {normalizedPayment === "refunded" && (
+              <div className="flex items-center gap-2 rounded-xl bg-blue-500/10 border border-blue-500/20 px-3 py-2.5">
+                <XCircle className="h-4 w-4 text-blue-400 shrink-0" />
+                <div>
+                  <p className="text-sm text-blue-400 font-medium">{t("cancelPaid.refundedBanner")}</p>
+                  {target.cancellationReason && (
+                    <p className={cn("text-xs mt-0.5", CANCELLATION_REASON_COLORS[target.cancellationReason] ?? "text-neutral-400")}>
+                      {CANCELLATION_REASON_LABELS[target.cancellationReason] ?? target.cancellationReason}
                     </p>
                   )}
                 </div>
@@ -465,6 +540,18 @@ export function PaymentActionModal({ target, onClose, onUpdated }: Props) {
           onConfirm={handlePaymentConfirm}
           onRevert={normalizedPayment === "paid" && target.type === "lesson" ? handlePaymentRevert : undefined}
           onClose={() => setShowPaymentForm(false)}
+        />
+      )}
+
+      {/* Paid booking cancellation reason modal */}
+      {showCancelPaidModal && (
+        <CancelPaidBookingModal
+          playerName={target.playerName}
+          detail={target.detail}
+          priceValue={target.priceValue}
+          groupId={target.groupId ?? undefined}
+          onConfirm={handleCancelPaid}
+          onClose={() => setShowCancelPaidModal(false)}
         />
       )}
     </>

@@ -41,6 +41,8 @@ export async function GET(
         id: b.id,
         courtId: b.courtId,
         courtLabel: b.court.label,
+        startTime: b.startTime.toISOString(),
+        endTime: b.endTime.toISOString(),
         priceValue: b.priceValue,
         status: b.status,
       })),

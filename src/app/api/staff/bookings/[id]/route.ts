@@ -4,6 +4,11 @@ import { json, error, parseBody, notFound } from "@/lib/api-helpers";
 import { requireStaff } from "@/lib/auth";
 import { getBookingConfig, resolveCourtBookingPrice, resolveCourtPricingMatrix } from "@/lib/booking";
 import { sendBookingEmail, wrapPaymentUrlWithMagicLogin } from "@/lib/email/send";
+import {
+  isPaidPaymentStatus,
+  paidCancellationUpdate,
+  requirePaidCancellationReason,
+} from "@/lib/paid-cancellation";
 
 export const dynamic = "force-dynamic";
 
@@ -39,6 +44,8 @@ export async function PATCH(
     const { id } = await params;
     const body = await parseBody<{
       status?: "cancelled" | "no_show";
+      /** Required when cancelling a paid booking: "refund" | "free_pass" | "staff_mistake" */
+      cancellationReason?: string;
       courtId?: string;
       date?: string;
       startTime?: string;
@@ -58,59 +65,117 @@ export async function PATCH(
       }
 
       if (body.status === "cancelled") {
+        const wasPaid = isPaidPaymentStatus(existing.paymentStatus);
+
+        // Paid cancellations require a reason
+        if (wasPaid) {
+          const reasonError = requirePaidCancellationReason(true, body.cancellationReason);
+          if (reasonError) return error(reasonError, 400);
+        }
+
         const venue = await prisma.venue.findUnique({
           where: { id: existing.venueId },
           select: { settings: true, name: true },
         });
-        const settings = (venue?.settings as Record<string, unknown>) ?? {};
-        const policy = (settings.cancellationPolicy as {
-          freeCancelHours?: number;
-          partialCancelHours?: number;
-          noCancelHours?: number;
-        }) ?? {};
-        const noCancelHours = policy.noCancelHours ?? 4;
-        const partialCancelHours = policy.partialCancelHours ?? 12;
-        const freeCancelHours = policy.freeCancelHours ?? 24;
 
-        const now = new Date();
-        const hoursUntilStart = (existing.startTime.getTime() - now.getTime()) / (1000 * 60 * 60);
+        // For non-paid bookings, enforce the venue cancellation policy
+        if (!wasPaid) {
+          const settings = (venue?.settings as Record<string, unknown>) ?? {};
+          const policy = (settings.cancellationPolicy as {
+            freeCancelHours?: number;
+            partialCancelHours?: number;
+            noCancelHours?: number;
+          }) ?? {};
+          const noCancelHours = policy.noCancelHours ?? 4;
+          const partialCancelHours = policy.partialCancelHours ?? 12;
+          const freeCancelHours = policy.freeCancelHours ?? 24;
 
-        if (hoursUntilStart < noCancelHours) {
-          return error(
-            `Cannot cancel — less than ${noCancelHours} hours before start. Cancellation is not allowed.`,
-            400
-          );
+          const now = new Date();
+          const hoursUntilStart = (existing.startTime.getTime() - now.getTime()) / (1000 * 60 * 60);
+
+          if (hoursUntilStart < noCancelHours) {
+            return error(
+              `Cannot cancel — less than ${noCancelHours} hours before start. Cancellation is not allowed.`,
+              400
+            );
+          }
+
+          const partialRefund = hoursUntilStart < partialCancelHours;
+          const freeCancel = hoursUntilStart >= freeCancelHours;
+
+          const booking = await prisma.booking.update({
+            where: { id },
+            data: { status: "cancelled", cancelledAt: new Date() },
+            include: {
+              court: { select: { id: true, label: true } },
+              player: { select: { id: true, name: true, phone: true, email: true } },
+            },
+          });
+
+          if (booking.player.email) {
+            const dateStr = booking.date.toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" });
+            const timeStr = `${booking.startTime.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })} – ${booking.endTime.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}`;
+            await sendBookingEmail({
+              to: booking.player.email,
+              playerName: booking.player.name,
+              bookingType: "court",
+              emailType: "cancelled",
+              details: {
+                venueName: venue?.name,
+                courtName: booking.court.label,
+                date: dateStr,
+                time: timeStr,
+              },
+            });
+          }
+
+          return json({ ...booking, partialRefund, freeCancel });
         }
 
-        const partialRefund = hoursUntilStart < partialCancelHours;
-        const freeCancel = hoursUntilStart >= freeCancelHours;
-
+        // Paid cancellation — set paymentStatus=refunded and record the reason
+        const now = new Date();
         const booking = await prisma.booking.update({
           where: { id },
-          data: { status: "cancelled", cancelledAt: new Date() },
+          data: {
+            ...paidCancellationUpdate(body.cancellationReason!, now),
+          },
           include: {
             court: { select: { id: true, label: true } },
             player: { select: { id: true, name: true, phone: true, email: true } },
           },
         });
 
+        // Also update the parent group if this booking belongs to one
+        if (existing.bookingGroupId) {
+          await prisma.bookingGroup.update({
+            where: { id: existing.bookingGroupId },
+            data: {
+              status: "cancelled",
+              cancelledAt: now,
+              paymentStatus: "refunded",
+              cancellationReason: body.cancellationReason,
+            },
+          });
+        }
+
         if (booking.player.email) {
           const dateStr = booking.date.toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" });
           const timeStr = `${booking.startTime.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })} – ${booking.endTime.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}`;
-          await sendBookingEmail({
+          void sendBookingEmail({
             to: booking.player.email,
             playerName: booking.player.name,
             bookingType: "court",
             emailType: "cancelled",
             details: {
               venueName: venue?.name,
+              courtName: booking.court.label,
               date: dateStr,
               time: timeStr,
             },
           });
         }
 
-        return json({ ...booking, partialRefund, freeCancel });
+        return json({ ...booking, partialRefund: false, freeCancel: true });
       }
 
       const booking = await prisma.booking.update({
@@ -219,6 +284,7 @@ export async function PATCH(
         emailType: "staff_confirmed",
         details: {
           venueName: booking.venue.name,
+          courtName: booking.court.label,
           date: dateStr,
           time: timeStr,
           amount: newPrice,

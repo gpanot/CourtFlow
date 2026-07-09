@@ -14,7 +14,10 @@ export async function DELETE(
     const auth = requireAuth(request.headers);
     const { id } = await params;
 
-    const booking = await prisma.booking.findUnique({ where: { id } });
+    const booking = await prisma.booking.findUnique({
+      where: { id },
+      include: { court: { select: { label: true } } },
+    });
     if (!booking) return notFound("Booking not found");
 
     if (booking.playerId !== auth.id) {
@@ -48,7 +51,7 @@ export async function DELETE(
         playerName: player.name,
         bookingType: "court",
         emailType: "cancelled",
-        details: {},
+        details: { courtName: booking.court.label },
       });
     }
 

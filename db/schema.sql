@@ -596,7 +596,8 @@ CREATE TABLE public.booking_groups (
     created_at timestamp without time zone DEFAULT now() NOT NULL,
     cancelled_at timestamp without time zone,
     invoice_number text,
-    invoiced_at timestamp with time zone
+    invoiced_at timestamp with time zone,
+    cancellation_reason text
 );
 
 
@@ -627,7 +628,8 @@ CREATE TABLE public.bookings (
     booking_group_id text,
     payment_method text,
     invoice_number text,
-    invoiced_at timestamp with time zone
+    invoiced_at timestamp with time zone,
+    cancellation_reason text
 );
 
 
@@ -790,7 +792,8 @@ CREATE TABLE public.coach_lessons (
     rejection_reason text,
     google_event_id text,
     invoice_number text,
-    invoiced_at timestamp with time zone
+    invoiced_at timestamp with time zone,
+    cancellation_reason text
 );
 
 
@@ -1105,7 +1108,8 @@ CREATE TABLE public.open_play_registrations (
     expired_at timestamp with time zone,
     payment_method text,
     invoice_number text,
-    invoiced_at timestamp with time zone
+    invoiced_at timestamp with time zone,
+    cancellation_reason text
 );
 
 
@@ -5390,4 +5394,6 @@ INSERT INTO public.schema_migrations (version) VALUES
     ('20260706074030'),
     ('20260706080327'),
     ('20260707015817'),
-    ('20260708013950');
+    ('20260708013950'),
+    ('20260708235206'),
+    ('20260709001329');

@@ -34,7 +34,19 @@ export async function GET(request: NextRequest) {
           orderBy: { openedAt: "desc" },
         },
         owner: { select: { id: true, name: true } },
-        organization: { select: { id: true, name: true, country: true, currency: true } },
+        organization: {
+          select: {
+            id: true,
+            name: true,
+            country: true,
+            currency: true,
+            paymentRegion: true,
+            legalCompanyName: true,
+            registrationNumber: true,
+            taxId: true,
+            registeredAddress: true,
+          },
+        },
         _count: { select: { staffAssignments: true } },
       },
     });
@@ -125,7 +137,19 @@ export async function POST(request: NextRequest) {
         },
       },
       include: {
-        organization: { select: { id: true, name: true, country: true, currency: true } },
+        organization: {
+          select: {
+            id: true,
+            name: true,
+            country: true,
+            currency: true,
+            paymentRegion: true,
+            legalCompanyName: true,
+            registrationNumber: true,
+            taxId: true,
+            registeredAddress: true,
+          },
+        },
       },
     });
 

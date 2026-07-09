@@ -42,6 +42,11 @@ import {
   fmtLessonSummary,
 } from "@/lib/lesson-slot-selection";
 import { previewStaffBookingEmail } from "@/lib/staff-booking-email-preview";
+import { useBookingSlotSelection } from "@/hooks/useBookingSlotSelection";
+import {
+  computeBookingSelectionSummary,
+  toGridSelectedSlots,
+} from "@/components/admin/BookingSelectionBar";
 
 // ─── Shared types ─────────────────────────────────────────────────────────────
 
@@ -86,8 +91,21 @@ export interface InitialCourtSelection {
   courtId: string;
   courtLabel: string;
   slots: { startTime: string; endTime: string; hour: number }[];
-  /** Additional courts pre-selected for a multi-court group booking */
-  additionalCourts?: { courtId: string; courtLabel: string }[];
+  /** Additional courts pre-selected for a multi-court group booking.
+   *  Each may carry its own slot window; if omitted, the primary court's slots are used. */
+  additionalCourts?: { courtId: string; courtLabel: string; slots?: { startTime: string; endTime: string; hour: number }[] }[];
+}
+
+/** When set, modal opens in edit mode for an existing group booking. */
+export interface EditGroupBooking {
+  groupId: string;
+  date: string;
+  /** ISO string — used to pre-seed the date picker */
+  startTime: string;
+  status: string;
+  player: PlayerResult;
+  /** Per-court snapshot for pre-seeding the grid */
+  bookings: { id: string; courtId: string; courtLabel: string; startTime: string; endTime: string; priceValue: number }[];
 }
 
 /** When set, modal opens in edit mode for an existing court booking. */
@@ -131,6 +149,8 @@ export interface StaffBookingModalProps {
   initialCourtSelection?: InitialCourtSelection;
   /** Edit an existing court booking (court mode only). */
   editBooking?: EditCourtBooking;
+  /** Edit an existing group booking (court mode, multi-court). */
+  editGroup?: EditGroupBooking;
   /** Edit an existing coach lesson (lesson mode only). */
   editLesson?: EditLessonBooking;
   onClose: () => void;
@@ -190,15 +210,17 @@ export function StaffBookingModal({
   initialMode,
   initialCourtSelection,
   editBooking,
+  editGroup,
   editLesson,
   onClose,
   onCreated,
 }: StaffBookingModalProps) {
   const { t } = useTranslation("translation", { i18n: adminI18n });
   const isCourtEditMode = !!editBooking;
+  const isGroupEditMode = !!editGroup;
   const isLessonEditMode = !!editLesson;
-  const isEditMode = isCourtEditMode || isLessonEditMode;
-  const effectiveAllowModes: BookingMode[] = isCourtEditMode
+  const isEditMode = isCourtEditMode || isGroupEditMode || isLessonEditMode;
+  const effectiveAllowModes: BookingMode[] = isCourtEditMode || isGroupEditMode
     ? ["court"]
     : isLessonEditMode
       ? ["lesson"]
@@ -220,7 +242,7 @@ export function StaffBookingModal({
   const [mode, setMode] = useState<BookingMode>(
     isCourtEditMode ? "court" : isLessonEditMode ? "lesson" : (initialMode ?? allowModes[0]),
   );
-  const editDateKey = (editBooking?.date ?? editLesson?.date)?.split("T")[0];
+  const editDateKey = (editBooking?.date ?? editGroup?.date ?? editLesson?.date)?.split("T")[0];
   const [bookDate, setBookDate] = useState(
     editDateKey ?? initialDate ?? localDateISO(new Date()),
   );
@@ -228,8 +250,7 @@ export function StaffBookingModal({
   const changeBookDate = (nextDate: string) => {
     setBookDate(nextDate);
     setSelectedSlots([]);
-    setSelectedCourtId("");
-    setAdditionalCourtIds([]);
+    clearCourtSelection();
   };
 
   const shiftBookDate = (days: number) => {
@@ -255,7 +276,7 @@ export function StaffBookingModal({
 
   // Selected player
   const [selectedPlayer, setSelectedPlayer] = useState<PlayerResult | null>(
-    editBooking?.player ?? editLesson?.player ?? initialPlayer ?? null,
+    editBooking?.player ?? editGroup?.player ?? editLesson?.player ?? initialPlayer ?? null,
   );
   const [playerSearch, setPlayerSearch] = useState("");
   const [playerResults, setPlayerResults] = useState<PlayerResult[]>([]);
@@ -276,21 +297,84 @@ export function StaffBookingModal({
     if (typeof window !== "undefined") localStorage.setItem(GRANULARITY_KEY, g);
   };
 
-  // Court mode state
-  const [selectedCourtId, setSelectedCourtId] = useState(initialCourtSelection?.courtId ?? "");
-  // Additional courts for group bookings — single source of truth for both
-  // the pre-selection (from grid) and manual in-modal additions.
-  const [additionalCourtIds, setAdditionalCourtIds] = useState<string[]>(
-    () => initialCourtSelection?.additionalCourts?.map((c) => c.courtId) ?? []
-  );
+  // Court mode selection — uses the same hook as the main bookings grid so
+  // multi-court selection (including independent time windows) works identically.
+  // We pass `availability` here (not `gridAvailability`) because the hook must be
+  // called before the gridAvailability useMemo. The `isSlotDisabled` callback
+  // gates selection on the same logic as `isSlotSelectable`.
+  const {
+    selectedSlots: courtSelectedSlots,
+    setSelectedSlots: setCourtSelectedSlots,
+    toggleSlotSelection,
+    clearSelection: clearCourtSelection,
+    selectionSummary: courtSelectionSummary,
+    gridSelectedSlots: courtGridSelectedSlots,
+  } = useBookingSlotSelection(availability, {
+    isSlotDisabled: (courtId, slot) => !isSlotSelectable(courtId, slot),
+  });
 
+  // Initialise court selection from pre-selection (when opened from grid)
   useEffect(() => {
     if (!initialCourtSelection) return;
-    const { courtId, courtLabel, slots } = initialCourtSelection;
-    setSelectedCourtId(courtId);
-    setSelectedSlots(slots.map((s) => ({ courtId, courtLabel, ...s })));
-    setAdditionalCourtIds(initialCourtSelection.additionalCourts?.map((c) => c.courtId) ?? []);
+    const { courtId, courtLabel, slots, additionalCourts } = initialCourtSelection;
+    const primary: import("@/components/admin/BookingSelectionBar").SlotSelectionEntry = {
+      courtLabel,
+      slots: slots.map((s) => ({
+        startTime: s.startTime,
+        endTime: s.endTime,
+        hour: s.hour,
+        priceValue: 0,
+        available: true,
+      })),
+    };
+    const init: import("@/components/admin/BookingSelectionBar").SlotSelectionState = { [courtId]: primary };
+    for (const ac of additionalCourts ?? []) {
+      const acSlots = ac.slots ?? slots;
+      init[ac.courtId] = {
+        courtLabel: ac.courtLabel,
+        slots: acSlots.map((s) => ({
+          startTime: s.startTime,
+          endTime: s.endTime,
+          hour: s.hour,
+          priceValue: 0,
+          available: true,
+        })),
+      };
+    }
+    setCourtSelectedSlots(init);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [initialCourtSelection]);
+
+  // Once availability loads, back-fill real priceValues into any pre-seeded court slots
+  // (pre-seeded slots arrive with priceValue: 0 because availability hasn't loaded yet).
+  useEffect(() => {
+    if (availability.length === 0) return;
+    setCourtSelectedSlots((prev) => {
+      if (Object.keys(prev).length === 0) return prev;
+      let changed = false;
+      const next = { ...prev };
+      for (const courtId of Object.keys(next)) {
+        const courtData = availability.find((c) => c.courtId === courtId);
+        if (!courtData) continue;
+        const updatedSlots = next[courtId].slots.map((s) => {
+          const live = courtData.slots.find((cs) => cs.startTime === s.startTime);
+          if (live && live.priceValue !== s.priceValue) {
+            changed = true;
+            return { ...s, priceValue: live.priceValue };
+          }
+          return s;
+        });
+        if (changed) next[courtId] = { ...next[courtId], slots: updatedSlots };
+      }
+      return changed ? next : prev;
+    });
+  }, [availability]);
+
+  // Seed group edit player immediately when the target is set
+  useEffect(() => {
+    if (!editGroup) return;
+    setSelectedPlayer(editGroup.player);
+  }, [editGroup]);
 
   // Open play mode state
   const [openPlaySessions, setOpenPlaySessions] = useState<OpenPlaySession[]>([]);
@@ -305,12 +389,9 @@ export function StaffBookingModal({
   const [lessonPlayerCount, setLessonPlayerCount] = useState(editLesson?.playerCount ?? 2);
   const [lessonStatus, setLessonStatus] = useState(editLesson?.status ?? "confirmed");
 
+  // Lesson-mode flat slot selection (court-mode now uses courtSelectedSlots from the hook)
   type SelectedSlot = { courtId: string; courtLabel: string; startTime: string; endTime: string; hour: number };
-  const [selectedSlots, setSelectedSlots] = useState<SelectedSlot[]>(() => {
-    if (!initialCourtSelection) return [];
-    const { courtId, courtLabel, slots } = initialCourtSelection;
-    return slots.map((s) => ({ courtId, courtLabel, ...s }));
-  });
+  const [selectedSlots, setSelectedSlots] = useState<SelectedSlot[]>([]);
 
   // Fetch venue timezone
   useEffect(() => {
@@ -346,6 +427,7 @@ export function StaffBookingModal({
 
   // When editing, pre-select all 30-min cells covered by the booking/lesson once availability loads.
   const editSlotsInitFor = useRef<string | null>(null);
+  const editGroupSlotsInitFor = useRef<string | null>(null);
   useEffect(() => {
     const target = editBooking ?? editLesson;
     if (!target) {
@@ -370,14 +452,92 @@ export function StaffBookingModal({
         hour: s.hour,
       }));
     if (slots.length > 0) {
-      setSelectedCourtId(target.courtId);
-      setSelectedSlots(slots);
+      if (editBooking) {
+        // Court edit mode — use the hook's slot selection
+        setCourtSelectedSlots({
+          [target.courtId]: {
+            courtLabel: target.courtLabel,
+            slots: slots.map((s) => ({
+              startTime: s.startTime,
+              endTime: s.endTime,
+              hour: s.hour,
+              priceValue: 0,
+              available: true,
+            })),
+          },
+        });
+      } else {
+        // Lesson edit mode — keep flat array
+        setSelectedSlots(slots);
+      }
       editSlotsInitFor.current = target.id;
     }
-  }, [editBooking, editLesson, availability]);
+  }, [editBooking, editLesson, availability, setCourtSelectedSlots]);
+
+  // Group edit: pre-select each court's slots from availability once it loads
+  useEffect(() => {
+    if (!editGroup) {
+      editGroupSlotsInitFor.current = null;
+      return;
+    }
+    if (editGroupSlotsInitFor.current === editGroup.groupId || availability.length === 0) return;
+
+    const init: import("@/components/admin/BookingSelectionBar").SlotSelectionState = {};
+    let anySlots = false;
+
+    for (const b of editGroup.bookings) {
+      const court = availability.find((c) => c.courtId === b.courtId);
+      if (!court || !b.startTime || !b.endTime) continue;
+      const startMs = new Date(b.startTime).getTime();
+      const endMs = new Date(b.endTime).getTime();
+      if (Number.isNaN(startMs) || Number.isNaN(endMs)) continue;
+
+      const slots = court.slots
+        .filter((s) => {
+          const t = new Date(s.startTime).getTime();
+          return t >= startMs && t < endMs;
+        })
+        .map((s) => ({ ...s, available: true }));
+
+      if (slots.length > 0) {
+        init[b.courtId] = { courtLabel: b.courtLabel, slots };
+        anySlots = true;
+      }
+    }
+
+    if (anySlots) {
+      setCourtSelectedSlots(init);
+      editGroupSlotsInitFor.current = editGroup.groupId;
+    }
+  }, [editGroup, availability, setCourtSelectedSlots]);
 
   /** In edit mode, release the booking/lesson's own cells so staff can re-select them. */
   const gridAvailability = useMemo((): CourtAvailability[] => {
+    if (editGroup) {
+      const editDate = editGroup.date.split("T")[0];
+      if (bookDate !== editDate) return availability;
+      return availability.map((court) => {
+        const selectedEntry = courtSelectedSlots[court.courtId];
+        const originalBooking = editGroup.bookings.find((b) => b.courtId === court.courtId);
+        if (!selectedEntry && !originalBooking) return court;
+
+        return {
+          ...court,
+          slots: court.slots.map((slot) => {
+            const t = new Date(slot.startTime).getTime();
+            if (selectedEntry?.slots.some((s) => s.startTime === slot.startTime)) {
+              return { ...slot, available: true };
+            }
+            if (originalBooking) {
+              const startMs = new Date(originalBooking.startTime).getTime();
+              const endMs = new Date(originalBooking.endTime).getTime();
+              if (t >= startMs && t < endMs) return { ...slot, available: true };
+            }
+            return slot;
+          }),
+        };
+      });
+    }
     const target = editBooking ?? editLesson;
     if (!target) return availability;
     const editDate = target.date.split("T")[0];
@@ -393,11 +553,28 @@ export function StaffBookingModal({
         return slot;
       }),
     }));
-  }, [availability, editBooking, editLesson, bookDate]);
+  }, [availability, editBooking, editGroup, editLesson, bookDate, courtSelectedSlots]);
+
+  /** Hide the group's own booking overlays so freed slots render as available cells. */
+  const displayGridBookings = useMemo(() => {
+    if (!editGroup) return gridBookings;
+    const groupBookingIds = new Set(editGroup.bookings.map((b) => b.id));
+    return gridBookings.filter((b) => !groupBookingIds.has(b.id));
+  }, [gridBookings, editGroup]);
 
   const isSlotSelectable = useCallback(
     (courtId: string, slot: CourtSlot): boolean => {
       if (slot.available) return true;
+      if (editGroup) {
+        const editDate = editGroup.date.split("T")[0];
+        if (bookDate !== editDate) return false;
+        const selectedEntry = courtSelectedSlots[courtId];
+        if (selectedEntry?.slots.some((s) => s.startTime === slot.startTime)) return true;
+        const booking = editGroup.bookings.find((b) => b.courtId === courtId);
+        if (!booking) return false;
+        const t = new Date(slot.startTime).getTime();
+        return t >= new Date(booking.startTime).getTime() && t < new Date(booking.endTime).getTime();
+      }
       const target = editBooking ?? editLesson;
       if (!target) return false;
       const editDate = target.date.split("T")[0];
@@ -407,7 +584,7 @@ export function StaffBookingModal({
       const endMs = new Date(target.endTime).getTime();
       return t >= startMs && t < endMs;
     },
-    [editBooking, editLesson, bookDate],
+    [editBooking, editGroup, editLesson, bookDate, courtSelectedSlots],
   );
 
   // Fetch open play sessions
@@ -460,44 +637,31 @@ export function StaffBookingModal({
 
   const switchMode = (m: BookingMode) => {
     setMode(m);
+    setDiscountPct(0);
     setErr("");
     setSelectedPlayer(null);
     setPlayerSearch("");
     setPlayerResults([]);
     setPlayerCreatedInSession(false);
     setSelectedSlots([]);
-    setSelectedCourtId("");
+    clearCourtSelection();
     setSelectedSessionId("");
   };
 
   // ─── Court booking ─────────────────────────────────────────────────────────
 
-  // Max selectable 30-min cells — derived from venue config (default 8 h = 16 cells)
-  const MAX_COURT_SLOTS = 16; // default; no venue config here, server enforces the real limit
+  // Max selectable 30-min cells per court — server enforces the real limit
+  const MAX_COURT_SLOTS = 16;
 
-  // Total price across all selected court slots
-  const courtSelectionPrice = selectedSlots.reduce((sum, s) => {
-    const price = availability
-      .find((c) => c.courtId === s.courtId)
-      ?.slots.find((sl) => sl.startTime === s.startTime)?.priceValue ?? 0;
-    return sum + price;
-  }, 0);
-
-  // After-discount price shown in the modal and sent to the API
-  const courtDiscountedPrice = discountPct > 0
-    ? Math.round(courtSelectionPrice * (100 - discountPct) / 100)
-    : courtSelectionPrice;
-
-  const courtOriginalTotal = courtSelectionPrice * (1 + additionalCourtIds.length);
+  // Derive total price from the selection summary (already computed by the hook)
+  const courtOriginalTotal = courtSelectionSummary?.totalPrice ?? 0;
   const courtFinalTotal = discountPct > 0
     ? Math.round(courtOriginalTotal * (100 - discountPct) / 100)
     : courtOriginalTotal;
 
   const selectedOpenPlaySession = openPlaySessions.find((s) => s.entryId === selectedSessionId);
   const openPlayOriginalPrice = selectedOpenPlaySession?.priceValue ?? 0;
-  const openPlayFinalPrice = discountPct > 0
-    ? Math.round(openPlayOriginalPrice * (100 - discountPct) / 100)
-    : openPlayOriginalPrice;
+  const openPlayFinalPrice = openPlayOriginalPrice;
 
   const emailPreviewBase = () => ({
     playerEmail: selectedPlayer?.email,
@@ -506,7 +670,8 @@ export function StaffBookingModal({
   });
 
   const submitCourt = async () => {
-    if (!selectedPlayer || selectedSlots.length === 0) {
+    const courtIds = Object.keys(courtSelectedSlots);
+    if (!selectedPlayer || courtIds.length === 0) {
       setErr("Time slot and player are required");
       return;
     }
@@ -514,7 +679,7 @@ export function StaffBookingModal({
       mode: "court",
       isCourtEditMode,
       isLessonEditMode: false,
-      hasAdditionalCourts: additionalCourtIds.length > 0,
+      hasAdditionalCourts: courtIds.length > 1,
       ...emailPreviewBase(),
       originalPrice: courtOriginalTotal,
       finalPrice: courtFinalTotal,
@@ -523,35 +688,59 @@ export function StaffBookingModal({
     setSaving(true);
     setErr("");
     try {
-      const first = selectedSlots[0];
-      if (isCourtEditMode && editBooking) {
-        await api.patch(`/api/staff/bookings/${editBooking.id}`, {
-          courtId: first.courtId,
+      if (isGroupEditMode && editGroup) {
+        // Group edit: PATCH the group with updated courts + per-court windows
+        await api.patch(`/api/staff/bookings/batch/${editGroup.groupId}`, {
           date: bookDate,
-          startTime: first.startTime,
-          slotCount: selectedSlots.length,
+          playerId: selectedPlayer.id,
+          courts: courtIds.map((cid) => {
+            const entry = courtSelectedSlots[cid];
+            const sorted = [...entry.slots].sort((a, b) => new Date(a.startTime).getTime() - new Date(b.startTime).getTime());
+            return {
+              courtId: cid,
+              startTime: sorted[0].startTime,
+              slotCount: sorted.length,
+            };
+          }),
         });
-      } else if (additionalCourtIds.length > 0) {
-        // Multi-court group booking (from grid pre-selection OR in-modal court additions)
+      } else if (isCourtEditMode && editBooking) {
+        // Single-court edit: use the first (only) court's selection
+        const entry = courtSelectedSlots[courtIds[0]];
+        const sorted = [...entry.slots].sort((a, b) => new Date(a.startTime).getTime() - new Date(b.startTime).getTime());
+        await api.patch(`/api/staff/bookings/${editBooking.id}`, {
+          courtId: courtIds[0],
+          date: bookDate,
+          startTime: sorted[0].startTime,
+          slotCount: sorted.length,
+        });
+      } else if (courtIds.length > 1) {
+        // Multi-court group booking — each court may have its own time window
         await api.post("/api/staff/bookings/batch", {
           venueId,
           playerId: selectedPlayer.id,
           date: bookDate,
-          courts: [first.courtId, ...additionalCourtIds].map((cid) => ({
-            courtId: cid,
-            startTime: first.startTime,
-            slotCount: selectedSlots.length,
-          })),
+          courts: courtIds.map((cid) => {
+            const entry = courtSelectedSlots[cid];
+            const sorted = [...entry.slots].sort((a, b) => new Date(a.startTime).getTime() - new Date(b.startTime).getTime());
+            return {
+              courtId: cid,
+              startTime: sorted[0].startTime,
+              slotCount: sorted.length,
+            };
+          }),
           ...(discountPct > 0 ? { discountPct } : {}),
         });
       } else {
+        // Single-court booking
+        const entry = courtSelectedSlots[courtIds[0]];
+        const sorted = [...entry.slots].sort((a, b) => new Date(a.startTime).getTime() - new Date(b.startTime).getTime());
         await api.post("/api/staff/bookings", {
-          courtId: first.courtId,
+          courtId: courtIds[0],
           venueId,
           playerId: selectedPlayer.id,
           date: bookDate,
-          startTime: first.startTime,
-          slotCount: selectedSlots.length,
+          startTime: sorted[0].startTime,
+          slotCount: sorted.length,
           ...(discountPct > 0 ? { discountPct } : {}),
         });
       }
@@ -567,6 +756,18 @@ export function StaffBookingModal({
     setErr("");
     try {
       await api.patch(`/api/staff/bookings/${editBooking.id}`, { status: "cancelled" });
+      onCreated();
+    } catch (e) { setErr((e as Error).message); }
+    finally { setSaving(false); }
+  };
+
+  const cancelEditGroup = async () => {
+    if (!editGroup) return;
+    if (!confirm("Cancel this entire group booking? This cannot be undone.")) return;
+    setSaving(true);
+    setErr("");
+    try {
+      await api.delete(`/api/staff/bookings/batch/${editGroup.groupId}`);
       onCreated();
     } catch (e) { setErr((e as Error).message); }
     finally { setSaving(false); }
@@ -597,7 +798,6 @@ export function StaffBookingModal({
         scheduleEntryId: selectedSessionId,
         date: bookDate,
         playerId: selectedPlayer.id,
-        ...(discountPct > 0 ? { discountPct } : {}),
       });
       onCreated();
     } catch (e) { setErr((e as Error).message); }
@@ -611,29 +811,25 @@ export function StaffBookingModal({
   const selectedPkg = coachPackages.find((p) => p.id === lessonPackageId);
 
   /**
-   * Toggle slots atomically. `slots` can be a single slot or an array
+   * Lesson-mode slot toggle. `slots` can be a single slot or an array
    * (used when gridGranularity === "1h" to select 2 cells at once, or
    * when lesson mode snaps to `cellsPerLesson` cells).
    */
-  const toggleSlot = (courtId: string, courtLabel: string, slots: CourtSlot | CourtSlot[]) => {
+  const toggleLessonSlot = (courtId: string, courtLabel: string, slots: CourtSlot | CourtSlot[]) => {
     const slotsArr = Array.isArray(slots) ? slots : [slots];
     const primarySlot = slotsArr[0];
     if (!isSlotSelectable(courtId, primarySlot)) return;
-    const maxSlots = mode === "court" ? MAX_COURT_SLOTS : Infinity;
 
     const already = selectedSlots.find((s) => s.courtId === courtId && s.startTime === primarySlot.startTime);
     if (already) {
-      // Clicking a selected slot: deselect it and everything after it on this court
       const slotTime = new Date(primarySlot.startTime).getTime();
       setSelectedSlots(selectedSlots.filter((s) => s.courtId !== courtId || new Date(s.startTime).getTime() < slotTime));
       return;
     }
 
-    // Different court → reset to these slots and clear additional courts
+    // Different court → reset to these slots
     if (selectedSlots.length > 0 && selectedSlots[0].courtId !== courtId) {
-      const newSel = slotsArr.map((s) => ({ courtId, courtLabel, startTime: s.startTime, endTime: s.endTime, hour: s.hour }));
-      setSelectedSlots(newSel);
-      if (mode === "court") { setSelectedCourtId(courtId); setAdditionalCourtIds([]); }
+      setSelectedSlots(slotsArr.map((s) => ({ courtId, courtLabel, startTime: s.startTime, endTime: s.endTime, hour: s.hour })));
       return;
     }
 
@@ -641,9 +837,7 @@ export function StaffBookingModal({
     if (!court) return;
 
     if (selectedSlots.length === 0) {
-      const newSel = slotsArr.map((s) => ({ courtId, courtLabel, startTime: s.startTime, endTime: s.endTime, hour: s.hour }));
-      setSelectedSlots(newSel);
-      if (mode === "court") setSelectedCourtId(courtId);
+      setSelectedSlots(slotsArr.map((s) => ({ courtId, courtLabel, startTime: s.startTime, endTime: s.endTime, hour: s.hour })));
       return;
     }
 
@@ -663,9 +857,8 @@ export function StaffBookingModal({
       newSlots.push({ courtId, courtLabel, startTime: s.startTime, endTime: s.endTime, hour: s.hour });
     }
 
-    if (consecutive && newSlots.length > 0 && newSlots.length <= maxSlots) {
+    if (consecutive && newSlots.length > 0) {
       setSelectedSlots(newSlots);
-      if (mode === "court") setSelectedCourtId(courtId);
     }
   };
 
@@ -760,7 +953,13 @@ export function StaffBookingModal({
   const isSubmitDisabled = () => {
     if (saving) return true;
     if (!selectedPlayer) return true;
-    if (mode === "court") return selectedSlots.length === 0;
+    if (mode === "court") {
+      const count = Object.keys(courtSelectedSlots).length;
+      if (count === 0) return true;
+      // Group edit requires at least 2 courts
+      if (isGroupEditMode && count < 2) return true;
+      return false;
+    }
     if (mode === "open_play") return !selectedSessionId;
     return !lessonCoachId || !lessonPackageId || selectedSlots.length === 0;
   };
@@ -769,32 +968,12 @@ export function StaffBookingModal({
 
   const showGrid = mode === "lesson" || mode === "court";
 
-  // Courts that can be added to a group — available in the same time window, not already selected
-  const addableCourts = useMemo(() => {
-    if (selectedSlots.length === 0 || !selectedCourtId || mode !== "court" || isCourtEditMode) return [];
-    const sortedSel = [...selectedSlots].sort((a, b) => new Date(a.startTime).getTime() - new Date(b.startTime).getTime());
-    const winStart = sortedSel[0].startTime;
-    const winEnd = sortedSel[sortedSel.length - 1].endTime;
-    return gridAvailability.filter((c) => {
-      if (c.courtId === selectedCourtId) return false;
-      if (additionalCourtIds.includes(c.courtId)) return false;
-      const windowSlots = c.slots.filter((s) => s.startTime >= winStart && s.endTime <= winEnd);
-      return windowSlots.length === selectedSlots.length && windowSlots.every((s) => s.available);
-    });
-  }, [selectedSlots, selectedCourtId, additionalCourtIds, gridAvailability, mode, isCourtEditMode]);
-
-  // Derive selectedSlots shape for BookingCourtGrid: Record<courtId, Set<startTime>>
-  // For group bookings all courts share the same time window.
-  const gridSelectedSlots = useMemo<Record<string, Set<string>>>(() => {
+  // Lesson-mode grid selection (flat array → Record<courtId, Set<startTime>>)
+  const lessonGridSelectedSlots = useMemo<Record<string, Set<string>>>(() => {
     if (selectedSlots.length === 0) return {};
     const cid = selectedSlots[0].courtId;
-    const timeSet = new Set(selectedSlots.map((s) => s.startTime));
-    const result: Record<string, Set<string>> = { [cid]: timeSet };
-    for (const acId of additionalCourtIds) {
-      result[acId] = timeSet;
-    }
-    return result;
-  }, [selectedSlots, additionalCourtIds]);
+    return { [cid]: new Set(selectedSlots.map((s) => s.startTime)) };
+  }, [selectedSlots]);
 
   // ─── Render ────────────────────────────────────────────────────────────────
 
@@ -813,12 +992,12 @@ export function StaffBookingModal({
                 <h3 className="text-lg font-bold">
                   {isLessonEditMode
                     ? t("coaching.editLesson")
-                    : isCourtEditMode
+                    : isCourtEditMode || isGroupEditMode
                       ? t("bookings.editBooking")
                       : t("bookings.newBooking")}
                 </h3>
-                {isEditMode && (editBooking || editLesson) && (
-                  <BookingStatusBadge status={(editBooking ?? editLesson)!.status} />
+                {isEditMode && (editBooking ?? editLesson ?? editGroup) && (
+                  <BookingStatusBadge status={(editBooking ?? editLesson ?? editGroup)!.status} />
                 )}
               </div>
               <button onClick={onClose} className="text-neutral-400 hover:text-white md:hidden">
@@ -867,107 +1046,71 @@ export function StaffBookingModal({
               <>
                 {/* Hint */}
                 <p className="text-xs text-neutral-500">
-                  Click slots on the right to select time. Up to {MAX_COURT_SLOTS} consecutive slots per booking.
+                  Click slots on the right to select time. Select multiple courts with independent time windows.
                 </p>
 
-                {/* Selection summary */}
-                {selectedSlots.length > 0 ? (
-                  <div className="rounded-lg border border-purple-600/40 bg-purple-600/10 p-3 space-y-0.5">
+                {/* Selection summary — driven by courtSelectionSummary from the hook */}
+                {courtSelectionSummary ? (
+                  <div className="rounded-lg border border-purple-600/40 bg-purple-600/10 p-3 space-y-1.5">
                     <div className="flex items-center justify-between">
                       <p className="text-xs text-purple-400 font-medium">
-                        {selectedSlots.length} slot{selectedSlots.length > 1 ? "s" : ""} · {fmtDuration(selectedSlots.length * 30)}
+                        {courtSelectionSummary.courtCount > 1
+                          ? `${courtSelectionSummary.courtCount} courts · ${fmtDuration(courtSelectionSummary.slotCount * 30)}`
+                          : `${courtSelectionSummary.slotCount} slot${courtSelectionSummary.slotCount > 1 ? "s" : ""} · ${fmtDuration(courtSelectionSummary.slotCount * 30)}`}
                       </p>
                       <button
                         type="button"
-                        onClick={() => { setSelectedSlots([]); setSelectedCourtId(""); }}
+                        onClick={clearCourtSelection}
                         className="text-neutral-500 hover:text-neutral-300 transition-colors"
                       >
                         <X className="h-3.5 w-3.5" />
                       </button>
                     </div>
-                    {/* Court list — primary + any additional courts (read-only) */}
-                    <div className="flex items-center gap-1 flex-wrap">
-                      <span className="rounded-full bg-purple-700/70 border border-purple-500/50 px-2 py-0.5 text-[11px] font-medium text-purple-100">
-                        {selectedSlots[0].courtLabel}
-                      </span>
-                      {additionalCourtIds.map((cid) => {
-                        const label = gridAvailability.find((c) => c.courtId === cid)?.courtLabel ?? cid;
-                        return (
-                          <span key={cid} className="rounded-full bg-purple-800/50 border border-purple-600/40 px-2 py-0.5 text-[11px] font-medium text-purple-200">
-                            {label}
+                    {/* Per-court rows */}
+                    <div className="space-y-1">
+                      {courtSelectionSummary.courts.map((c) => (
+                        <div key={c.courtId} className="flex items-center justify-between gap-2">
+                          <span className="rounded-full bg-purple-700/70 border border-purple-500/50 px-2 py-0.5 text-[11px] font-medium text-purple-100 shrink-0">
+                            {c.courtLabel}
                           </span>
-                        );
-                      })}
+                          <span className="text-[11px] text-neutral-300 truncate">
+                            {fmtSlotTime(c.startTime, venueTimezone)} – {fmtSlotTime(c.endTime, venueTimezone)}
+                          </span>
+                          {c.priceValue > 0 && (
+                            <span className="text-[11px] text-purple-400 font-medium shrink-0">
+                              {fmtPrice(c.priceValue)}
+                            </span>
+                          )}
+                          {!isCourtEditMode && (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                const next = { ...courtSelectedSlots };
+                                delete next[c.courtId];
+                                setCourtSelectedSlots(next);
+                              }}
+                              className="text-neutral-600 hover:text-red-400 transition-colors shrink-0"
+                            >
+                              <X className="h-3 w-3" />
+                            </button>
+                          )}
+                        </div>
+                      ))}
                     </div>
-                    <p className="text-xs text-neutral-300">
-                      {fmtSlotTime(selectedSlots[0].startTime, venueTimezone)}
-                      {" – "}
-                      {fmtSlotTime(selectedSlots[selectedSlots.length - 1].endTime, venueTimezone)}
-                    </p>
-                    {courtSelectionPrice > 0 && (() => {
-                      const totalCourts = 1 + additionalCourtIds.length;
-                      const total = courtDiscountedPrice * totalCourts;
-                      const original = courtSelectionPrice * totalCourts;
-                      const hasDiscount = discountPct > 0;
-                      return totalCourts > 1 ? (
-                        <div className="flex items-baseline gap-1.5 pt-0.5 flex-wrap">
-                          <span className="text-xs text-neutral-500">{fmtPrice(courtDiscountedPrice)} × {totalCourts} =</span>
-                          <span className="text-sm font-semibold text-purple-300">{fmtPrice(total)} VND</span>
-                          {hasDiscount && (
-                            <span className="text-[10px] text-neutral-500 line-through">{fmtPrice(original)} VND</span>
-                          )}
-                        </div>
-                      ) : (
-                        <div className="flex items-center gap-1.5 pt-0.5 flex-wrap">
-                          <p className="text-xs text-purple-400 font-medium">
-                            {fmtPrice(courtDiscountedPrice)} VND
-                          </p>
-                          {hasDiscount && (
-                            <span className="text-[10px] text-neutral-500 line-through">{fmtPrice(courtSelectionPrice)} VND</span>
-                          )}
-                        </div>
-                      );
-                    })()}
+                    {courtFinalTotal > 0 && (
+                      <div className="flex items-center gap-1.5 pt-0.5 flex-wrap border-t border-purple-600/20 pt-1.5">
+                        <p className="text-xs text-purple-400 font-semibold">
+                          Total: {fmtPrice(courtFinalTotal)} VND
+                        </p>
+                        {discountPct > 0 && (
+                          <span className="text-[10px] text-neutral-500 line-through">{fmtPrice(courtOriginalTotal)} VND</span>
+                        )}
+                      </div>
+                    )}
                   </div>
                 ) : (
                   <div className="rounded-lg border border-dashed border-neutral-700 p-4 text-center">
-                    <p className="text-xs text-neutral-600">No time selected yet</p>
-                  </div>
-                )}
-
-                {/* Add-court action — outside the summary card */}
-                {!isCourtEditMode && addableCourts.length > 0 && selectedSlots.length > 0 && (
-                  <div className="flex items-center gap-1.5 flex-wrap">
-                    <span className="text-[10px] text-neutral-500">Add court:</span>
-                    {addableCourts.map((c) => (
-                      <button
-                        key={c.courtId}
-                        type="button"
-                        onClick={() => setAdditionalCourtIds((ids) => [...ids, c.courtId])}
-                        className="rounded-full border border-dashed border-purple-600/50 bg-purple-900/20 px-2.5 py-0.5 text-[11px] text-purple-400 hover:bg-purple-600/20 hover:border-purple-500 transition-colors"
-                      >
-                        + {c.courtLabel}
-                      </button>
-                    ))}
-                  </div>
-                )}
-                {/* Remove additional court action */}
-                {!isCourtEditMode && additionalCourtIds.length > 0 && (
-                  <div className="flex items-center gap-1.5 flex-wrap">
-                    <span className="text-[10px] text-neutral-500">Remove:</span>
-                    {additionalCourtIds.map((cid) => {
-                      const label = gridAvailability.find((c) => c.courtId === cid)?.courtLabel ?? cid;
-                      return (
-                        <button
-                          key={cid}
-                          type="button"
-                          onClick={() => setAdditionalCourtIds((ids) => ids.filter((id) => id !== cid))}
-                          className="flex items-center gap-0.5 rounded-full border border-red-800/50 bg-red-900/10 px-2 py-0.5 text-[11px] text-red-400 hover:bg-red-900/25 transition-colors"
-                        >
-                          {label} <X className="h-2.5 w-2.5 ml-0.5" />
-                        </button>
-                      );
-                    })}
+                    <p className="text-xs text-neutral-600">Click slots on the grid to select time</p>
                   </div>
                 )}
               </>
@@ -1225,8 +1368,8 @@ export function StaffBookingModal({
             </div>
           </div>
 
-          {/* Discount — court + open_play modes only, not in edit */}
-          {(mode === "court" || mode === "open_play") && !isEditMode && (
+          {/* Discount — court mode only, not in edit */}
+          {mode === "court" && !isEditMode && (
             <div className="px-5 pb-3">
               <div className="flex items-center justify-between mb-2">
                 <label className="text-sm text-neutral-400">Discount</label>
@@ -1257,10 +1400,10 @@ export function StaffBookingModal({
                   </button>
                 ))}
               </div>
-              {discountPct > 0 && courtSelectionPrice > 0 && (
+              {discountPct > 0 && courtOriginalTotal > 0 && (
                 <p className="mt-2 text-[11px] text-purple-400 font-medium">
-                  {discountPct}% off — {fmtPrice(Math.round(courtSelectionPrice * (100 - discountPct) / 100 * (1 + additionalCourtIds.length)))} VND
-                  <span className="text-neutral-500 ml-1 line-through">{fmtPrice(courtSelectionPrice * (1 + additionalCourtIds.length))} VND</span>
+                  {discountPct}% off — {fmtPrice(courtFinalTotal)} VND
+                  <span className="text-neutral-500 ml-1 line-through">{fmtPrice(courtOriginalTotal)} VND</span>
                 </p>
               )}
             </div>
@@ -1298,6 +1441,16 @@ export function StaffBookingModal({
                 className="w-full rounded-xl border border-red-500/40 py-2.5 text-sm font-medium text-red-400 hover:bg-red-600/10 disabled:opacity-40"
               >
                 {t("overview.cancelBookingAction")}
+              </button>
+            )}
+            {isGroupEditMode && editGroup?.status === "confirmed" && (
+              <button
+                type="button"
+                onClick={cancelEditGroup}
+                disabled={saving}
+                className="w-full rounded-xl border border-red-500/40 py-2.5 text-sm font-medium text-red-400 hover:bg-red-600/10 disabled:opacity-40"
+              >
+                Cancel entire group booking
               </button>
             )}
             {isLessonEditMode && editLesson && editLesson.status !== "cancelled" && (
@@ -1347,11 +1500,15 @@ export function StaffBookingModal({
                   {t("bookings.today")}
                 </button>
                 <span className="text-xs text-neutral-500">
-                  {selectedSlots.length > 0
-                    ? mode === "lesson" && selectedPkg
-                      ? fmtLessonSummary(selectedSlots.length, selectedPkg)
-                      : `${selectedSlots.length} slot${selectedSlots.length > 1 ? "s" : ""} selected (${fmtDuration(selectedSlots.length * 30)})`
-                    : "Click slots to select time"}
+                  {mode === "court"
+                    ? courtSelectionSummary
+                      ? `${courtSelectionSummary.courtCount > 1 ? `${courtSelectionSummary.courtCount} courts` : courtSelectionSummary.singleCourtLabel} · ${fmtDuration(courtSelectionSummary.slotCount * 30)}`
+                      : "Click slots to select time"
+                    : selectedSlots.length > 0
+                      ? mode === "lesson" && selectedPkg
+                        ? fmtLessonSummary(selectedSlots.length, selectedPkg)
+                        : `${selectedSlots.length} slot${selectedSlots.length > 1 ? "s" : ""} selected (${fmtDuration(selectedSlots.length * 30)})`
+                      : "Click slots to select time"}
                 </span>
               </div>
               <div className="flex items-center gap-2">
@@ -1386,8 +1543,8 @@ export function StaffBookingModal({
                 availability={gridAvailability}
                 date={bookDate}
                 timezone={venueTimezone}
-                bookings={gridBookings}
-                selectedSlots={gridSelectedSlots}
+                bookings={displayGridBookings}
+                selectedSlots={mode === "court" ? courtGridSelectedSlots : lessonGridSelectedSlots}
                 displayGranularity={gridGranularity}
                 onSlotClick={(courtId, courtLabel, slot) => {
                   const court = gridAvailability.find((c) => c.courtId === courtId);
@@ -1410,15 +1567,15 @@ export function StaffBookingModal({
                   }
 
                   if (mode === "court") {
-                    const addCount = slotsToSelect.filter((s) => !gridSelectedSlots[courtId]?.has(s.startTime)).length;
-                    const wouldExceedCap =
-                      addCount > 0 &&
-                      selectedSlots.length > 0 &&
-                      selectedSlots[0].courtId === courtId &&
-                      selectedSlots.length + addCount > MAX_COURT_SLOTS;
-                    if (!wouldExceedCap) toggleSlot(courtId, courtLabel, slotsToSelect);
+                    // Court mode: use the hook's toggleSlotSelection for multi-court support
+                    if (court) {
+                      const existingSlots = courtSelectedSlots[courtId]?.slots ?? [];
+                      const addCount = slotsToSelect.filter((s) => !courtGridSelectedSlots[courtId]?.has(s.startTime)).length;
+                      const wouldExceedCap = addCount > 0 && existingSlots.length + addCount > MAX_COURT_SLOTS;
+                      if (!wouldExceedCap) toggleSlotSelection(court, slotsToSelect);
+                    }
                   } else {
-                    toggleSlot(courtId, courtLabel, slotsToSelect);
+                    toggleLessonSlot(courtId, courtLabel, slotsToSelect);
                   }
                 }}
                 compact

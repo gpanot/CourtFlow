@@ -4,6 +4,11 @@ import { json, error, parseBody } from "@/lib/api-helpers";
 import { requireAdminAccess } from "@/lib/auth";
 import { buildLessonEmailContext, sendBookingEmail, sendLessonEventEmails } from "@/lib/email/send";
 import { allocateInvoiceNumber } from "@/lib/invoice-number";
+import {
+  isPaidPaymentStatus,
+  paidCancellationUpdate,
+  requirePaidCancellationReason,
+} from "@/lib/paid-cancellation";
 
 export const dynamic = "force-dynamic";
 export async function PATCH(
@@ -23,6 +28,8 @@ export async function PATCH(
       startTime?: string;
       endTime?: string;
       status?: "confirmed" | "completed" | "cancelled" | "no_show";
+      /** Required when cancelling a paid lesson */
+      cancellationReason?: string;
       note?: string | null;
       paymentStatus?: "UNPAID" | "PAID" | "pending" | "paid" | "proof_submitted";
       paidAt?: string;
@@ -45,9 +52,19 @@ export async function PATCH(
     if (body.playerId !== undefined) data.playerId = body.playerId;
 
     if (body.status !== undefined) {
-      data.status = body.status;
       if (body.status === "cancelled") {
-        data.cancelledAt = new Date();
+        const wasPaid = isPaidPaymentStatus(existing.paymentStatus);
+        const reasonError = requirePaidCancellationReason(wasPaid, body.cancellationReason);
+        if (reasonError) return error(reasonError, 400);
+
+        if (wasPaid && body.cancellationReason) {
+          Object.assign(data, paidCancellationUpdate(body.cancellationReason));
+        } else {
+          data.status = "cancelled";
+          data.cancelledAt = new Date();
+        }
+      } else {
+        data.status = body.status;
       }
     }
 
@@ -166,6 +183,13 @@ export async function DELETE(
 
     const existing = await prisma.coachLesson.findUnique({ where: { id } });
     if (!existing) return error("Lesson not found", 404);
+
+    if (isPaidPaymentStatus(existing.paymentStatus)) {
+      return error(
+        "Use PATCH with status=cancelled and cancellationReason to cancel a paid lesson",
+        400
+      );
+    }
 
     await prisma.coachLesson.update({
       where: { id },

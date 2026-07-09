@@ -74,6 +74,7 @@ export async function DELETE(
 
     const booking = await prisma.booking.findFirst({
       where: { id, playerId },
+      include: { court: { select: { label: true } } },
     });
     if (!booking) return error("Booking not found", 404);
     if (booking.status === "cancelled") return error("Already cancelled", 400);
@@ -82,7 +83,7 @@ export async function DELETE(
     if (booking.bookingGroupId) {
       const group = await prisma.bookingGroup.findUnique({
         where: { id: booking.bookingGroupId },
-        include: { bookings: { where: { playerId } } },
+        include: { bookings: { where: { playerId }, include: { court: { select: { label: true } } } } },
       });
       if (!group) return error("Group booking not found", 404);
 
@@ -142,12 +143,13 @@ export async function DELETE(
         select: { name: true, email: true },
       });
       if (player?.email) {
+        const courtName = group.bookings.map((b) => b.court.label).join(", ");
         await sendBookingEmail({
           to: player.email,
           playerName: player.name,
           bookingType: "court",
           emailType: "cancelled",
-          details: {},
+          details: { courtName },
         });
       }
 
@@ -201,7 +203,7 @@ export async function DELETE(
         playerName: player.name,
         bookingType: "court",
         emailType: "cancelled",
-        details: {},
+        details: { courtName: booking.court.label },
       });
     }
 

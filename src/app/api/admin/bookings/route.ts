@@ -84,7 +84,7 @@ export async function GET(request: NextRequest) {
         include: {
           court: { select: { id: true, label: true } },
           player: { select: { id: true, name: true, phone: true, avatar: true, avatarPhotoPath: true, facePhotoPath: true } },
-          bookingGroup: { select: { paymentRef: true, invoiceNumber: true } },
+          bookingGroup: { select: { paymentRef: true, invoiceNumber: true, cancellationReason: true } },
         },
         orderBy: { startTime: "desc" },
         skip: (page - 1) * pageSize,

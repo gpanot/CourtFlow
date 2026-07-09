@@ -22,6 +22,7 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/cn";
 import { PaymentStatusBadge } from "@/components/admin/EditBookingModal";
+import { BookingPriceDisplay } from "@/components/admin/BookingPriceDisplay";
 import { DashboardPaymentCell } from "@/components/admin/DashboardPaymentCell";
 import {
   PaymentActionModal,
@@ -80,6 +81,7 @@ interface RecentBooking {
   priceValue: number;
   createdAt: string;
   bookingGroupId: string | null;
+  cancellationReason: string | null;
   isGroup: boolean;
 }
 
@@ -104,6 +106,7 @@ interface RecentLesson {
   holdExpiresAt: string | null;
   priceValue: number;
   createdAt: string;
+  cancellationReason: string | null;
 }
 
 interface RecentOpenPlay {
@@ -125,6 +128,7 @@ interface RecentOpenPlay {
   holdExpiresAt: string | null;
   priceValue: number;
   createdAt: string;
+  cancellationReason: string | null;
 }
 
 interface OpenPlayTodayRegistration {
@@ -171,6 +175,8 @@ interface RecentEntry {
   holdExpiresAt: string | null;
   priceValue: number;
   createdAt: string;
+  bookingGroupId?: string | null;
+  cancellationReason?: string | null;
 }
 
 function displayPaymentStatus(status: string | null): string {
@@ -361,6 +367,8 @@ export default function AdminOverview() {
       holdExpiresAt: b.holdExpiresAt ?? null,
       priceValue: b.priceValue,
       createdAt: b.createdAt,
+      bookingGroupId: b.bookingGroupId,
+      cancellationReason: b.cancellationReason ?? null,
     })),
     ...(data.recentLessons ?? []).map((l): RecentEntry => ({
       id: l.id,
@@ -383,6 +391,7 @@ export default function AdminOverview() {
       holdExpiresAt: l.holdExpiresAt ?? null,
       priceValue: l.priceValue,
       createdAt: l.createdAt,
+      cancellationReason: l.cancellationReason ?? null,
     })),
     ...(data.recentOpenPlay ?? []).map((r): RecentEntry => ({
       id: r.id,
@@ -405,6 +414,7 @@ export default function AdminOverview() {
       holdExpiresAt: r.holdExpiresAt ?? null,
       priceValue: r.priceValue,
       createdAt: r.createdAt,
+      cancellationReason: r.cancellationReason ?? null,
     })),
   ]
     .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
@@ -620,13 +630,24 @@ export default function AdminOverview() {
                           endTime: entry.endTime,
                           priceValue: entry.priceValue,
                           detail: entry.kind === "openplay" ? t("overview.typeOpenPlay") : entry.detail,
+                          cancellationReason: entry.cancellationReason,
+                          bookingGroupId: entry.bookingGroupId,
                         }}
                         onManage={setPaymentActionTarget}
                       />
                     )}
                   </td>
                   <td className="px-4 py-2.5 text-right font-medium">
-                    {fmtPrice(entry.priceValue)}
+                    {entry.kind === "booking" ? (
+                      <BookingPriceDisplay
+                        priceValue={entry.priceValue}
+                        status={entry.status}
+                        paymentStatus={entry.paymentStatus}
+                        cancellationReason={entry.cancellationReason}
+                      />
+                    ) : (
+                      fmtPrice(entry.priceValue)
+                    )}
                   </td>
                 </tr>
               ))}
@@ -683,6 +704,8 @@ export default function AdminOverview() {
                         endTime: entry.endTime,
                         priceValue: entry.priceValue,
                         detail: entry.kind === "openplay" ? t("overview.typeOpenPlay") : entry.detail,
+                        cancellationReason: entry.cancellationReason,
+                        bookingGroupId: entry.bookingGroupId,
                       }}
                       onManage={setPaymentActionTarget}
                     />
@@ -698,7 +721,17 @@ export default function AdminOverview() {
                   <span className="block">{fmtDate(entry.date)} · {fmtTime(entry.startTime)}</span>
                   <span className="block text-neutral-600">{t("overview.receivedShort")} {fmtReceivedTime(entry.createdAt)}</span>
                 </div>
-                <span className="text-xs font-medium text-neutral-300 shrink-0 self-center">{fmtPrice(entry.priceValue)}</span>
+                {entry.kind === "booking" ? (
+                  <BookingPriceDisplay
+                    priceValue={entry.priceValue}
+                    status={entry.status}
+                    paymentStatus={entry.paymentStatus}
+                    cancellationReason={entry.cancellationReason}
+                    className="text-xs shrink-0 self-center"
+                  />
+                ) : (
+                  <span className="text-xs font-medium text-neutral-300 shrink-0 self-center">{fmtPrice(entry.priceValue)}</span>
+                )}
               </div>
             </div>
           ))}

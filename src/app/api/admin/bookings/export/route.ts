@@ -8,6 +8,10 @@ import { NextRequest, NextResponse } from "next/server";
 import { requireAdminAccess } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 import { resolveBookingRef } from "@/lib/booking-reference";
+import {
+  getCancellationReasonLabel,
+  getNetBookingPrice,
+} from "@/lib/booking-cancellation";
 
 export const dynamic = "force-dynamic";
 
@@ -105,36 +109,54 @@ export async function GET(request: NextRequest) {
       court: { select: { label: true } },
       player: { select: { name: true, phone: true } },
       venue: { select: { name: true } },
-      bookingGroup: { select: { paymentRef: true, invoiceNumber: true } },
+      bookingGroup: { select: { paymentRef: true, invoiceNumber: true, cancellationReason: true } },
     },
     orderBy: { startTime: "desc" },
   });
 
   const header = [
     "Date", "Time", "Player", "Phone", "Court", "Venue", "Status", "Payment",
-    "Payment Method", "Booking ref", "Invoice ref", "Price (VND)",
+    "Payment Method", "Cancellation Reason", "Booking ref", "Invoice ref", "Price (VND)",
   ];
-  const rows = bookings.map((b) => [
-    fmtDate(b.date),
-    `${fmtTime(b.startTime)} – ${fmtTime(b.endTime)}`,
-    b.player.name,
-    b.player.phone,
-    b.court.label,
-    b.venue.name,
-    b.status,
-    b.paymentStatus ?? "pending",
-    fmtPaymentMethod(b.paymentMethod),
-    resolveBookingRef(b) ?? "",
-    b.invoiceNumber ?? b.bookingGroup?.invoiceNumber ?? "",
-    b.priceValue,
-  ]);
+  const rows = bookings.map((b) => {
+    const cancellationReason = b.cancellationReason ?? b.bookingGroup?.cancellationReason ?? null;
+    const netPrice = getNetBookingPrice(b.priceValue, {
+      status: b.status,
+      paymentStatus: b.paymentStatus,
+      cancellationReason,
+    });
+    return [
+      fmtDate(b.date),
+      `${fmtTime(b.startTime)} – ${fmtTime(b.endTime)}`,
+      b.player.name,
+      b.player.phone,
+      b.court.label,
+      b.venue.name,
+      b.status,
+      b.paymentStatus ?? "pending",
+      fmtPaymentMethod(b.paymentMethod),
+      getCancellationReasonLabel(cancellationReason) ?? "",
+      resolveBookingRef(b) ?? "",
+      b.invoiceNumber ?? b.bookingGroup?.invoiceNumber ?? "",
+      netPrice,
+    ];
+  });
+
+  const totalRevenue = bookings.reduce((sum, b) => {
+    const cancellationReason = b.cancellationReason ?? b.bookingGroup?.cancellationReason ?? null;
+    return sum + getNetBookingPrice(b.priceValue, {
+      status: b.status,
+      paymentStatus: b.paymentStatus,
+      cancellationReason,
+    });
+  }, 0);
 
   const lines = [
     header.map(csvEscape).join(","),
     ...rows.map((r) => r.map(csvEscape).join(",")),
     "",
     `Total bookings,${bookings.length}`,
-    `Total revenue (VND),${bookings.filter((b) => b.status !== "cancelled").reduce((s, b) => s + b.priceValue, 0)}`,
+    `Total revenue (VND),${totalRevenue}`,
   ];
 
   const filename = `bookings-${dateFrom ?? "all"}-to-${dateTo ?? "all"}-${fmtDate(new Date())}.csv`;

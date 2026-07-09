@@ -45,13 +45,15 @@ import {
   Pencil as PencilIcon,
 } from "lucide-react";
 import { InvoiceDownloadButton } from "@/components/admin/InvoiceDownloadButton";
+import { BookingPriceDisplay } from "@/components/admin/BookingPriceDisplay";
+import { CancellationReasonBadge } from "@/components/admin/CancellationReasonBadge";
+import { isBookingWrittenOff } from "@/lib/booking-cancellation";
 import { CourtsManager } from "@/components/admin/CourtsManager";
 import {
   PaymentActionModal,
   type PaymentActionTarget,
 } from "@/components/admin/PaymentActionModal";
-import { StaffBookingModal, type InitialCourtSelection, type EditCourtBooking, type EditLessonBooking } from "@/components/admin/StaffBookingModal";
-import { EditGroupBookingModal } from "@/components/admin/EditGroupBookingModal";
+import { StaffBookingModal, type InitialCourtSelection, type EditCourtBooking, type EditLessonBooking, type EditGroupBooking } from "@/components/admin/StaffBookingModal";
 import { VenueDayPlanner } from "@/components/admin/VenueDayPlanner";
 import { type CourtSlot } from "@/components/admin/BookingCourtGrid";
 import {
@@ -112,10 +114,11 @@ interface BookingRecord {
   priceValue: number;
   coPlayerIds: string[];
   cancelledAt: string | null;
+  cancellationReason: string | null;
   bookingGroupId: string | null;
   paymentRef: string | null;
   invoiceNumber: string | null;
-  bookingGroup?: { paymentRef: string | null; invoiceNumber?: string | null } | null;
+  bookingGroup?: { paymentRef: string | null; invoiceNumber?: string | null; cancellationReason?: string | null } | null;
   court: { id: string; label: string };
   player: { id: string; name: string; phone: string; avatar?: string };
 }
@@ -184,6 +187,7 @@ interface OpenPlayRegRecord {
   priceValue: number;
   paymentRef: string | null;
   invoiceNumber: string | null;
+  cancellationReason: string | null;
   player: { id: string; name: string; phone: string };
 }
 
@@ -206,6 +210,7 @@ interface CoachLessonRecord {
   proofUrl: string | null;
   paymentRef: string | null;
   invoiceNumber: string | null;
+  cancellationReason: string | null;
   coach: { id: string; name: string };
   player: { id: string; name: string; phone: string };
   court: { id: string; label: string } | null;
@@ -315,8 +320,8 @@ export default function BookingsPage() {
   const [editBookingTarget, setEditBookingTarget] = useState<EditCourtBooking | null>(null);
   const [editLessonTarget, setEditLessonTarget] = useState<EditLessonBooking | null>(null);
 
-  // Group booking edit modal
-  const [editGroupId, setEditGroupId] = useState<string | null>(null);
+  // Group booking edit (uses StaffBookingModal)
+  const [editGroupTarget, setEditGroupTarget] = useState<EditGroupBooking | null>(null);
 
   const [paymentActionTarget, setPaymentActionTarget] = useState<PaymentActionTarget | null>(null);
 
@@ -465,6 +470,7 @@ export default function BookingsPage() {
     setShowStaffModal(false);
     setStaffModalInitialSelection(undefined);
     setEditBookingTarget(null);
+    setEditGroupTarget(null);
     setEditLessonTarget(null);
     clearSelection();
   };
@@ -480,12 +486,41 @@ export default function BookingsPage() {
     player: { id: booking.player.id, name: booking.player.name, phone: booking.player.phone },
   });
 
-  const openEditModal = (booking: BookingRecord) => {
+  const openEditModal = async (booking: BookingRecord) => {
     if (booking.bookingGroupId) {
-      // Multi-court group booking — open the group edit modal
-      setEditGroupId(booking.bookingGroupId);
+      // Multi-court group booking — fetch group data then open StaffBookingModal
+      try {
+        const group = await api.get(`/api/staff/bookings/groups/${booking.bookingGroupId}`) as {
+          id: string; date: string; startTime: string; status: string;
+          player: { id: string; name: string; phone: string; email?: string };
+          bookings: { id: string; courtId: string; courtLabel: string; startTime: string; endTime: string; priceValue: number }[];
+        };
+        setEditGroupTarget({
+          groupId: group.id,
+          date: group.date,
+          startTime: group.startTime,
+          status: group.status,
+          player: { id: group.player.id, name: group.player.name, phone: group.player.phone, email: group.player.email },
+          bookings: group.bookings.map((b) => ({
+            id: b.id,
+            courtId: b.courtId,
+            courtLabel: b.courtLabel,
+            startTime: b.startTime,
+            endTime: b.endTime,
+            priceValue: b.priceValue,
+          })),
+        });
+        setEditBookingTarget(null);
+        setEditLessonTarget(null);
+        setStaffModalInitialSelection(undefined);
+        setStaffModalMode("court");
+        setShowStaffModal(true);
+      } catch (e) {
+        console.error("Failed to load group booking:", e);
+      }
       return;
     }
+    setEditGroupTarget(null);
     setEditLessonTarget(null);
     setEditBookingTarget(bookingToEditTarget(booking));
     setStaffModalInitialSelection(undefined);
@@ -535,7 +570,7 @@ export default function BookingsPage() {
         })),
       });
     } else {
-      // Multi-court group booking — pass all courts
+      // Multi-court group booking — pass all courts with their own per-court slots
       const firstCid = selectionCourtIds[0];
       const firstEntry = selectedSlots[firstCid];
       const sorted = [...firstEntry.slots].sort((a, b) => new Date(a.startTime).getTime() - new Date(b.startTime).getTime());
@@ -547,10 +582,19 @@ export default function BookingsPage() {
           endTime: s.endTime,
           hour: s.hour,
         })),
-        additionalCourts: selectionCourtIds.slice(1).map((cid) => ({
-          courtId: cid,
-          courtLabel: selectedSlots[cid].courtLabel,
-        })),
+        additionalCourts: selectionCourtIds.slice(1).map((cid) => {
+          const entry = selectedSlots[cid];
+          const courtSorted = [...entry.slots].sort((a, b) => new Date(a.startTime).getTime() - new Date(b.startTime).getTime());
+          return {
+            courtId: cid,
+            courtLabel: entry.courtLabel,
+            slots: courtSorted.map((s) => ({
+              startTime: s.startTime,
+              endTime: s.endTime,
+              hour: s.hour,
+            })),
+          };
+        }),
       });
     }
   };
@@ -871,7 +915,13 @@ export default function BookingsPage() {
 
           return (
           <div className="space-y-2">
-            {showBookings && bookings.map((b) => (
+            {showBookings && bookings.map((b) => {
+              const writtenOff = isBookingWrittenOff({
+                status: b.status,
+                paymentStatus: b.paymentStatus,
+                cancellationReason: b.cancellationReason,
+              });
+              return (
               <div key={b.id} className={cn(
                 "flex items-center gap-3 rounded-xl border p-3",
                 b.status === "confirmed" && "border-neutral-800 bg-neutral-900",
@@ -894,12 +944,15 @@ export default function BookingsPage() {
                     </a>
                     <span className="text-xs text-neutral-500">{b.player.phone}</span>
                     <BookingStatusBadge status={b.status} bookingRef={resolveBookingRef(b)} />
-                    {b.status !== "cancelled" && (
+                    {writtenOff && b.cancellationReason ? (
+                      <CancellationReasonBadge reason={b.cancellationReason} size="md" />
+                    ) : b.status !== "cancelled" && (
                       <div className="flex flex-col items-start gap-0.5">
                         <button
                           onClick={() => setPaymentActionTarget({
                             type: "booking",
                             entityId: b.id,
+                            groupId: b.bookingGroupId,
                             playerName: b.player.name,
                             playerPhone: b.player.phone,
                             detail: b.court.label,
@@ -911,6 +964,7 @@ export default function BookingsPage() {
                             paymentMethod: b.paymentMethod,
                             paymentProofUrl: b.paymentProofUrl,
                             bookingStatus: b.status,
+                            cancellationReason: b.cancellationReason,
                           })}
                           title="Manage payment"
                         >
@@ -927,7 +981,14 @@ export default function BookingsPage() {
                   <div className="flex items-center gap-3 mt-1 text-xs text-neutral-400">
                     <span>{b.court.label}</span>
                     <span className="flex items-center gap-1"><Clock className="h-3 w-3" />{formatTime(b.startTime, venueTimezone)} – {formatTime(b.endTime, venueTimezone)}</span>
-                    <span>{fmtPrice(b.priceValue)}</span>
+                    <span>
+                      <BookingPriceDisplay
+                        priceValue={b.priceValue}
+                        status={b.status}
+                        paymentStatus={b.paymentStatus}
+                        cancellationReason={b.cancellationReason}
+                      />
+                    </span>
                     {b.coPlayerIds.length > 0 && <span>+{b.coPlayerIds.length} co-player{b.coPlayerIds.length > 1 ? "s" : ""}</span>}
                   </div>
                 </div>
@@ -937,13 +998,20 @@ export default function BookingsPage() {
                   )}
                 </div>
               </div>
-            ))}
+            );})}
 
             {/* Open Play registrations */}
-            {showOpenPlay && openPlayRegs.map((r) => (
+            {showOpenPlay && openPlayRegs.map((r) => {
+              const writtenOff = isBookingWrittenOff({
+                status: r.status,
+                paymentStatus: r.paymentStatus,
+                cancellationReason: r.cancellationReason,
+              });
+              return (
               <div key={r.id} className={cn(
                 "flex items-center gap-3 rounded-xl border p-3",
                 r.status === "confirmed" && "border-emerald-800/30 bg-emerald-900/5",
+                r.status === "cancelled" && "border-neutral-800/50 bg-neutral-900/50 opacity-60",
                 r.status === "no_show" && "border-amber-800/30 bg-amber-900/10",
               )}>
                 <div className="flex-1 min-w-0">
@@ -961,7 +1029,9 @@ export default function BookingsPage() {
                     </a>
                     <span className="text-xs text-neutral-500">{r.player.phone}</span>
                     <BookingStatusBadge status={r.status} bookingRef={r.paymentRef} />
-                    {r.status !== "cancelled" && (
+                    {writtenOff && r.cancellationReason ? (
+                      <CancellationReasonBadge reason={r.cancellationReason} size="md" />
+                    ) : r.status !== "cancelled" && (
                       <div className="flex flex-col items-start gap-0.5">
                         <button
                           onClick={() => setPaymentActionTarget({
@@ -978,6 +1048,7 @@ export default function BookingsPage() {
                             paymentMethod: r.paymentMethod,
                             paymentProofUrl: r.paymentProofUrl,
                             bookingStatus: r.status,
+                            cancellationReason: r.cancellationReason,
                           })}
                           title="Manage payment"
                         >
@@ -994,14 +1065,27 @@ export default function BookingsPage() {
                       <Clock className="h-3 w-3" />
                       {formatTime(r.startTime, venueTimezone)} – {formatTime(r.endTime, venueTimezone)}
                     </span>
-                    <span>{fmtPrice(r.priceValue)}</span>
+                    <span>
+                      <BookingPriceDisplay
+                        priceValue={r.priceValue}
+                        status={r.status}
+                        paymentStatus={r.paymentStatus}
+                        cancellationReason={r.cancellationReason}
+                      />
+                    </span>
                   </div>
                 </div>
               </div>
-            ))}
+            );})}
 
             {/* Coaching lessons */}
-            {showLessons && activeLessons.map((lesson) => (
+            {showLessons && activeLessons.map((lesson) => {
+              const writtenOff = isBookingWrittenOff({
+                status: lesson.status,
+                paymentStatus: lesson.paymentStatus,
+                cancellationReason: lesson.cancellationReason,
+              });
+              return (
               <div key={lesson.id} className={cn(
                 "flex items-center gap-3 rounded-xl border p-3",
                 lesson.status === "confirmed" && "border-teal-800/30 bg-teal-900/5",
@@ -1034,7 +1118,9 @@ export default function BookingsPage() {
                     )}>
                       {lesson.package.lessonType === "private" ? t("coaching.private") : t("coaching.group")}
                     </span>
-                    {lesson.status !== "cancelled" && (
+                    {writtenOff && lesson.cancellationReason ? (
+                      <CancellationReasonBadge reason={lesson.cancellationReason} size="md" />
+                    ) : lesson.status !== "cancelled" && (
                       <div className="flex flex-col items-start gap-0.5">
                         <button
                           onClick={() => setPaymentActionTarget({
@@ -1051,6 +1137,7 @@ export default function BookingsPage() {
                             paymentMethod: lesson.paymentMethod,
                             paymentProofUrl: lesson.proofUrl,
                             bookingStatus: lesson.status,
+                            cancellationReason: lesson.cancellationReason,
                           })}
                           title={t("overview.manageLessonPayment")}
                         >
@@ -1078,7 +1165,12 @@ export default function BookingsPage() {
                     {lesson.court && <span>{lesson.court.label}</span>}
                     <span className="flex items-center gap-1">
                       <Clock className="h-3 w-3" />
-                      {fmtPrice(lesson.priceValue)}
+                      <BookingPriceDisplay
+                        priceValue={lesson.priceValue}
+                        status={lesson.status}
+                        paymentStatus={lesson.paymentStatus}
+                        cancellationReason={lesson.cancellationReason}
+                      />
                     </span>
                     {lesson.playerCount != null && lesson.package.lessonType === "group" && (
                       <span className="flex items-center gap-1 text-blue-400">
@@ -1098,9 +1190,15 @@ export default function BookingsPage() {
                   <Pencil className="h-4 w-4" />
                 </button>
               </div>
-            ))}
+            );})}
 
-            {showLessons && cancelledLessons.map((lesson) => (
+            {showLessons && cancelledLessons.map((lesson) => {
+              const writtenOff = isBookingWrittenOff({
+                status: lesson.status,
+                paymentStatus: lesson.paymentStatus,
+                cancellationReason: lesson.cancellationReason,
+              });
+              return (
               <div key={lesson.id} className="flex items-center gap-3 rounded-xl border border-neutral-800/50 bg-neutral-900/50 p-3 opacity-60">
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 flex-wrap">
@@ -1123,10 +1221,19 @@ export default function BookingsPage() {
                     <span className={cn("rounded-full px-2 py-0.5 text-[10px] font-medium", LESSON_STATUS_COLORS.cancelled)}>
                       {t("overview.statusCancelled")}
                     </span>
+                    {writtenOff && lesson.cancellationReason && (
+                      <CancellationReasonBadge reason={lesson.cancellationReason} size="md" />
+                    )}
+                    <BookingPriceDisplay
+                      priceValue={lesson.priceValue}
+                      status={lesson.status}
+                      paymentStatus={lesson.paymentStatus}
+                      cancellationReason={lesson.cancellationReason}
+                    />
                   </div>
                 </div>
               </div>
-            ))}
+            );})}
 
             {showBlocks && courtBlocks.map((bl) => (
               <div key={bl.id} className={cn(
@@ -1173,15 +1280,16 @@ export default function BookingsPage() {
 
       </>}
 
-      {/* Unified Staff Booking Modal (Court + Open Play + Lesson) */}
+      {/* Unified Staff Booking Modal (Court + Open Play + Lesson + Group Edit) */}
       {showStaffModal && selectedVenueId && (
         <StaffBookingModal
           venueId={selectedVenueId}
           initialDate={selectedDate}
-          allowModes={editBookingTarget ? ["court"] : editLessonTarget ? ["lesson"] : ["court", "open_play", "lesson"]}
+          allowModes={editBookingTarget || editGroupTarget ? ["court"] : editLessonTarget ? ["lesson"] : ["court", "open_play", "lesson"]}
           initialMode={staffModalMode}
           initialCourtSelection={staffModalInitialSelection}
           editBooking={editBookingTarget ?? undefined}
+          editGroup={editGroupTarget ?? undefined}
           editLesson={editLessonTarget ?? undefined}
           onClose={closeStaffModal}
           onCreated={async () => {
@@ -1234,20 +1342,6 @@ export default function BookingsPage() {
         }}
       />
 
-      {/* Group booking edit modal */}
-      {editGroupId && (
-        <EditGroupBookingModal
-          groupId={editGroupId}
-          venueId={selectedVenueId}
-          courts={availability.map((c) => ({ id: c.courtId, label: c.courtLabel }))}
-          onClose={() => setEditGroupId(null)}
-          onSaved={async () => {
-            setEditGroupId(null);
-            await fetchBookings();
-            await fetchAvailability();
-          }}
-        />
-      )}
 
       
     </div>
@@ -2156,9 +2250,11 @@ interface AllBookingRow {
   priceValue: number;
   coPlayerIds: string[];
   cancelledAt: string | null;
+  cancellationReason: string | null;
+  bookingGroupId: string | null;
   paymentRef: string | null;
   invoiceNumber: string | null;
-  bookingGroup?: { paymentRef: string | null; invoiceNumber?: string | null } | null;
+  bookingGroup?: { paymentRef: string | null; invoiceNumber?: string | null; cancellationReason?: string | null } | null;
   court: { id: string; label: string };
   player: { id: string; name: string; phone: string; avatar?: string; avatarPhotoPath?: string; facePhotoPath?: string };
 }
@@ -2175,6 +2271,7 @@ const PAYMENT_STATUS_COLORS: Record<string, string> = {
   PAID: "bg-green-600/20 text-green-400",
   proof_submitted: "bg-orange-600/20 text-orange-400",
   pending: "bg-neutral-700/30 text-neutral-400",
+  refunded: "bg-blue-600/20 text-blue-400",
 };
 
 const PAYMENT_STATUS_LABELS: Record<string, string> = {
@@ -2182,6 +2279,7 @@ const PAYMENT_STATUS_LABELS: Record<string, string> = {
   PAID: "Paid",
   proof_submitted: "Proof submitted",
   pending: "Unpaid",
+  refunded: "Refunded",
 };
 
 const DATE_PRESETS = [
@@ -2451,6 +2549,12 @@ function AllBookingsTab({
                 {rows.map((row) => {
                   const isPaid = row.paymentStatus === "paid" || row.paymentStatus === "PAID";
                   const isProof = row.paymentStatus === "proof_submitted";
+                  const cancellationReason = row.cancellationReason ?? row.bookingGroup?.cancellationReason ?? null;
+                  const writtenOff = isBookingWrittenOff({
+                    status: row.status,
+                    paymentStatus: row.paymentStatus,
+                    cancellationReason,
+                  });
                   const bookingRef = resolveBookingRef(row);
                   return (
                     <tr
@@ -2487,32 +2591,42 @@ function AllBookingsTab({
                       </td>
                       <td className="px-4 py-3 whitespace-nowrap">
                         <div>
-                          <button
-                            onClick={(e) => { e.stopPropagation(); setPaymentActionTarget({
-                              type: "booking",
-                              entityId: row.id,
-                              playerName: row.player.name,
-                              playerPhone: row.player.phone,
-                              detail: row.court.label,
-                              date: row.startTime,
-                              startTime: row.startTime,
-                              endTime: row.endTime,
-                              priceValue: row.priceValue,
-                              paymentStatus: row.paymentStatus ?? "pending",
-                              paymentMethod: row.paymentMethod,
-                              paymentProofUrl: row.paymentProofUrl,
-                              bookingStatus: row.status,
-                            }); }}
-                            className="flex flex-row flex-wrap items-center gap-1 group"
-                            title="Manage payment"
-                          >
-                            <span className={cn("rounded px-2 py-0.5 text-xs font-medium group-hover:ring-1 group-hover:ring-white/20 transition-all", PAYMENT_STATUS_COLORS[row.paymentStatus ?? "pending"] ?? "bg-neutral-700/30 text-neutral-400")}>
-                              {PAYMENT_STATUS_LABELS[row.paymentStatus ?? "pending"] ?? row.paymentStatus ?? "Unpaid"}
+                          {writtenOff && cancellationReason ? (
+                            <CancellationReasonBadge reason={cancellationReason} size="md" />
+                          ) : writtenOff ? (
+                            <span className={cn("rounded px-2 py-0.5 text-xs font-medium", PAYMENT_STATUS_COLORS.refunded)}>
+                              {PAYMENT_STATUS_LABELS.refunded}
                             </span>
-                            {isPaid && row.paymentMethod && (
-                              <PaymentMethodBadge method={row.paymentMethod} size="md" />
-                            )}
-                          </button>
+                          ) : (
+                            <button
+                              onClick={(e) => { e.stopPropagation(); setPaymentActionTarget({
+                                type: "booking",
+                                entityId: row.id,
+                                groupId: row.bookingGroupId,
+                                playerName: row.player.name,
+                                playerPhone: row.player.phone,
+                                detail: row.court.label,
+                                date: row.startTime,
+                                startTime: row.startTime,
+                                endTime: row.endTime,
+                                priceValue: row.priceValue,
+                                paymentStatus: row.paymentStatus ?? "pending",
+                                paymentMethod: row.paymentMethod,
+                                paymentProofUrl: row.paymentProofUrl,
+                                bookingStatus: row.status,
+                                cancellationReason,
+                              }); }}
+                              className="flex flex-row flex-wrap items-center gap-1 group"
+                              title="Manage payment"
+                            >
+                              <span className={cn("rounded px-2 py-0.5 text-xs font-medium group-hover:ring-1 group-hover:ring-white/20 transition-all", PAYMENT_STATUS_COLORS[row.paymentStatus ?? "pending"] ?? "bg-neutral-700/30 text-neutral-400")}>
+                                {PAYMENT_STATUS_LABELS[row.paymentStatus ?? "pending"] ?? row.paymentStatus ?? "Unpaid"}
+                              </span>
+                              {isPaid && row.paymentMethod && (
+                                <PaymentMethodBadge method={row.paymentMethod} size="md" />
+                              )}
+                            </button>
+                          )}
                           {(row.invoiceNumber ?? row.bookingGroup?.invoiceNumber) && (
                             <p className="text-[10px] text-neutral-500 mt-0.5 font-mono">
                               {row.invoiceNumber ?? row.bookingGroup?.invoiceNumber}
@@ -2521,7 +2635,12 @@ function AllBookingsTab({
                         </div>
                       </td>
                       <td className="px-4 py-3 text-right text-neutral-300 whitespace-nowrap">
-                        {fmtPrice(row.priceValue)}
+                        <BookingPriceDisplay
+                          priceValue={row.priceValue}
+                          status={row.status}
+                          paymentStatus={row.paymentStatus}
+                          cancellationReason={cancellationReason}
+                        />
                       </td>
                       <td className="px-4 py-3 whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
                         <div className="flex items-center gap-1 justify-end">

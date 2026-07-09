@@ -87,7 +87,23 @@ interface VenueDetail {
     country: string;
     currency: string;
     paymentRegion?: string;
+    legalCompanyName?: string | null;
+    registrationNumber?: string | null;
+    taxId?: string | null;
+    registeredAddress?: string | null;
   } | null;
+}
+
+function OrgInfoRow({ label, value, multiline }: { label: string; value: string | null | undefined; multiline?: boolean }) {
+  const display = value?.trim() || "—";
+  return (
+    <div className="grid grid-cols-[minmax(0,9rem)_1fr] gap-x-3 gap-y-0.5 py-1 border-b border-neutral-800/50 last:border-0">
+      <dt className="text-[11px] text-neutral-500 leading-snug">{label}</dt>
+      <dd className={cn("text-[11px] text-neutral-200 leading-snug", multiline ? "whitespace-pre-wrap" : "text-right")}>
+        {display}
+      </dd>
+    </div>
+  );
 }
 
 export default function GeneralSettingsPage() {
@@ -380,44 +396,44 @@ export default function GeneralSettingsPage() {
 
         {/* Organization section — read-only, role-scoped */}
         {venueId && selectedVenue && (
-          <section className="rounded-xl border border-neutral-800 bg-neutral-900 p-5">
-            <div className="flex items-center gap-2 mb-3">
-              <Building2 className="h-4 w-4 text-purple-400" />
+          <section className="rounded-xl border border-neutral-800 bg-neutral-900 p-4">
+            <div className="flex items-center gap-2 mb-2">
+              <Building2 className="h-4 w-4 text-purple-400 shrink-0" />
               <h2 className="text-sm font-semibold text-white">
                 {role === "superadmin" ? t("settings.organizationTitle") : t("settings.yourOrganization")}
               </h2>
             </div>
             {selectedVenue.organization ? (
               <>
-                <dl className="space-y-2 text-sm">
-                  <div className="flex justify-between">
-                    <dt className="text-neutral-400">{t("settings.orgName")}</dt>
-                    <dd className="text-white">{selectedVenue.organization.name}</dd>
-                  </div>
-                  <div className="flex justify-between">
-                    <dt className="text-neutral-400">{t("settings.orgCountry")}</dt>
-                    <dd className="text-white">
-                      {COUNTRIES_MAP[selectedVenue.organization.country]?.flag ?? ""}{" "}
-                      {COUNTRIES_MAP[selectedVenue.organization.country]?.name ?? selectedVenue.organization.country}
-                    </dd>
-                  </div>
-                  <div className="flex justify-between">
-                    <dt className="text-neutral-400">{t("settings.orgCurrency")}</dt>
-                    <dd className="text-white">{selectedVenue.organization.currency}</dd>
-                  </div>
-                  <div className="flex justify-between">
-                    <dt className="text-neutral-400">{t("settings.orgPaymentRegion")}</dt>
-                    <dd>
-                      <span className="rounded-full bg-neutral-700/50 px-2 py-0.5 text-xs text-neutral-300">
+                <dl>
+                  <OrgInfoRow label={t("settings.orgName")} value={selectedVenue.organization.name} />
+                  <OrgInfoRow
+                    label={t("settings.orgCountry")}
+                    value={`${COUNTRIES_MAP[selectedVenue.organization.country]?.flag ?? ""} ${COUNTRIES_MAP[selectedVenue.organization.country]?.name ?? selectedVenue.organization.country}`.trim()}
+                  />
+                  <OrgInfoRow label={t("settings.orgCurrency")} value={selectedVenue.organization.currency} />
+                  <div className="grid grid-cols-[minmax(0,9rem)_1fr] gap-x-3 py-1 border-b border-neutral-800/50">
+                    <dt className="text-[11px] text-neutral-500 leading-snug">{t("settings.orgPaymentRegion")}</dt>
+                    <dd className="text-right">
+                      <span className="rounded-full bg-neutral-700/50 px-1.5 py-0.5 text-[10px] text-neutral-300">
                         {selectedVenue.organization.paymentRegion ?? PAYMENT_REGION_MAP[selectedVenue.organization.country] ?? "OTHER"}
                       </span>
                     </dd>
                   </div>
+                  <div className="pt-2 pb-0.5">
+                    <p className="text-[10px] font-medium uppercase tracking-wide text-neutral-600">
+                      {t("settings.orgLegalEntity")}
+                    </p>
+                  </div>
+                  <OrgInfoRow label={t("settings.orgLegalCompanyName")} value={selectedVenue.organization.legalCompanyName} />
+                  <OrgInfoRow label={t("settings.orgRegistrationNumber")} value={selectedVenue.organization.registrationNumber} />
+                  <OrgInfoRow label={t("settings.orgTaxId")} value={selectedVenue.organization.taxId} />
+                  <OrgInfoRow label={t("settings.orgRegisteredAddress")} value={selectedVenue.organization.registeredAddress} multiline />
                 </dl>
                 {role === "superadmin" && (
                   <Link
                     href="/admin/organizations"
-                    className="mt-3 inline-block text-xs text-purple-400 hover:text-purple-300"
+                    className="mt-2 inline-block text-[11px] text-purple-400 hover:text-purple-300"
                   >
                     {t("settings.manageOrganizations")}
                   </Link>

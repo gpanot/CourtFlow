@@ -162,6 +162,7 @@ export async function POST(request: NextRequest) {
         recipientRole: "student",
         details: {
           venueName: booking.venue.name,
+          courtName: booking.court.label,
           date: dateStr,
           time: timeStr,
           amount: finalPrice,

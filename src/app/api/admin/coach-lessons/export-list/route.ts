@@ -7,6 +7,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireAdminAccess } from "@/lib/auth";
 import { prisma } from "@/lib/db";
+import {
+  getCancellationReasonLabel,
+  getNetBookingPrice,
+} from "@/lib/booking-cancellation";
 
 export const dynamic = "force-dynamic";
 
@@ -117,32 +121,44 @@ export async function GET(request: NextRequest) {
     "Date", "Start", "End", "Duration (hrs)",
     "Player", "Phone", "Coach", "Package", "Type",
     "Court", "Venue", "Status", "Payment", "Payment Method",
-    "Booking ref", "Invoice ref", "Price (VND)",
+    "Booking ref", "Invoice ref", "Price (VND)", "Cancellation Reason",
   ];
 
-  const rows = lessons.map((l) => [
-    fmtDate(l.date),
-    fmtTime(l.startTime),
-    fmtTime(l.endTime),
-    durationHours(l.startTime, l.endTime),
-    l.player.name,
-    l.player.phone,
-    l.coach.name,
-    l.package.name,
-    l.package.lessonType,
-    l.court?.label ?? "",
-    l.venue.name,
-    l.status,
-    l.paymentStatus,
-    fmtPaymentMethod(l.paymentMethod),
-    l.paymentRef ?? "",
-    l.invoiceNumber ?? "",
-    l.priceValue,
-  ]);
+  const rows = lessons.map((l) => {
+    const netPrice = getNetBookingPrice(l.priceValue, {
+      status: l.status,
+      paymentStatus: l.paymentStatus,
+      cancellationReason: l.cancellationReason,
+    });
+    return [
+      fmtDate(l.date),
+      fmtTime(l.startTime),
+      fmtTime(l.endTime),
+      durationHours(l.startTime, l.endTime),
+      l.player.name,
+      l.player.phone,
+      l.coach.name,
+      l.package.name,
+      l.package.lessonType,
+      l.court?.label ?? "",
+      l.venue.name,
+      l.status,
+      l.paymentStatus,
+      fmtPaymentMethod(l.paymentMethod),
+      l.paymentRef ?? "",
+      l.invoiceNumber ?? "",
+      netPrice,
+      getCancellationReasonLabel(l.cancellationReason) ?? "",
+    ];
+  });
 
-  const totalRevenue = lessons
-    .filter((l) => l.status !== "cancelled" && (l.paymentStatus === "paid" || l.paymentStatus === "PAID"))
-    .reduce((s, l) => s + l.priceValue, 0);
+  const totalRevenue = lessons.reduce((sum, l) => {
+    return sum + getNetBookingPrice(l.priceValue, {
+      status: l.status,
+      paymentStatus: l.paymentStatus,
+      cancellationReason: l.cancellationReason,
+    });
+  }, 0);
 
   const lines = [
     header.map(csvEscape).join(","),

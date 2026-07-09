@@ -72,9 +72,15 @@ export async function POST(request: NextRequest) {
     // Both write and query use noon local time to avoid UTC-midnight day-shift (workspace rule)
     const dateForWrite = new Date(dateKey + "T12:00:00+07:00");
 
-    const refStart = new Date(courtsInput[0].startTime);
-    const durationMinutes = courtsInput[0].slotCount * GRID_GRANULARITY_MINUTES;
-    const refEnd = new Date(refStart.getTime() + durationMinutes * 60 * 1000);
+    // Each court may have an independent startTime / slotCount.
+    // The group's startTime/endTime spans the earliest start and latest end.
+    const courtTimes = courtsInput.map((c) => {
+      const start = new Date(c.startTime);
+      const end = new Date(start.getTime() + c.slotCount * GRID_GRANULARITY_MINUTES * 60 * 1000);
+      return { start, end };
+    });
+    const refStart = courtTimes.reduce((earliest, t) => t.start < earliest ? t.start : earliest, courtTimes[0].start);
+    const refEnd = courtTimes.reduce((latest, t) => t.end > latest ? t.end : latest, courtTimes[0].end);
 
     const pricing = resolveGroupBookingPrice(config, courtsInput, venueTimezone, courtMatrices);
 
@@ -86,10 +92,11 @@ export async function POST(request: NextRequest) {
       discountPct > 0 ? Math.round(price * (100 - discountPct) / 100) : price;
 
     const result = await prisma.$transaction(async (tx) => {
-      // Conflict-check each court (skip expired holds)
-      for (const c of courtsInput) {
-        const startTime = new Date(c.startTime);
-        const endTime = new Date(startTime.getTime() + durationMinutes * 60 * 1000);
+      // Conflict-check each court independently using its own time window
+      for (let i = 0; i < courtsInput.length; i++) {
+        const c = courtsInput[i];
+        const startTime = courtTimes[i].start;
+        const endTime = courtTimes[i].end;
 
         const conflict = await tx.booking.findFirst({
           where: {
@@ -119,7 +126,7 @@ export async function POST(request: NextRequest) {
       });
 
       const bookingRows = await Promise.all(
-        courtsInput.map(async (c) => {
+        courtsInput.map(async (c, i) => {
           const courtPrice = pricing.perCourt.find((p) => p.courtId === c.courtId)?.priceValue ?? 0;
           return tx.booking.create({
             data: {
@@ -127,8 +134,8 @@ export async function POST(request: NextRequest) {
               venueId: body.venueId,
               playerId: body.playerId,
               date: dateForWrite,
-              startTime: new Date(c.startTime),
-              endTime: new Date(new Date(c.startTime).getTime() + durationMinutes * 60 * 1000),
+              startTime: courtTimes[i].start,
+              endTime: courtTimes[i].end,
               status: "confirmed",
               priceValue: applyDiscount(courtPrice),
               coPlayerIds: [],
@@ -172,6 +179,7 @@ export async function POST(request: NextRequest) {
         emailType: "staff_confirmed",
         details: {
           venueName: venue?.name,
+          courtName: courtLabels,
           date: dateStr,
           time: timeStr,
           amount: result.group.totalPriceValue,

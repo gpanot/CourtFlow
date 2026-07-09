@@ -171,21 +171,21 @@ export function CourtsManager({
                 "group relative rounded-xl border overflow-hidden transition-all",
                 showBookable
                   ? cn(
-                      "border-neutral-700/60 bg-neutral-900/60",
-                      court.isBookable ? "hover:border-neutral-600" : "opacity-80",
+                      "border-neutral-800 bg-neutral-900/60",
+                      court.isBookable ? "hover:border-neutral-700" : "opacity-80",
                     )
                   : cn(
-                      "border-2 bg-gradient-to-b from-neutral-800/80 to-neutral-900/80",
+                      "border bg-neutral-900",
                       court.isBookable
-                        ? "border-neutral-700/60 hover:border-purple-600/40"
-                        : "border-neutral-800/60 opacity-75 hover:border-neutral-600/40",
+                        ? "border-neutral-800 hover:border-purple-500"
+                        : "border-neutral-800 opacity-75 hover:border-neutral-700",
                     ),
               )}
             >
               {!showBookable && (
                 <>
-                  <div className="absolute inset-2 rounded-lg border border-neutral-700/30 pointer-events-none" />
-                  <div className="absolute inset-[18px] border-t border-neutral-700/20 top-1/2 pointer-events-none" />
+                  <div className="absolute inset-2 rounded-lg border border-neutral-800/50 pointer-events-none" />
+                  <div className="absolute inset-[18px] border-t border-neutral-800/50 top-1/2 pointer-events-none" />
                 </>
               )}
 
@@ -330,7 +330,7 @@ export function CourtsManager({
         })}
 
         {!readOnly && (
-          <div className="rounded-xl border-2 border-dashed border-neutral-700/40 bg-neutral-900/30 p-3 flex flex-col items-center justify-center gap-2 min-h-[100px]">
+          <div className="rounded-xl border-2 border-dashed border-neutral-700/50 bg-neutral-900/30 p-3 flex flex-col items-center justify-center gap-2 min-h-[100px]">
             <input
               type="text"
               value={addLabel}

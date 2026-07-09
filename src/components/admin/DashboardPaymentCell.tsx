@@ -3,9 +3,11 @@
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import adminI18n from "@/i18n/admin-i18n";
+import { CancellationReasonBadge } from "@/components/admin/CancellationReasonBadge";
 import { PaymentMethodBadge, PaymentStatusBadge } from "@/components/admin/EditBookingModal";
 import { PaymentHoldTimer } from "@/components/admin/PaymentHoldTimer";
 import type { PaymentActionTarget } from "@/components/admin/PaymentActionModal";
+import { isBookingWrittenOff } from "@/lib/booking-cancellation";
 import {
   isPaymentHoldActive,
   normalizePaymentStatus,
@@ -28,6 +30,8 @@ interface EntryForPayment {
   endTime: string;
   priceValue: number;
   detail: string;
+  cancellationReason?: string | null;
+  bookingGroupId?: string | null;
 }
 
 interface Props {
@@ -41,7 +45,21 @@ export function DashboardPaymentCell({ kind, entry, onManage }: Props) {
   const [holdExpired, setHoldExpired] = useState(false);
 
   if (kind === "lesson" && !entry.paymentStatus) return null;
-  if ((kind === "booking" || kind === "openplay") && entry.status === "cancelled") return null;
+
+  if (
+    isBookingWrittenOff({
+      status: entry.status,
+      paymentStatus: entry.paymentStatus,
+      cancellationReason: entry.cancellationReason,
+    })
+  ) {
+    if (entry.cancellationReason) {
+      return <CancellationReasonBadge reason={entry.cancellationReason} />;
+    }
+    return <PaymentStatusBadge status="refunded" />;
+  }
+
+  if (entry.status === "cancelled") return null;
   // Expired holds — just show a static badge, no click action needed
   if (entry.status === "expired_hold" || entry.paymentStatus === "expired") {
     return <PaymentStatusBadge status="expired" />;
@@ -78,6 +96,7 @@ export function DashboardPaymentCell({ kind, entry, onManage }: Props) {
         onManage({
           type: kind,
           entityId: entry.id,
+          groupId: entry.bookingGroupId,
           playerName: entry.playerName,
           playerPhone: entry.playerPhone,
           detail: entry.detail,
@@ -90,6 +109,7 @@ export function DashboardPaymentCell({ kind, entry, onManage }: Props) {
           paymentMethod: entry.paymentMethod,
           paymentProofUrl: entry.paymentProofUrl,
           bookingStatus: entry.status,
+          cancellationReason: entry.cancellationReason,
         })
       }
       title={t(titleKey)}

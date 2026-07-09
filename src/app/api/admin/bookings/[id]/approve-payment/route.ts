@@ -80,12 +80,20 @@ export async function PATCH(
 
     // Send confirmation email
     if (updated.player.email) {
+      let courtName = updated.court.label;
+      if (booking.bookingGroupId) {
+        const groupCourts = await prisma.booking.findMany({
+          where: { bookingGroupId: booking.bookingGroupId },
+          include: { court: { select: { label: true } } },
+        });
+        courtName = groupCourts.map((b) => b.court.label).join(", ");
+      }
       await sendBookingEmail({
         to: updated.player.email,
         playerName: updated.player.name,
         bookingType: "court",
         emailType: "approved",
-        details: {},
+        details: { courtName },
       });
     }
 

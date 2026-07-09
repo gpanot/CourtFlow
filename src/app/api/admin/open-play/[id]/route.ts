@@ -5,6 +5,11 @@ import { requireAdminAccess } from "@/lib/auth";
 import { assertVenueAccess } from "@/lib/venue-scope";
 import { sendBookingEmail } from "@/lib/email/send";
 import { allocateInvoiceNumber } from "@/lib/invoice-number";
+import {
+  isPaidPaymentStatus,
+  paidCancellationUpdate,
+  requirePaidCancellationReason,
+} from "@/lib/paid-cancellation";
 
 export const dynamic = "force-dynamic";
 
@@ -17,7 +22,7 @@ export async function PATCH(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const auth = await await requireAdminAccess(request.headers);
+    const auth = await requireAdminAccess(request.headers);
     const { id } = await params;
     const body = await request.json();
     const action: string = body.action;
@@ -47,9 +52,15 @@ export async function PATCH(
     }
 
     if (action === "cancel") {
+      const wasPaid = isPaidPaymentStatus(reg.paymentStatus);
+      const reasonError = requirePaidCancellationReason(wasPaid, body.cancellationReason);
+      if (reasonError) return error(reasonError, 400);
+
       const updated = await prisma.openPlayRegistration.update({
         where: { id },
-        data: { status: "cancelled" },
+        data: wasPaid && body.cancellationReason
+          ? paidCancellationUpdate(body.cancellationReason)
+          : { status: "cancelled", cancelledAt: new Date() },
         include: { player: { select: { name: true, email: true } } },
       });
       if (updated.player.email) {
