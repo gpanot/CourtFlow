@@ -6,45 +6,61 @@ import { OnboardingScreen } from "./OnboardingScreen";
 
 const ONBOARDING_KEY = "cf_onboarding_complete";
 const SWIPE_THRESHOLD = 50;
-const TOTAL_SCREENS = 4;
+const TOTAL_SCREENS = 3;
 
 /* ──────────────────────────────────
    Inline SVG illustrations
    ────────────────────────────────── */
 
-function FaceScanIllustration() {
+function CourtManagementIllustration() {
   return (
-    <div className="relative flex items-center justify-center">
-      {/* Pulsing ring */}
-      <span className="absolute h-44 w-44 animate-ping rounded-full border-2 border-green-500/20" />
-      <svg
-        viewBox="0 0 200 200"
-        width={176}
-        height={176}
-        fill="none"
-        xmlns="http://www.w3.org/2000/svg"
-      >
-        {/* Outer circle */}
-        <circle cx="100" cy="100" r="88" stroke="#22c55e" strokeWidth="2" opacity="0.5" />
-        <circle cx="100" cy="100" r="80" stroke="#22c55e" strokeWidth="1.5" opacity="0.25" />
+    <svg
+      viewBox="0 0 200 200"
+      width={176}
+      height={176}
+      fill="none"
+      xmlns="http://www.w3.org/2000/svg"
+    >
+      {/* Court grid */}
+      <rect x="20" y="40" width="160" height="120" rx="10" stroke="#22c55e" strokeWidth="2" opacity="0.5" />
 
-        {/* Corner brackets */}
-        <path d="M40 70 V50 H60" stroke="#22c55e" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" />
-        <path d="M160 70 V50 H140" stroke="#22c55e" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" />
-        <path d="M40 130 V150 H60" stroke="#22c55e" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" />
-        <path d="M160 130 V150 H140" stroke="#22c55e" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" />
+      {/* Court dividers */}
+      <line x1="100" y1="40" x2="100" y2="160" stroke="#22c55e" strokeWidth="1.5" opacity="0.3" />
+      <line x1="20" y1="100" x2="180" y2="100" stroke="#22c55e" strokeWidth="1.5" opacity="0.3" />
 
-        {/* Face outline */}
-        <ellipse cx="100" cy="95" rx="28" ry="35" stroke="#22c55e" strokeWidth="2" />
-        {/* Eyes */}
-        <circle cx="88" cy="88" r="3" fill="#22c55e" />
-        <circle cx="112" cy="88" r="3" fill="#22c55e" />
-        {/* Mouth */}
-        <path d="M92 104 Q100 112 108 104" stroke="#22c55e" strokeWidth="2" strokeLinecap="round" fill="none" />
-        {/* Neck/body hint */}
-        <path d="M82 128 Q100 138 118 128" stroke="#22c55e" strokeWidth="1.5" strokeLinecap="round" fill="none" opacity="0.5" />
-      </svg>
-    </div>
+      {/* Court 1 — Active (green) */}
+      <rect x="28" y="48" width="64" height="44" rx="4" fill="#22c55e" opacity="0.15" stroke="#22c55e" strokeWidth="1.5" />
+      <text x="60" y="67" textAnchor="middle" fill="#22c55e" fontSize="8" fontWeight="600" opacity="0.9">Court 1</text>
+      <circle cx="60" cy="80" r="4" fill="#22c55e" opacity="0.8" />
+      <text x="68" y="83" fill="#22c55e" fontSize="7" opacity="0.7">Active</text>
+
+      {/* Court 2 — Blocked */}
+      <rect x="108" y="48" width="64" height="44" rx="4" fill="#ef4444" opacity="0.08" stroke="#ef4444" strokeWidth="1.5" opacity="0.5" />
+      <text x="140" y="67" textAnchor="middle" fill="#f87171" fontSize="8" fontWeight="600" opacity="0.7">Court 2</text>
+      <circle cx="140" cy="80" r="4" fill="#ef4444" opacity="0.5" />
+      <text x="148" y="83" fill="#f87171" fontSize="7" opacity="0.6">Blocked</text>
+
+      {/* Court 3 — Available */}
+      <rect x="28" y="108" width="64" height="44" rx="4" fill="#22c55e" opacity="0.06" stroke="#22c55e" strokeWidth="1.5" opacity="0.3" />
+      <text x="60" y="127" textAnchor="middle" fill="#22c55e" fontSize="8" fontWeight="600" opacity="0.5">Court 3</text>
+      <circle cx="60" cy="140" r="4" fill="#22c55e" opacity="0.3" />
+      <text x="68" y="143" fill="#22c55e" fontSize="7" opacity="0.4">Open</text>
+
+      {/* Court 4 — Active */}
+      <rect x="108" y="108" width="64" height="44" rx="4" fill="#22c55e" opacity="0.15" stroke="#22c55e" strokeWidth="1.5" />
+      <text x="140" y="127" textAnchor="middle" fill="#22c55e" fontSize="8" fontWeight="600" opacity="0.9">Court 4</text>
+      <circle cx="140" cy="140" r="4" fill="#22c55e" opacity="0.8" />
+      <text x="148" y="143" fill="#22c55e" fontSize="7" opacity="0.7">Active</text>
+
+      {/* Staff badge top-right */}
+      <rect x="140" y="12" width="46" height="18" rx="9" fill="#22c55e" opacity="0.2" stroke="#22c55e" strokeWidth="1.5" />
+      <text x="163" y="25" textAnchor="middle" fill="#22c55e" fontSize="8" fontWeight="700">Staff</text>
+
+      {/* Real-time pulse dot */}
+      <circle cx="26" cy="21" r="5" fill="#22c55e" opacity="0.8" />
+      <circle cx="26" cy="21" r="8" stroke="#22c55e" strokeWidth="1" opacity="0.3" />
+      <text x="35" y="25" fill="#22c55e" fontSize="8" opacity="0.6">Live</text>
+    </svg>
   );
 }
 
@@ -137,73 +153,28 @@ function DashboardIllustration() {
   );
 }
 
-function SubscriptionIllustration() {
-  return (
-    <svg
-      viewBox="0 0 220 200"
-      width={194}
-      height={176}
-      fill="none"
-      xmlns="http://www.w3.org/2000/svg"
-    >
-      {/* Card 3 (back) */}
-      <rect x="50" y="30" width="130" height="60" rx="10" stroke="#22c55e" strokeWidth="1.5" opacity="0.25" />
-      <rect x="64" y="44" width="50" height="5" rx="2" fill="#22c55e" opacity="0.15" />
-      <rect x="64" y="55" width="30" height="4" rx="2" fill="#22c55e" opacity="0.1" />
-      <rect x="64" y="66" width="70" height="4" rx="2" fill="#22c55e" opacity="0.1" />
-
-      {/* Card 2 (middle) */}
-      <rect x="38" y="60" width="130" height="60" rx="10" stroke="#22c55e" strokeWidth="1.5" opacity="0.45" fill="#0a0a0a" />
-      <rect x="52" y="74" width="50" height="5" rx="2" fill="#22c55e" opacity="0.25" />
-      <rect x="52" y="85" width="30" height="4" rx="2" fill="#22c55e" opacity="0.2" />
-      <rect x="52" y="96" width="70" height="4" rx="2" fill="#22c55e" opacity="0.2" />
-
-      {/* Card 1 (front) */}
-      <rect x="26" y="90" width="130" height="60" rx="10" stroke="#22c55e" strokeWidth="2" fill="#0a0a0a" />
-      <rect x="40" y="104" width="60" height="6" rx="3" fill="#22c55e" opacity="0.4" />
-      <rect x="40" y="116" width="36" height="4" rx="2" fill="#22c55e" opacity="0.3" />
-      <rect x="40" y="126" width="80" height="4" rx="2" fill="#22c55e" opacity="0.25" />
-
-      {/* Active badge on front card */}
-      <rect x="108" y="99" width="40" height="18" rx="9" fill="#22c55e" opacity="0.2" stroke="#22c55e" strokeWidth="1.5" />
-      <text x="128" y="112" textAnchor="middle" fill="#22c55e" fontSize="9" fontWeight="600">Active</text>
-
-      {/* Labels */}
-      <text x="58" y="180" fill="#444" fontSize="10" fontWeight="500">5 sessions</text>
-      <text x="108" y="180" fill="#444" fontSize="10" fontWeight="500">10 sessions</text>
-      <text x="163" y="180" fill="#444" fontSize="10" fontWeight="500">Unlimited</text>
-    </svg>
-  );
-}
-
 /* ──────────────────────────────────
    Screen data
    ────────────────────────────────── */
 
 const SCREENS = [
   {
-    illustration: <FaceScanIllustration />,
-    headline: "Players check in instantly",
+    illustration: <CourtManagementIllustration />,
+    headline: "Run your courts effortlessly",
     subtext:
-      "Face recognition registers new players and welcomes back regulars in seconds. No forms. No friction.",
+      "See every court's live status at a glance. Block, assign, and manage sessions in seconds — no paperwork, no confusion.",
   },
   {
     illustration: <QrPaymentIllustration />,
-    headline: "Payments fully automated",
+    headline: "Payments handled automatically",
     subtext:
-      "Players scan a QR and pay the right amount directly to your account. Confirmed instantly. No cash handling.",
+      "Players scan a QR and pay the right amount directly to your account. Confirmed instantly. No cash, no chasing.",
   },
   {
     illustration: <DashboardIllustration />,
-    headline: "Know exactly what you earned",
+    headline: "Full visibility for managers",
     subtext:
-      "Every player. Every payment. Live on your phone. Your staff knows you can see it.",
-  },
-  {
-    illustration: <SubscriptionIllustration />,
-    headline: "Members keep coming back",
-    subtext:
-      "Offer session packages that reward loyalty and give you predictable monthly revenue.",
+      "Every session, every payment, every staff action — live on your dashboard. Know what's happening before anyone tells you.",
   },
 ];
 
