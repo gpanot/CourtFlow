@@ -35,13 +35,13 @@ function CourtManagementIllustration() {
       <text x="68" y="83" fill="#22c55e" fontSize="7" opacity="0.7">Active</text>
 
       {/* Court 2 — Blocked */}
-      <rect x="108" y="48" width="64" height="44" rx="4" fill="#ef4444" opacity="0.08" stroke="#ef4444" strokeWidth="1.5" opacity="0.5" />
+      <rect x="108" y="48" width="64" height="44" rx="4" fill="#ef4444" fillOpacity="0.08" stroke="#ef4444" strokeWidth="1.5" strokeOpacity="0.5" />
       <text x="140" y="67" textAnchor="middle" fill="#f87171" fontSize="8" fontWeight="600" opacity="0.7">Court 2</text>
       <circle cx="140" cy="80" r="4" fill="#ef4444" opacity="0.5" />
       <text x="148" y="83" fill="#f87171" fontSize="7" opacity="0.6">Blocked</text>
 
       {/* Court 3 — Available */}
-      <rect x="28" y="108" width="64" height="44" rx="4" fill="#22c55e" opacity="0.06" stroke="#22c55e" strokeWidth="1.5" opacity="0.3" />
+      <rect x="28" y="108" width="64" height="44" rx="4" fill="#22c55e" fillOpacity="0.06" stroke="#22c55e" strokeWidth="1.5" strokeOpacity="0.3" />
       <text x="60" y="127" textAnchor="middle" fill="#22c55e" fontSize="8" fontWeight="600" opacity="0.5">Court 3</text>
       <circle cx="60" cy="140" r="4" fill="#22c55e" opacity="0.3" />
       <text x="68" y="143" fill="#22c55e" fontSize="7" opacity="0.4">Open</text>
