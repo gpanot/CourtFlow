@@ -506,6 +506,8 @@ export default function StaffPage() {
                       return (
                         <div key={vid} className="rounded-lg border border-neutral-800 bg-neutral-900/40 p-3">
                           <p className="mb-2 text-xs font-medium text-neutral-300">{t("staff.venueLabel")}: {vname}</p>
+
+                          {/* App login access */}
                           <div className="flex flex-wrap gap-2">
                             {/* CourtFlow — superadmin only */}
                             <button
@@ -559,9 +561,16 @@ export default function StaffPage() {
                                 Courtpass (Admin)
                               </button>
                             )}
-                            {/* CourtPass Staff & CourtPay Staff — staff-only page-level access restrictions */}
-                            {!isManagerOrAbove && (
-                              <>
+                          </div>
+                          {isManagerOrAbove && (
+                            <p className="mt-1.5 text-[10px] text-neutral-600">Admin panel access is always granted to managers.</p>
+                          )}
+
+                          {/* Page-level access restriction — staff only */}
+                          {!isManagerOrAbove && (
+                            <div className="mt-3 border-t border-neutral-700/50 pt-3">
+                              <p className="mb-2 text-[11px] font-medium text-neutral-400">Restrict access:</p>
+                              <div className="flex flex-wrap gap-2">
                                 <button
                                   type="button"
                                   onClick={() => toggleVenueApp(vid, "courtpass_staff")}
@@ -588,16 +597,14 @@ export default function StaffPage() {
                                   {apps.includes("courtpay_staff") && <Check className="h-3 w-3" />}
                                   CourtPay Staff
                                 </button>
-                              </>
-                            )}
-                          </div>
-                          {isManagerOrAbove && (
-                            <p className="mt-1.5 text-[10px] text-neutral-600">Admin panel access is always granted to managers.</p>
-                          )}
-                          {!isManagerOrAbove && (apps.includes("courtpass_staff") || apps.includes("courtpay_staff")) && (
-                            <p className="mt-1.5 text-[10px] text-neutral-500">
-                              CourtPass Staff restricts access to CourtPass pages only. CourtPay Staff restricts to CP Players &amp; Analytics only.
-                            </p>
+                              </div>
+                              {(apps.includes("courtpass_staff") || apps.includes("courtpay_staff")) && (
+                                <p className="mt-1.5 text-[10px] text-neutral-500">
+                                  CourtPass Staff: Overview, Venues, Bookings, Coaching, Memberships, CourtPass Players.{" "}
+                                  CourtPay Staff: CP Players &amp; CP Analytics.
+                                </p>
+                              )}
+                            </div>
                           )}
                         </div>
                       );
