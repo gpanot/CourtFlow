@@ -81,13 +81,14 @@ export async function PATCH(
 
     // Send confirmation email
     if (updated.player.email) {
-      const emailDetails = await buildCourtBookingEmailDetails(id, booking.playerId);
+      const emailDetails = await buildCourtBookingEmailDetails(id);
       await sendBookingEmail({
         to: updated.player.email,
         playerName: updated.player.name,
         bookingType: "court",
         emailType: "approved",
         venueId: booking.venueId,
+        bookingId: id,
         details: emailDetails,
       });
     }

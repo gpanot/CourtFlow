@@ -135,16 +135,14 @@ async function handlePortalBookingPayment(
         select: { id: true },
       });
       if (firstBooking) {
-        const emailDetails = await buildCourtBookingEmailDetails(
-          firstBooking.id,
-          group.playerId
-        );
+        const emailDetails = await buildCourtBookingEmailDetails(firstBooking.id);
         await sendBookingEmail({
           to: player.email,
           playerName: player.name,
           bookingType: "court",
           emailType: "auto_confirmed",
           venueId: group.venueId,
+          bookingId: firstBooking.id,
           details: emailDetails,
         });
       }
@@ -173,13 +171,14 @@ async function handlePortalBookingPayment(
     select: { name: true, email: true },
   });
   if (player?.email) {
-    const emailDetails = await buildCourtBookingEmailDetails(booking.id, booking.playerId);
+    const emailDetails = await buildCourtBookingEmailDetails(booking.id);
     await sendBookingEmail({
       to: player.email,
       playerName: player.name,
       bookingType: "court",
       emailType: "auto_confirmed",
       venueId: booking.venueId,
+      bookingId: booking.id,
       details: emailDetails,
     });
   }

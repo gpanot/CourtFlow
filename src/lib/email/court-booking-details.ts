@@ -1,5 +1,4 @@
 import { prisma } from "../db";
-import { wrapPaymentUrlWithMagicLogin } from "./send";
 import type { SendBookingEmailParams } from "./send";
 
 function formatBookingDate(date: Date): string {
@@ -16,8 +15,7 @@ function formatBookingTime(start: Date, end: Date): string {
  * Handles single-court and multi-court group bookings.
  */
 export async function buildCourtBookingEmailDetails(
-  bookingId: string,
-  playerId: string
+  bookingId: string
 ): Promise<SendBookingEmailParams["details"]> {
   const booking = await prisma.booking.findUnique({
     where: { id: bookingId },
@@ -48,10 +46,6 @@ export async function buildCourtBookingEmailDetails(
     });
     const courtName = groupCourts.map((b) => b.court.label).join(", ");
     const { bookingGroup } = booking;
-    const invoiceNumber = bookingGroup.invoiceNumber ?? undefined;
-    const invoiceUrl = invoiceNumber
-      ? await wrapPaymentUrlWithMagicLogin(playerId, `/book/bookings/${bookingId}?invoice=1`)
-      : undefined;
 
     return {
       venueName: booking.venue.name,
@@ -60,15 +54,9 @@ export async function buildCourtBookingEmailDetails(
       time: formatBookingTime(bookingGroup.startTime, bookingGroup.endTime),
       amount: bookingGroup.totalPriceValue,
       paymentRef: bookingGroup.paymentRef ?? undefined,
-      invoiceNumber,
-      invoiceUrl,
+      invoiceNumber: bookingGroup.invoiceNumber ?? undefined,
     };
   }
-
-  const invoiceNumber = booking.invoiceNumber ?? undefined;
-  const invoiceUrl = invoiceNumber
-    ? await wrapPaymentUrlWithMagicLogin(playerId, `/book/bookings/${bookingId}?invoice=1`)
-    : undefined;
 
   return {
     venueName: booking.venue.name,
@@ -77,7 +65,6 @@ export async function buildCourtBookingEmailDetails(
     time: formatBookingTime(booking.startTime, booking.endTime),
     amount: booking.priceValue,
     paymentRef: booking.paymentRef ?? undefined,
-    invoiceNumber,
-    invoiceUrl,
+    invoiceNumber: booking.invoiceNumber ?? undefined,
   };
 }

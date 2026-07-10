@@ -3,6 +3,7 @@ import { json, error } from "@/lib/api-helpers";
 import { prisma } from "@/lib/db";
 import { requirePortalAuth } from "@/lib/portal-auth";
 import { sendBookingEmail } from "@/lib/email/send";
+import { buildCourtBookingEmailDetails } from "@/lib/email/court-booking-details";
 import { writeFile, mkdir } from "fs/promises";
 import path from "path";
 
@@ -76,21 +77,14 @@ export async function POST(
       select: { name: true, email: true },
     });
     if (player?.email) {
-      let courtName = booking.court.label;
-      if (booking.bookingGroupId) {
-        const groupCourts = await prisma.booking.findMany({
-          where: { bookingGroupId: booking.bookingGroupId },
-          include: { court: { select: { label: true } } },
-        });
-        courtName = groupCourts.map((b) => b.court.label).join(", ");
-      }
+      const emailDetails = await buildCourtBookingEmailDetails(id);
       await sendBookingEmail({
         to: player.email,
         playerName: player.name,
         bookingType: "court",
         emailType: "pending",
         venueId: booking.venueId,
-        details: { courtName },
+        details: emailDetails,
       });
     }
 

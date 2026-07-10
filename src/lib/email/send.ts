@@ -1,6 +1,10 @@
 import { prisma } from "../db";
 import { getResendClient } from "./client";
 import { createMagicLoginToken } from "../player-magic-link";
+import {
+  loadBookingInvoiceData,
+  renderInvoicePdfBuffer,
+} from "../invoice-pdf-data";
 
 const FROM = "noreply_bookings@thecourtflow.com";
 
@@ -24,6 +28,8 @@ export interface SendBookingEmailParams {
   recipientRole?: RecipientRole;
   /** When set, venue contact fields are loaded for player emails. */
   venueId?: string;
+  /** Court booking id — used to attach the invoice PDF on payment confirmation. */
+  bookingId?: string;
   details: {
     venueName?: string;
     courtName?: string;
@@ -43,8 +49,6 @@ export interface SendBookingEmailParams {
     paymentUrl?: string;
     /** Invoice reference shown after payment is confirmed */
     invoiceNumber?: string;
-    /** Magic-link URL to download the invoice PDF */
-    invoiceUrl?: string;
   };
 }
 
@@ -204,25 +208,6 @@ function buildEmail(params: SendBookingEmailParams): { subject: string; html: st
     recipientRole === "student"
   );
 
-  const invoiceDownloadButton =
-    bookingType === "court" &&
-    recipientRole === "student" &&
-    details.invoiceUrl &&
-    (emailType === "approved" || emailType === "auto_confirmed")
-      ? `
-<table width="100%" cellpadding="0" cellspacing="0" style="margin-top:24px;">
-  <tr>
-    <td align="center">
-      <a href="${details.invoiceUrl}"
-         style="display:inline-block;background:#059669;color:#fff;font-size:15px;font-weight:700;
-                padding:14px 32px;border-radius:10px;text-decoration:none;letter-spacing:0.01em;">
-        Download invoice
-      </a>
-    </td>
-  </tr>
-</table>`
-      : "";
-
   // Add-to-Calendar links (only for student/coach on confirmed events)
   const calendarButtons = (() => {
     if (recipientRole === "staff") return "";
@@ -314,7 +299,7 @@ function buildEmail(params: SendBookingEmailParams): { subject: string; html: st
       if (recipientRole === "student") {
         return {
           subject: `${refPrefix}Payment approved — your ${label} is confirmed`,
-          html: `<p>${greeting}</p><p>Great news! Your payment for your <strong>${label}</strong> has been approved and your booking is confirmed.</p>${detailsBlock}${invoiceDownloadButton}${calendarButtons}<p style="margin-top:20px;">We look forward to seeing you on the court!</p>${footer}`,
+          html: `<p>${greeting}</p><p>Great news! Your payment for your <strong>${label}</strong> has been approved and your booking is confirmed.</p>${detailsBlock}${calendarButtons}<p style="margin-top:20px;">We look forward to seeing you on the court!</p>${footer}`,
         };
       }
       if (recipientRole === "coach") {
@@ -372,7 +357,7 @@ function buildEmail(params: SendBookingEmailParams): { subject: string; html: st
       if (recipientRole === "student") {
         return {
           subject: `${refPrefix}Payment confirmed — your ${label} is booked`,
-          html: `<p>${greeting}</p><p>Your payment has been automatically confirmed and your <strong>${label}</strong> is now booked.</p>${detailsBlock}${invoiceDownloadButton}${calendarButtons}<p style="margin-top:20px;">We look forward to seeing you on the court!</p>${footer}`,
+          html: `<p>${greeting}</p><p>Your payment has been automatically confirmed and your <strong>${label}</strong> is now booked.</p>${detailsBlock}${calendarButtons}<p style="margin-top:20px;">We look forward to seeing you on the court!</p>${footer}`,
         };
       }
       if (recipientRole === "coach") {
@@ -450,6 +435,35 @@ export async function wrapPaymentUrlWithMagicLogin(
   }
 }
 
+async function buildCourtInvoiceAttachment(
+  bookingId: string | undefined,
+  bookingType: BookingType,
+  emailType: EmailType,
+  recipientRole: RecipientRole
+): Promise<{ filename: string; content: Buffer } | null> {
+  if (
+    bookingType !== "court" ||
+    recipientRole !== "student" ||
+    (emailType !== "approved" && emailType !== "auto_confirmed") ||
+    !bookingId
+  ) {
+    return null;
+  }
+
+  try {
+    const data = await loadBookingInvoiceData(bookingId);
+    if (!data) {
+      console.warn(`[sendBookingEmail] No invoice data for bookingId=${bookingId} — sending without attachment`);
+      return null;
+    }
+    const content = await renderInvoicePdfBuffer(data);
+    return { filename: `${data.invoiceNumber}.pdf`, content };
+  } catch (err) {
+    console.error(`[sendBookingEmail] Failed to render invoice PDF for bookingId=${bookingId}:`, err);
+    return null;
+  }
+}
+
 export async function sendBookingEmail(params: SendBookingEmailParams): Promise<void> {
   if (!params.to) {
     console.warn("[sendBookingEmail] No email address provided — skipping");
@@ -461,6 +475,13 @@ export async function sendBookingEmail(params: SendBookingEmailParams): Promise<
       recipientRole === "student"
         ? await resolveVenueContact(params.venueId, params.details.venueContact)
         : undefined;
+
+    const attachment = await buildCourtInvoiceAttachment(
+      params.bookingId,
+      params.bookingType,
+      params.emailType,
+      recipientRole
+    );
 
     const resend = getResendClient();
     const { subject, html } = buildEmail({
@@ -476,11 +497,25 @@ export async function sendBookingEmail(params: SendBookingEmailParams): Promise<
       to: params.to,
       subject,
       html,
+      ...(attachment
+        ? {
+            attachments: [
+              {
+                filename: attachment.filename,
+                content: attachment.content,
+                contentType: "application/pdf",
+              },
+            ],
+          }
+        : {}),
     });
     if (result.error) {
       console.error(`[sendBookingEmail] Resend rejected to=${params.to} subject="${subject}":`, result.error);
     } else {
-      console.log(`[sendBookingEmail] Sent to=${params.to} id=${result.data?.id} subject="${subject}"`);
+      console.log(
+        `[sendBookingEmail] Sent to=${params.to} id=${result.data?.id} subject="${subject}"` +
+          (attachment ? ` attachment=${attachment.filename}` : "")
+      );
     }
   } catch (err) {
     console.error("[sendBookingEmail] Failed to send email:", err);
