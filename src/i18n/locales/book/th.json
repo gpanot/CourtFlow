@@ -47,7 +47,8 @@
     "downloadQr": "ดาวน์โหลด QR",
     "tapToViewFullSize": "แตะเพื่อดูขนาดเต็ม",
     "imageLoadError": "ไม่สามารถโหลดรูปภาพได้",
-    "session": "เซสชัน"
+    "session": "เซสชัน",
+    "close": "ปิด"
   },
   "language": {
     "label": "ภาษา",

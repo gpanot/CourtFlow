@@ -163,7 +163,10 @@ export default function BookingDetailPage() {
   return (
     <div className="px-6 pt-6 pb-8">
       {searchParams.get("from") === "payment" ? (
-        <button onClick={() => router.replace("/book/bookings")} className="text-sm text-[var(--cm-text-sec)] mb-4">
+        <button
+          onClick={() => router.replace("/book/bookings")}
+          className="text-sm font-bold text-[var(--cm-text)] mb-4"
+        >
           ✕ {t("common.close")}
         </button>
       ) : (

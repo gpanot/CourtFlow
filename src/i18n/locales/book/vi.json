@@ -47,7 +47,8 @@
     "downloadQr": "Tải mã QR",
     "tapToViewFullSize": "Chạm để xem toàn màn hình",
     "imageLoadError": "Không thể tải hình ảnh",
-    "session": "Buổi"
+    "session": "Buổi",
+    "close": "Đóng"
   },
   "language": {
     "label": "Ngôn ngữ",

@@ -6,6 +6,7 @@ import { useEffect, useState, useCallback, useRef, Suspense } from "react";
 import { useTranslation } from "react-i18next";
 import { usePlayerSession } from "../components/usePlayerSession";
 import { usePlayerVenue } from "../components/PlayerVenueContext";
+import { BookLanguageMenu } from "../components/BookLanguageMenu";
 import { signOutToIntro } from "@/app/(book)/book/lib/sign-out-to-intro";
 import { ScanFace } from "lucide-react";
 import {
@@ -418,9 +419,12 @@ function OnboardingContent() {
 
   return (
     <div className="px-6 pt-12 pb-8">
-      <button onClick={() => void signOutToIntro()} className="text-sm text-[var(--cm-text-sec)] mb-6">
-        ← {t("account.signOut")}
-      </button>
+      <div className="flex items-center justify-between mb-6">
+        <button onClick={() => void signOutToIntro()} className="text-sm text-[var(--cm-text-sec)]">
+          ← {t("account.signOut")}
+        </button>
+        <BookLanguageMenu large />
+      </div>
       <h1 className="text-xl font-bold mb-1">{t("onboarding.completeProfile")}</h1>
       <p className="text-sm text-[var(--cm-text-sec)] mb-6">{t("onboarding.profileSubtitle")}</p>
       {error && (

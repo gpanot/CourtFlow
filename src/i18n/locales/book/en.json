@@ -47,7 +47,8 @@
     "downloadQr": "Download QR",
     "tapToViewFullSize": "Tap to view full size",
     "imageLoadError": "Image could not be loaded",
-    "session": "Session"
+    "session": "Session",
+    "close": "Close"
   },
   "language": {
     "label": "Language",
