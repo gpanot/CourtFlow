@@ -162,9 +162,15 @@ export default function BookingDetailPage() {
 
   return (
     <div className="px-6 pt-6 pb-8">
-      <button onClick={() => router.back()} className="text-sm text-[var(--cm-text-sec)] mb-4">
-        ← {t("common.back")}
-      </button>
+      {searchParams.get("from") === "payment" ? (
+        <button onClick={() => router.replace("/book/bookings")} className="text-sm text-[var(--cm-text-sec)] mb-4">
+          ✕ {t("common.close")}
+        </button>
+      ) : (
+        <button onClick={() => router.back()} className="text-sm text-[var(--cm-text-sec)] mb-4">
+          ← {t("common.back")}
+        </button>
+      )}
 
       <h1 className="text-xl font-bold mb-4">{t("bookingDetail.title")}</h1>
 
