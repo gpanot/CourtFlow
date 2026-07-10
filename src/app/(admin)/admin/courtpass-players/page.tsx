@@ -481,13 +481,6 @@ function CancelBookingModal({
           </div>
         </div>
 
-        {hoursUntil < policy.noCancelHours && (
-          <div className="flex items-center gap-2 rounded-lg border border-red-800/50 bg-red-900/20 px-3 py-2 text-xs text-red-300">
-            <Ban className="h-3.5 w-3.5 shrink-0" />
-            {t("courtpassPlayers.cancelNotAllowed", { hours: policy.noCancelHours })}
-          </div>
-        )}
-
         {err && (
           <p className="rounded-lg border border-red-800/50 bg-red-900/20 px-3 py-2 text-xs text-red-300">{err}</p>
         )}
@@ -495,7 +488,7 @@ function CancelBookingModal({
         <div className="flex gap-2 pt-1">
           <button
             onClick={handleConfirm}
-            disabled={saving || hoursUntil < policy.noCancelHours}
+            disabled={saving}
             className="flex-1 flex items-center justify-center gap-2 rounded-lg bg-red-600 py-2 text-sm font-medium text-white hover:bg-red-500 disabled:opacity-50"
           >
             {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <XCircle className="h-4 w-4" />}

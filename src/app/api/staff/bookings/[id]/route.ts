@@ -79,7 +79,8 @@ export async function PATCH(
           select: { settings: true, name: true },
         });
 
-        // For non-paid bookings, enforce the venue cancellation policy
+        // For non-paid bookings: staff/admin can always cancel regardless of venue policy.
+        // The time-based cancellation policy only applies to player-initiated cancellations.
         if (!wasPaid) {
           const settings = (venue?.settings as Record<string, unknown>) ?? {};
           const policy = (settings.cancellationPolicy as {
@@ -87,19 +88,11 @@ export async function PATCH(
             partialCancelHours?: number;
             noCancelHours?: number;
           }) ?? {};
-          const noCancelHours = policy.noCancelHours ?? 4;
           const partialCancelHours = policy.partialCancelHours ?? 12;
           const freeCancelHours = policy.freeCancelHours ?? 24;
 
           const now = new Date();
           const hoursUntilStart = (existing.startTime.getTime() - now.getTime()) / (1000 * 60 * 60);
-
-          if (hoursUntilStart < noCancelHours) {
-            return error(
-              `Cannot cancel — less than ${noCancelHours} hours before start. Cancellation is not allowed.`,
-              400
-            );
-          }
 
           const partialRefund = hoursUntilStart < partialCancelHours;
           const freeCancel = hoursUntilStart >= freeCancelHours;
