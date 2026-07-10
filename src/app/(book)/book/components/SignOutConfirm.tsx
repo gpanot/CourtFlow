@@ -44,11 +44,11 @@ export function SignOutIconButton({ className }: SignOutIconButtonProps) {
 
       {step !== "closed" && (
         <div
-          className="fixed inset-0 z-[70] flex items-end justify-center bg-black/50 sm:items-center"
+          className="fixed inset-0 z-[70] flex items-center justify-center bg-black/50 px-6"
           onClick={() => !busy && setStep("closed")}
         >
           <div
-            className="w-full max-w-sm mx-4 mb-[calc(1rem+env(safe-area-inset-bottom,0px))] sm:mb-0 rounded-2xl bg-[var(--cm-sheet-bg)] border border-[var(--cm-border)] p-5 shadow-[var(--cm-shadow)]"
+            className="w-full max-w-sm rounded-2xl bg-[var(--cm-sheet-bg)] border border-[var(--cm-border)] p-5 shadow-[var(--cm-shadow)]"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex items-center gap-3 mb-3">
