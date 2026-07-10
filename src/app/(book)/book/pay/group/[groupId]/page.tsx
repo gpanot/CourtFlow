@@ -202,7 +202,7 @@ export default function GroupPaymentPage() {
         {group.paymentRef && (
           <p className="text-sm font-semibold text-[var(--cm-accent)] mb-6">{group.paymentRef}</p>
         )}
-        <button onClick={() => { const firstId = group.bookings[0]?.id; router.push(firstId ? `/book/bookings/${firstId}` : "/book/bookings"); }} className="w-full py-3 bg-[var(--cm-accent)] text-black rounded-xl font-medium text-sm mb-3">
+        <button onClick={() => { const firstId = group.bookings[0]?.id; router.push(firstId ? `/book/bookings/${firstId}?from=payment` : "/book/bookings"); }} className="w-full py-3 bg-[var(--cm-accent)] text-black rounded-xl font-medium text-sm mb-3">
           {t("payment.showMyBooking")}
         </button>
         <button onClick={() => router.push("/book")} className="w-full py-3 bg-[var(--cm-bg-surface)] border border-[var(--cm-border)] text-[var(--cm-text-sec)] rounded-xl font-medium text-sm">
