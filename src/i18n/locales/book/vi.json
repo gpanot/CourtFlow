@@ -479,5 +479,12 @@
     "viewRegistration": "Xem đăng ký của tôi",
     "proofSubmitted": "Đã gửi bằng chứng thanh toán. Chúng tôi sẽ xác nhận sớm.",
     "myOpenPlay": "Chơi tự do"
+  },
+  "namePrompt": {
+    "title": "Tên của bạn là gì?",
+    "body": "Nhập tên để nhân viên có thể nhận ra bạn khi check-in.",
+    "placeholder": "Tên của bạn",
+    "save": "Lưu",
+    "doItLater": "Để sau"
   }
 }

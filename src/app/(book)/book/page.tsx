@@ -10,6 +10,9 @@ import { usePlayerVenue } from "./components/PlayerVenueContext";
 import { useBookFormatters } from "./lib/useBookFormatters";
 import { BookTabTopBar } from "./components/BookTabTopBar";
 import { resolveUploadUrl } from "@/lib/resolve-upload-url";
+import { portalFetch } from "@/lib/portal-fetch";
+
+const NAME_PROMPT_DISMISSED_KEY = "name_prompt_dismissed";
 
 interface Slot {
   startTime: string;
@@ -187,6 +190,11 @@ export default function VenueHomePage() {
   const startTimeRowRef = useRef<HTMLDivElement>(null);
   const selectedHourRef = useRef<HTMLButtonElement>(null);
 
+  // Name prompt modal state (for Apple sign-in users who skipped sharing their name)
+  const [showNamePrompt, setShowNamePrompt] = useState(false);
+  const [namePromptValue, setNamePromptValue] = useState("");
+  const [nameSaving, setNameSaving] = useState(false);
+
 
 
   // Compute dates client-side only to avoid SSR/hydration mismatch when
@@ -233,15 +241,21 @@ export default function VenueHomePage() {
         : (venueHoursNow[0] ?? 8);
       setQuickStartHour(effectiveStartHour);
 
-      // Group view: auto-select first available slot on the first court >= effectiveStartHour
+      // Group view: auto-select first available hour (both :00 + :30 pair) on the first court >= effectiveStartHour
       if (gridData.length > 0) {
         for (const court of gridData) {
-          const firstAvail = court.slots.find(
+          const idx = court.slots.findIndex(
             (s) => s.available && new Date(s.startTime).getHours() >= effectiveStartHour && new Date(s.startTime).getMinutes() === 0
           );
-          if (firstAvail) {
+          if (idx >= 0) {
+            const hourSlot = court.slots[idx];
+            const nextSlot = court.slots[idx + 1];
+            const halfSlot =
+              nextSlot && new Date(nextSlot.startTime).getMinutes() === 30 && nextSlot.available
+                ? nextSlot
+                : null;
             setSelectedCourtId(court.courtId);
-            setSelectedSlots([firstAvail]);
+            setSelectedSlots(halfSlot ? [hourSlot, halfSlot] : [hourSlot]);
             break;
           }
         }
@@ -277,6 +291,20 @@ export default function VenueHomePage() {
     if (!venueReady || !selectedDate) return;
     loadGrid(selectedDate);
   }, [selectedDate, loadGrid, venueReady]);
+
+  // Show name prompt once for players whose name is the default "Player" fallback
+  useEffect(() => {
+    if (status !== "authenticated") return;
+    if (typeof window !== "undefined" && localStorage.getItem(NAME_PROMPT_DISMISSED_KEY)) return;
+    portalFetch("/api/public/account")
+      .then((r) => r.json())
+      .then((p) => {
+        if (p.name === "Player") {
+          setShowNamePrompt(true);
+        }
+      })
+      .catch(() => {});
+  }, [status]);
 
   // A 30-min slot with no adjacent available slot is functionally unavailable
   // when 30-min bookings are not allowed (the default).
@@ -617,6 +645,31 @@ export default function VenueHomePage() {
       setSelectedCourtId(null);
       setSelectedSlots([]);
       setQuickSelection(null);
+    }
+  }
+
+  function dismissNamePrompt() {
+    if (typeof window !== "undefined") {
+      localStorage.setItem(NAME_PROMPT_DISMISSED_KEY, "1");
+    }
+    setShowNamePrompt(false);
+  }
+
+  async function handleSaveName() {
+    const trimmed = namePromptValue.trim();
+    if (!trimmed) return;
+    setNameSaving(true);
+    try {
+      await portalFetch("/api/public/account", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name: trimmed }),
+      });
+    } catch {
+      // silently ignore — user can update from profile later
+    } finally {
+      setNameSaving(false);
+      dismissNamePrompt();
     }
   }
 
@@ -1243,6 +1296,48 @@ export default function VenueHomePage() {
               )}
               <div className="h-4" />
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Name prompt modal — shown once for Apple sign-in users who skipped sharing their name */}
+      {showNamePrompt && (
+        <div className="fixed inset-0 z-[70] flex items-end justify-center bg-black/50 px-4 pb-4">
+          <div
+            className="w-full max-w-lg bg-[var(--cm-sheet-bg)] rounded-2xl p-6 border border-[var(--cm-border)]"
+            style={{ paddingBottom: "max(1.5rem, env(safe-area-inset-bottom))" }}
+          >
+            <div className="flex justify-center mb-4">
+              <div className="w-10 h-10 rounded-full bg-[var(--cm-accent-bg)] flex items-center justify-center text-xl">👋</div>
+            </div>
+            <h2 className="text-base font-bold text-center text-[var(--cm-text)] mb-1">
+              {t("namePrompt.title")}
+            </h2>
+            <p className="text-sm text-[var(--cm-text-sec)] text-center mb-5">
+              {t("namePrompt.body")}
+            </p>
+            <input
+              type="text"
+              value={namePromptValue}
+              onChange={(e) => setNamePromptValue(e.target.value)}
+              placeholder={t("namePrompt.placeholder")}
+              autoFocus
+              className="w-full px-4 py-3 bg-[var(--cm-bg-input)] border border-[var(--cm-border)] rounded-xl text-sm outline-none focus:border-[var(--cm-accent)] text-[var(--cm-text)] mb-4"
+              onKeyDown={(e) => { if (e.key === "Enter") void handleSaveName(); }}
+            />
+            <button
+              onClick={() => void handleSaveName()}
+              disabled={!namePromptValue.trim() || nameSaving}
+              className="w-full py-3 bg-[var(--cm-accent)] text-black rounded-xl font-semibold text-sm mb-3 disabled:opacity-40 transition-opacity"
+            >
+              {nameSaving ? t("common.saving") : t("namePrompt.save")}
+            </button>
+            <button
+              onClick={dismissNamePrompt}
+              className="w-full py-2 text-sm text-[var(--cm-text-muted)] font-medium"
+            >
+              {t("namePrompt.doItLater")}
+            </button>
           </div>
         </div>
       )}

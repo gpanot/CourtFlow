@@ -479,5 +479,12 @@
     "viewRegistration": "View My Registration",
     "proofSubmitted": "Your payment proof has been submitted. We'll confirm it shortly.",
     "myOpenPlay": "Open Play"
+  },
+  "namePrompt": {
+    "title": "What's your name?",
+    "body": "Enter your name so our staff can find you at check-in.",
+    "placeholder": "Your name",
+    "save": "Save",
+    "doItLater": "Do it later"
   }
 }
