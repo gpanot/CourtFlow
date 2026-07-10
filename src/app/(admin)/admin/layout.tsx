@@ -90,7 +90,9 @@ function getFilteredNav(
     hasCourtpay: boolean;
     hasCourtpassStaff: boolean;
     hasCourtpayStaff: boolean;
-  } = { hasCourtflow: true, hasCourtpay: true, hasCourtpassStaff: true, hasCourtpayStaff: true }
+    /** True when at least one staff page-restriction flag is present on this account. */
+    hasPageRestriction: boolean;
+  } = { hasCourtflow: true, hasCourtpay: true, hasCourtpassStaff: true, hasCourtpayStaff: true, hasPageRestriction: false }
 ) {
   const isSuperAdmin = userRole === "superadmin";
   const isStaff = userRole === "staff";
@@ -101,10 +103,14 @@ function getFilteredNav(
     return app === "courtflow" ? appAccess.hasCourtflow : appAccess.hasCourtpay;
   };
 
-  // For staff: items tagged with requiresAccess are only shown when that access is granted.
-  // Managers and superadmins always see all items (requiresAccess is irrelevant for them).
+  // For staff with page restrictions:
+  //   - Items tagged requiresAccess: shown only if that flag is granted.
+  //   - Items with no requiresAccess tag: hidden when any restriction is active
+  //     (they are "manager-only" items like Staff, Venue Analytics, My Billing, Settings).
+  // For staff with NO restrictions, and for managers/superadmins: all items visible.
   const accessFilter = (requiresAccess: "courtpass_staff" | "courtpay_staff" | undefined) => {
-    if (!isStaff || !requiresAccess) return true;
+    if (!isStaff || !appAccess.hasPageRestriction) return true;
+    if (!requiresAccess) return false; // untagged items hidden when restricted
     return requiresAccess === "courtpass_staff"
       ? appAccess.hasCourtpassStaff
       : appAccess.hasCourtpayStaff;
@@ -154,6 +160,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
     hasCourtpay: true,
     hasCourtpassStaff: true,
     hasCourtpayStaff: true,
+    hasPageRestriction: false,
   });
   // null = loading (only relevant for staff role); true/false = resolved
   const [staffAdminGranted, setStaffAdminGranted] = useState<boolean | null>(
@@ -182,10 +189,9 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
         const nextAppAccess = {
           hasCourtflow: allAccess.includes("courtflow"),
           hasCourtpay: allAccess.includes("courtpay"),
-          // When restricted: only show the section if the matching flag is present.
-          // When unrestricted (no flags, or non-staff role): show everything.
-          hasCourtpassStaff: !hasAnyRestriction || allAccess.includes("courtpass_staff"),
-          hasCourtpayStaff: !hasAnyRestriction || allAccess.includes("courtpay_staff"),
+          hasCourtpassStaff: hasAnyRestriction ? allAccess.includes("courtpass_staff") : true,
+          hasCourtpayStaff: hasAnyRestriction ? allAccess.includes("courtpay_staff") : true,
+          hasPageRestriction: hasAnyRestriction,
         };
         console.log("[AdminLayout] staff-me debug", {
           role,
