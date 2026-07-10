@@ -36,7 +36,7 @@ const navSections: NavSection[] = [
     label: "nav.courtpassBooking",
     items: [
       { href: "/admin", label: "nav.overview", icon: LayoutDashboard, requiresAccess: "courtpass_staff" },
-      { href: "/admin/venues", label: "nav.venues", icon: MapPin, requiresAccess: "courtpass_staff" },
+      { href: "/admin/venues", label: "nav.venues", icon: MapPin },
       { href: "/admin/organizations", label: "nav.organizations", icon: Building2, superadminOnly: true },
       { href: "/admin/bookings", label: "nav.bookings", icon: CalendarDays, requiresAccess: "courtpass_staff" },
       { href: "/admin/coaching", label: "nav.coaching", icon: GraduationCap, requiresAccess: "courtpass_staff" },
