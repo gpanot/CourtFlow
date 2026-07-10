@@ -179,14 +179,23 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
         const hasAnyRestriction = isStaffRole && allAccess.some(
           (a) => a === "courtpass_staff" || a === "courtpay_staff"
         );
-        setAppAccess({
+        const nextAppAccess = {
           hasCourtflow: allAccess.includes("courtflow"),
           hasCourtpay: allAccess.includes("courtpay"),
           // When restricted: only show the section if the matching flag is present.
           // When unrestricted (no flags, or non-staff role): show everything.
           hasCourtpassStaff: !hasAnyRestriction || allAccess.includes("courtpass_staff"),
           hasCourtpayStaff: !hasAnyRestriction || allAccess.includes("courtpay_staff"),
+        };
+        console.log("[AdminLayout] staff-me debug", {
+          role,
+          isStaffRole,
+          venueAccess: data.venues.map((v) => ({ appAccess: v.appAccess })),
+          allAccess,
+          hasAnyRestriction,
+          nextAppAccess,
         });
+        setAppAccess(nextAppAccess);
         if (role === "staff") {
           setStaffAdminGranted(allAccess.includes("admin"));
         }
@@ -197,6 +206,11 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   }, [token, role]);
 
   const { navSections: visibleSections, allNavItems: visibleAllItems } = getFilteredNav(role ?? "", appAccess);
+  console.log("[AdminLayout] nav render", {
+    role,
+    appAccess,
+    visibleItemHrefs: visibleAllItems.map((i) => i.href),
+  });
 
   const toggleSection = (label: string) => {
     setCollapsedSections((prev) => {

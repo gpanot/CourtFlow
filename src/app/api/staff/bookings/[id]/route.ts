@@ -79,6 +79,8 @@ export async function PATCH(
           select: { settings: true, name: true },
         });
 
+        console.log(`[staffCancel] bookingId=${id} wasPaid=${wasPaid} paymentStatus=${existing.paymentStatus} build=2026-07-10-no-time-block`);
+
         // For non-paid bookings: staff/admin can always cancel regardless of venue policy.
         // The time-based cancellation policy only applies to player-initiated cancellations.
         if (!wasPaid) {
