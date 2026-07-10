@@ -6,8 +6,10 @@ import type { Prisma } from "@prisma/client";
 export const dynamic = "force-dynamic";
 
 /**
- * Auto-close sessions that have been open for more than 6 hours.
- * Called by a Railway cron job every hour.
+ * Auto-close sessions that have been open for more than 4 hours.
+ * Called by a Railway cron job every hour (0 * * * *).
+ * A session is therefore closed between 4h and ~5h after it opened,
+ * depending on when the hourly tick fires.
  * Auth: Bearer CRON_SECRET header (required when CRON_SECRET env var is set).
  *
  * Mirrors the full behaviour of POST /api/sessions/[sessionId]/close:
@@ -24,8 +26,8 @@ export async function GET(req: Request) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const SIX_HOURS_MS = 6 * 60 * 60 * 1000;
-  const cutoff = new Date(Date.now() - SIX_HOURS_MS);
+  const FOUR_HOURS_MS = 4 * 60 * 60 * 1000;
+  const cutoff = new Date(Date.now() - FOUR_HOURS_MS);
 
   try {
     // Fetch full session data so we can build the Reclub snapshot

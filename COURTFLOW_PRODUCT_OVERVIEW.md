@@ -66,7 +66,7 @@ The original heart of CourtFlow. Staff opens a session, players join a queue, an
 - GPS-based join radius to prevent remote queue joins
 - Session statistics, player history, and feedback collection
 - TV Display mode for public screens
-- **Auto-close** — sessions open for more than 6 hours are automatically closed by a Railway cron job (hourly)
+- **Auto-close** — sessions open for more than 4 hours are automatically closed by a Railway cron job (hourly, so effective window is 4h–5h)
 
 **Session Types:**
 - **Open Play** — standard drop-in rotation (queue-based)
@@ -389,7 +389,7 @@ Self-service tablet station at the venue entrance — no staff required:
 
 | Job | Schedule | Description |
 |-----|----------|-------------|
-| `auto-close-sessions` | Every hour (`0 * * * *`) | Closes sessions that have been open for more than 6 hours |
+| `auto-close-sessions` | Every hour (`0 * * * *`) | Closes sessions that have been open for more than 4 hours (effective window: 4h–5h) |
 | `generate-invoices` | Every Monday 00:01 (`1 0 * * 1`) | Generates weekly invoices (`per_payment` venues); on the 1st of each month also generates monthly invoices, reverts cancelled/expired monthly subscriptions to `per_payment`; marks overdue, suspends unpaid venues |
 
 Both jobs are secured with `CRON_SECRET` bearer token auth.
@@ -423,7 +423,7 @@ Events flow through venue-scoped rooms (`venue:{id}`) and player-scoped rooms (`
 2. Tap "Open Session" → session starts
 3. Players arrive and check in at the kiosk (face/QR) or staff checks them in manually
 4. Each player receives a VietQR payment QR; auto-confirmed via Sepay when payment is received
-5. End of session → tap "Close Session" (or session auto-closes after 6h if forgotten)
+5. End of session → tap "Close Session" (or session auto-closes after 4h–5h if forgotten)
 6. Session summary shows revenue, players, confirmed payments
 
 ### Admin: Monitoring CourtPay Revenue
@@ -470,7 +470,7 @@ Events flow through venue-scoped rooms (`venue:{id}`) and player-scoped rooms (`
 | **Face recognition kiosk** | Live | AWS Rekognition for self-service check-in |
 | **Push notifications (FCM)** | Live | Staff and player mobile push notifications |
 | **PayOS (kiosk stickers)** | Live | PayOS QR-based sticker kiosk payments |
-| **Auto-close sessions** | Live | Automatic 6-hour session timeout |
+| **Auto-close sessions** | Live | Automatic 4h–5h session timeout |
 | **CourtPay analytics export** | Live | Session-consolidated CSV export for monthly/weekly data |
 | **CP Players (admin)** | Live | CourtPay player roster page with KPIs, detail drawer, face thumbnails |
 | **Monthly SaaS billing** | Live | Flat monthly subscription with start/end dates, cancel flow, pro-rated first invoice |
