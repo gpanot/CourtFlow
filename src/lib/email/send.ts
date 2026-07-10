@@ -447,9 +447,10 @@ async function buildCourtInvoiceAttachment(
   }
 
   try {
-    // Use Function() to prevent TSC (server build, no jsx) from statically resolving the .tsx module
-    // eslint-disable-next-line @typescript-eslint/no-implied-eval, no-new-func, @typescript-eslint/no-explicit-any
-    const { loadBookingInvoiceData, renderInvoicePdfBuffer } = await (Function('return import("../invoice-pdf-data")')() as Promise<any>);
+    // Dynamic import via path alias to allow JSX rendering in a non-JSX server file.
+    // The alias is resolved by Next.js at bundle time, so the chunk path is always correct.
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { loadBookingInvoiceData, renderInvoicePdfBuffer } = await import("@/lib/invoice-pdf-data") as any;
     const data = await loadBookingInvoiceData(bookingId);
     if (!data) {
       console.warn(`[sendBookingEmail] No invoice data for bookingId=${bookingId} — sending without attachment`);
