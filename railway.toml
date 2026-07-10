@@ -18,3 +18,6 @@ releaseCommand = "npx prisma migrate deploy"
 #
 #  generate-invoices    → GET /api/cron/generate-invoices      Mon 00:01  (1 0 * * 1)
 #    Generates weekly billing invoices and marks overdue ones.
+#
+#  open-bill-aging      → GET /api/cron/open-bill-aging        daily 02:00  (0 2 * * *)
+#    Auto-issues open bills on the 1st of month, marks overdue, sends escalation events.
