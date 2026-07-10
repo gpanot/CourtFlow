@@ -4,6 +4,7 @@ import { json, error, parseBody, notFound } from "@/lib/api-helpers";
 import { requireStaff } from "@/lib/auth";
 import { getBookingConfig, resolveCourtBookingPrice, resolveCourtPricingMatrix } from "@/lib/booking";
 import { sendBookingEmail, wrapPaymentUrlWithMagicLogin } from "@/lib/email/send";
+import { wrapPaymentUrlForNewPlayer, getBaseUrl } from "@/lib/player-reset-password";
 import {
   isPaidPaymentStatus,
   paidCancellationUpdate,
@@ -274,9 +275,15 @@ export async function PATCH(
     // Notify player of the rescheduled booking
     console.log(`[staffEditBooking] bookingId=${booking.id} player="${booking.player.name}" email=${booking.player.email ?? "NONE"}`);
     if (booking.player.email) {
-      const appUrl = process.env.APP_URL ?? "";
-      const rawPaymentUrl = `${appUrl}/book/pay/${booking.id}`;
-      const paymentUrl = await wrapPaymentUrlWithMagicLogin(booking.player.id, rawPaymentUrl);
+      const rawPaymentUrl = `${getBaseUrl()}/book/pay/${booking.id}`;
+      const playerAccount = await prisma.playerAccount.findFirst({
+        where: { playerId: booking.player.id, provider: "credentials" },
+        select: { emailVerified: true },
+      });
+      const isNewUnverifiedPlayer = !playerAccount || playerAccount.emailVerified === false;
+      const paymentUrl = isNewUnverifiedPlayer
+        ? await wrapPaymentUrlForNewPlayer(booking.player.id, rawPaymentUrl)
+        : await wrapPaymentUrlWithMagicLogin(booking.player.id, rawPaymentUrl);
       const dateStr = booking.date.toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" });
       const timeStr = `${booking.startTime.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })} – ${booking.endTime.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}`;
       console.log(`[staffEditBooking] sending reschedule email to=${booking.player.email}`);

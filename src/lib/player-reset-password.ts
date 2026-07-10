@@ -33,7 +33,7 @@ const RATE_LIMIT_SECONDS = 2 * 60; // 2 minutes between requests
 
 const FROM = "noreply_bookings@thecourtflow.com";
 
-function getBaseUrl(): string {
+export function getBaseUrl(): string {
   return (
     process.env.NEXT_PUBLIC_COURTPASS_URL ?? "https://courtpass.thecourtflow.com"
   ).replace(/\/$/, "");

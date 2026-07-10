@@ -368,6 +368,8 @@ function buildEmail(params: SendBookingEmailParams): { subject: string; html: st
       };
 
     case "staff_confirmed": {
+      const isNewPlayerLink = details.paymentUrl?.includes("setup-password") ?? false;
+      const ctaLabel = isNewPlayerLink ? "Register &amp; Pay" : "Pay now";
       const payButton = details.paymentUrl
         ? `
 <table width="100%" cellpadding="0" cellspacing="0" style="margin-top:24px;">
@@ -376,9 +378,9 @@ function buildEmail(params: SendBookingEmailParams): { subject: string; html: st
       <a href="${details.paymentUrl}"
          style="display:inline-block;background:#7c3aed;color:#fff;font-size:15px;font-weight:700;
                 padding:14px 32px;border-radius:10px;text-decoration:none;letter-spacing:0.01em;">
-        Pay now
+        ${ctaLabel}
       </a>
-      <p style="margin-top:10px;font-size:12px;color:#6b7280;">Payment is required to confirm your spot.</p>
+      <p style="margin-top:10px;font-size:12px;color:#6b7280;">${isNewPlayerLink ? "Create your account and pay to confirm your spot." : "Payment is required to confirm your spot."}</p>
     </td>
   </tr>
 </table>`

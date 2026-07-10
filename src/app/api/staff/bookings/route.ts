@@ -11,7 +11,7 @@ import {
 } from "@/lib/booking";
 import { attachBookingToOpenBill, getPlayerOpenBillAccount } from "@/lib/open-bill";
 import { sendBookingEmail, wrapPaymentUrlWithMagicLogin } from "@/lib/email/send";
-import { wrapPaymentUrlForNewPlayer } from "@/lib/player-reset-password";
+import { wrapPaymentUrlForNewPlayer, getBaseUrl } from "@/lib/player-reset-password";
 
 export const dynamic = "force-dynamic";
 
@@ -162,8 +162,7 @@ export async function POST(request: NextRequest) {
       `[staffBooking] created bookingId=${booking.id} player="${booking.player.name}" email=${booking.player.email ?? "NONE"} paymentStatus=${openBillAccount ? "open_bill" : "pending"}`
     );
     if (booking.player.email && !openBillAccount) {
-      const appUrl = process.env.APP_URL ?? "";
-      const rawPaymentUrl = `${appUrl}/book/pay/${booking.id}`;
+      const rawPaymentUrl = `${getBaseUrl()}/book/pay/${booking.id}`;
 
       // Check if the player has a verified account — if not, this is a new player
       // and the "Pay now" link must route through account setup first.

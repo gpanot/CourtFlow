@@ -12,7 +12,7 @@ import {
   type PricingMatrix,
 } from "@/lib/booking";
 import { sendBookingEmail, wrapPaymentUrlWithMagicLogin } from "@/lib/email/send";
-import { wrapPaymentUrlForNewPlayer } from "@/lib/player-reset-password";
+import { wrapPaymentUrlForNewPlayer, getBaseUrl } from "@/lib/player-reset-password";
 export const dynamic = "force-dynamic";
 
 export async function POST(request: NextRequest) {
@@ -163,14 +163,13 @@ export async function POST(request: NextRequest) {
     );
 
     if (player?.email) {
-      const appUrl = process.env.APP_URL ?? "";
       const courtLabels = result.bookings.map((b) => b.court.label).join(", ");
       const dateStr = result.group.date.toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" });
       const timeStr =
         `${result.group.startTime.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })} – ` +
         `${result.group.endTime.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}`;
       // Link to the first booking so the player can pay
-      const rawPaymentUrl = `${appUrl}/book/pay/${result.bookings[0].id}`;
+      const rawPaymentUrl = `${getBaseUrl()}/book/pay/${result.bookings[0].id}`;
 
       // Check if the player has a verified account — if not, route through setup-password
       const playerAccount = await prisma.playerAccount.findFirst({
