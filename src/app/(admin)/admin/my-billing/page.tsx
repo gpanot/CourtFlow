@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useCallback, useRef } from "react";
 import { api } from "@/lib/api-client";
-import { Loader2, Receipt, CheckCircle2, Clock, AlertTriangle, FileText, ExternalLink, Upload, X, Eye } from "lucide-react";
+import { Loader2, Receipt, CheckCircle2, Clock, AlertTriangle, FileText, ExternalLink, Upload, X, Eye, Pencil } from "lucide-react";
 import { cn } from "@/lib/cn";
 import { useTranslation } from "react-i18next";
 import adminI18n from "@/i18n/admin-i18n";
@@ -48,7 +48,10 @@ interface InvoiceRow {
   pdfUrl: string | null;
   notes: string | null;
   invoiceType: string | null;
-  // Proof fields
+  // Payment fields (admin-confirmed)
+  paidMethod: string | null;
+  paymentRef: string | null;
+  // Proof fields (client-submitted)
   proofUrl: string | null;
   proofSubmittedAt: string | null;
   proofMethod: string | null;
@@ -106,10 +109,12 @@ export default function MyBillingPage() {
 
   const openProofModal = (inv: InvoiceRow) => {
     setProofModal(inv);
-    setProofPaidAt(new Date().toISOString().substring(0, 10));
-    setProofMethod("bank_transfer");
-    setProofRef("");
-    setProofFileUrl("");
+    // Pre-fill with existing proof data when editing
+    const existingDate = inv.proofSubmittedAt ?? inv.paidAt;
+    setProofPaidAt(existingDate ? new Date(existingDate).toISOString().substring(0, 10) : new Date().toISOString().substring(0, 10));
+    setProofMethod(inv.proofMethod ?? inv.paidMethod ?? "bank_transfer");
+    setProofRef(inv.proofRef ?? inv.paymentRef ?? "");
+    setProofFileUrl(inv.proofUrl ?? "");
   };
 
   const uploadProofFile = async (file: File) => {
@@ -128,14 +133,20 @@ export default function MyBillingPage() {
     setProofUploading(false);
   };
 
+  const proofRequired = proofMethod === "bank_transfer";
+
   const submitProof = async () => {
-    if (!proofModal || !proofFileUrl || !proofPaidAt) return;
+    if (!proofModal || !proofPaidAt) return;
+    const resolvedProofUrl = proofFileUrl || proofModal.proofUrl || null;
+    // Bank transfer requires a proof document on first submission
+    const isFirstSubmission = !proofModal.proofUrl && !proofModal.paidAt;
+    if (proofRequired && isFirstSubmission && !resolvedProofUrl) return;
     setProofSubmitting(true);
     try {
       await api.post(
         `/api/admin/manager/billing/invoices/${proofModal.id}/submit-proof`,
         {
-          proofUrl: proofFileUrl,
+          proofUrl: resolvedProofUrl ?? undefined,
           proofMethod,
           proofRef: proofRef.trim() || undefined,
           paidAt: new Date(proofPaidAt).toISOString(),
@@ -266,10 +277,10 @@ export default function MyBillingPage() {
                       <th className="py-2 pr-4 font-medium text-right">{t("myBilling.checkIns")}</th>
                       <th className="py-2 pr-4 font-medium text-right">{t("myBilling.amount")}</th>
                       <th className="py-2 pr-4 font-medium">{t("myBilling.status")}</th>
+                      <th className="py-2 pr-4 font-medium">{t("myBilling.payment")}</th>
                       <th className="py-2 pr-4 font-medium">{t("myBilling.paidAt")}</th>
                       <th className="py-2 pr-4 font-medium">{t("myBilling.issued")}</th>
                       <th className="py-2 font-medium">PDF</th>
-                      <th className="py-2 font-medium"></th>
                     </tr>
                   </thead>
                   <tbody>
@@ -278,7 +289,17 @@ export default function MyBillingPage() {
                       const Icon = cfg.icon;
                       const isManual = inv.kind === "manual";
                       const isPendingReview = inv.status === "pending_review";
+                      const isPaid = inv.status === "paid";
                       const canSubmitProof = isManual && (inv.status === "pending" || inv.status === "overdue");
+                      const canEditProof = isManual && (isPendingReview || isPaid);
+                      // Payment method label for display
+                      const displayMethod = inv.proofMethod ?? inv.paidMethod;
+                      const methodLabel = displayMethod === "bank_transfer" ? t("myBilling.proofModal.bankTransfer")
+                        : displayMethod === "cash" ? t("myBilling.proofModal.cash")
+                        : displayMethod === "payos" ? "PayOS"
+                        : displayMethod === "sepay" ? "SePay"
+                        : displayMethod === "manual_admin" || displayMethod === "manual" ? t("myBilling.proofModal.other")
+                        : displayMethod ?? null;
                       return (
                         <tr key={inv.id} className="border-b border-neutral-800/50 hover:bg-neutral-800/30">
                           <td className="py-2 pr-4 max-w-[180px]">
@@ -312,13 +333,41 @@ export default function MyBillingPage() {
                               <p className="text-[11px] text-neutral-500 mt-0.5">{t("myBilling.awaitingReview")}</p>
                             )}
                           </td>
+                          <td className="py-2 pr-4">
+                            {canSubmitProof ? (
+                              <button
+                                onClick={() => openProofModal(inv)}
+                                className="text-xs px-2.5 py-1 rounded-lg font-medium bg-purple-600 text-white hover:bg-purple-500 transition-colors"
+                              >
+                                {t("myBilling.submitPayment")}
+                              </button>
+                            ) : methodLabel ? (
+                              <button
+                                onClick={() => canEditProof ? openProofModal(inv) : undefined}
+                                className={cn(
+                                  "text-xs flex items-center gap-1",
+                                  canEditProof
+                                    ? "text-neutral-300 hover:text-white group cursor-pointer"
+                                    : "text-neutral-500 cursor-default"
+                                )}
+                                title={canEditProof ? t("myBilling.editPayment") : undefined}
+                              >
+                                {methodLabel}
+                                {canEditProof && (
+                                  <Pencil className="h-3 w-3 opacity-0 group-hover:opacity-60 transition-opacity" />
+                                )}
+                              </button>
+                            ) : (
+                              <span className="text-neutral-700 text-xs">—</span>
+                            )}
+                          </td>
                           <td className="py-2 pr-4 text-neutral-400">
                             {inv.paidAt ? formatDate(inv.paidAt) : isPendingReview && inv.proofSubmittedAt ? formatDate(inv.proofSubmittedAt) : "—"}
                           </td>
                           <td className="py-2 pr-4 text-neutral-400">
                             {formatDate(inv.createdAt)}
                           </td>
-                          <td className="py-2 pr-4">
+                          <td className="py-2">
                             {inv.pdfUrl ? (
                               <a
                                 href={inv.pdfUrl}
@@ -329,20 +378,7 @@ export default function MyBillingPage() {
                                 <ExternalLink className="h-3.5 w-3.5" />
                                 {t("myBilling.invoice")}
                               </a>
-                            ) : (
-                              <span className="text-neutral-700 text-xs">—</span>
-                            )}
-                          </td>
-                          <td className="py-2 whitespace-nowrap">
-                            {canSubmitProof && (
-                              <button
-                                onClick={() => openProofModal(inv)}
-                                className="text-xs px-3 py-1.5 rounded-lg font-medium bg-purple-600 text-white hover:bg-purple-500 transition-colors"
-                              >
-                                {t("myBilling.submitPayment")}
-                              </button>
-                            )}
-                            {isPendingReview && inv.proofUrl && (
+                            ) : inv.proofUrl && (isPendingReview || isPaid) ? (
                               <a
                                 href={inv.proofUrl}
                                 target="_blank"
@@ -352,6 +388,8 @@ export default function MyBillingPage() {
                                 <ExternalLink className="h-3.5 w-3.5" />
                                 {t("myBilling.viewProof")}
                               </a>
+                            ) : (
+                              <span className="text-neutral-700 text-xs">—</span>
                             )}
                           </td>
                         </tr>
@@ -365,7 +403,7 @@ export default function MyBillingPage() {
         </>
       )}
 
-      {/* ── Submit Payment Proof Modal ─────────────────────────────── */}
+      {/* ── Submit / Edit Payment Proof Modal ─────────────────────────────── */}
       {proofModal && (
         <div
           className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 px-4"
@@ -376,7 +414,11 @@ export default function MyBillingPage() {
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex items-center justify-between">
-              <h3 className="text-base font-semibold">{t("myBilling.proofModal.title")}</h3>
+              <h3 className="text-base font-semibold">
+                {(proofModal.proofUrl || proofModal.paidAt)
+                  ? t("myBilling.proofModal.editTitle")
+                  : t("myBilling.proofModal.title")}
+              </h3>
               <button
                 onClick={() => setProofModal(null)}
                 className="rounded-lg p-1.5 hover:bg-neutral-800 text-neutral-500 hover:text-white"
@@ -438,13 +480,16 @@ export default function MyBillingPage() {
               />
             </div>
 
-            {/* Upload proof */}
+            {/* Upload proof — required for bank transfer, optional for cash/other */}
             <div className="space-y-2">
               <label className="text-xs text-neutral-500 block font-medium">
-                {t("myBilling.proofModal.proofLabel")}{" "}
+                {proofRequired
+                  ? t("myBilling.proofModal.proofLabel")
+                  : t("myBilling.proofModal.proofLabelOptional")}{" "}
                 <span className="text-neutral-600 font-normal">{t("myBilling.proofModal.proofHint")}</span>
               </label>
-              {proofFileUrl ? (
+              {/* Show newly uploaded file */}
+              {proofFileUrl && proofFileUrl !== proofModal.proofUrl ? (
                 <div className="flex items-center gap-3 rounded-lg border border-neutral-700 bg-neutral-800/60 px-3 py-2">
                   <FileText className="h-4 w-4 text-sky-400 shrink-0" />
                   <a
@@ -456,10 +501,35 @@ export default function MyBillingPage() {
                     {proofFileUrl.split("/").pop()}
                   </a>
                   <button
-                    onClick={() => setProofFileUrl("")}
+                    onClick={() => setProofFileUrl(proofModal.proofUrl ?? "")}
                     className="text-neutral-500 hover:text-red-400"
                   >
                     <X className="h-3.5 w-3.5" />
+                  </button>
+                </div>
+              ) : proofModal.proofUrl ? (
+                /* Existing proof — show it and allow replacing */
+                <div className="space-y-1.5">
+                  <div className="flex items-center gap-3 rounded-lg border border-neutral-700 bg-neutral-800/60 px-3 py-2">
+                    <FileText className="h-4 w-4 text-sky-400 shrink-0" />
+                    <a
+                      href={proofModal.proofUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-xs text-sky-400 hover:text-sky-300 truncate flex-1"
+                    >
+                      {proofModal.proofUrl.split("/").pop()}
+                    </a>
+                    <ExternalLink className="h-3.5 w-3.5 text-neutral-500" />
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => proofFileRef.current?.click()}
+                    disabled={proofUploading}
+                    className="flex items-center gap-2 w-full rounded-lg border border-dashed border-neutral-700 bg-neutral-800/40 px-4 py-2 text-xs text-neutral-500 hover:border-neutral-500 hover:text-neutral-300 disabled:opacity-50"
+                  >
+                    {proofUploading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Upload className="h-3.5 w-3.5" />}
+                    {proofUploading ? t("myBilling.proofModal.uploading") : t("myBilling.proofModal.replaceBtn")}
                   </button>
                 </div>
               ) : (
@@ -500,15 +570,23 @@ export default function MyBillingPage() {
               </button>
               <button
                 onClick={() => void submitProof()}
-                disabled={proofSubmitting || !proofFileUrl || !proofPaidAt}
+                disabled={
+                  proofSubmitting ||
+                  !proofPaidAt ||
+                  (proofRequired && !proofFileUrl && !proofModal.proofUrl && !proofModal.paidAt)
+                }
                 className="flex-1 flex items-center justify-center gap-2 rounded-lg bg-purple-600 py-2.5 text-sm font-medium text-white hover:bg-purple-500 disabled:opacity-50"
               >
                 {proofSubmitting ? (
                   <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (proofModal.proofUrl || proofModal.paidAt) ? (
+                  <Pencil className="h-4 w-4" />
                 ) : (
                   <Upload className="h-4 w-4" />
                 )}
-                {t("myBilling.proofModal.submit")}
+                {(proofModal.proofUrl || proofModal.paidAt)
+                  ? t("myBilling.proofModal.save")
+                  : t("myBilling.proofModal.submit")}
               </button>
             </div>
           </div>

@@ -396,11 +396,15 @@ export default function VenueBillingDetailPage() {
   const [newInvSaving, setNewInvSaving] = useState(false);
   const pdfInputRef = useRef<HTMLInputElement>(null);
 
-  // Mark-paid for manual invoices
+  // Mark-paid / edit-payment for manual invoices
   const [manualPayModal, setManualPayModal] = useState<ManualInvoice | null>(null);
   const [manualPayMethod, setManualPayMethod] = useState("manual");
   const [manualPayRef, setManualPayRef] = useState("");
   const [manualPayNotes, setManualPayNotes] = useState("");
+  const [manualPayDate, setManualPayDate] = useState("");
+  const [manualPayProofUrl, setManualPayProofUrl] = useState("");
+  const [manualPayProofUploading, setManualPayProofUploading] = useState(false);
+  const manualPayProofRef = useRef<HTMLInputElement>(null);
   const [manualMarkingPaid, setManualMarkingPaid] = useState<string | null>(null);
   const [manualMarkingUnpaid, setManualMarkingUnpaid] = useState<string | null>(null);
 
@@ -668,20 +672,42 @@ export default function VenueBillingDetailPage() {
 
   const openManualPayModal = (inv: ManualInvoice) => {
     setManualPayModal(inv);
-    setManualPayMethod("manual");
-    setManualPayRef("");
+    // Pre-fill with existing data when editing a paid invoice
+    setManualPayMethod(inv.paidMethod ?? "manual");
+    setManualPayRef(inv.paidRef ?? "");
     setManualPayNotes(inv.notes ?? "");
+    setManualPayDate(inv.paidAt ? new Date(inv.paidAt).toISOString().substring(0, 10) : new Date().toISOString().substring(0, 10));
+    setManualPayProofUrl(inv.proofUrl ?? "");
+  };
+
+  const uploadManualPayProof = async (file: File) => {
+    setManualPayProofUploading(true);
+    try {
+      const fd = new FormData();
+      fd.append("file", file);
+      const result = await api.upload<{ url: string }>(
+        `/api/admin/billing/venue/${venueId}/manual-invoices/upload-pdf`,
+        fd
+      );
+      if (result.url) setManualPayProofUrl(result.url);
+    } catch (e) {
+      console.error(e);
+    }
+    setManualPayProofUploading(false);
   };
 
   const submitManualMarkPaid = async () => {
     if (!manualPayModal) return;
     setManualMarkingPaid(manualPayModal.id);
+    const isEditing = manualPayModal.status === "paid";
     try {
       await api.patch(`/api/admin/billing/venue/${venueId}/manual-invoices/${manualPayModal.id}`, {
-        action: "mark-paid",
+        action: isEditing ? "update-payment" : "mark-paid",
         paidMethod: manualPayMethod,
         paidRef: manualPayRef.trim() || undefined,
         notes: manualPayNotes.trim() || undefined,
+        paidAt: manualPayDate ? new Date(manualPayDate).toISOString() : undefined,
+        proofUrl: manualPayProofUrl || undefined,
       });
       setManualPayModal(null);
       await fetchManualInvoices();
@@ -1751,20 +1777,29 @@ export default function VenueBillingDetailPage() {
                         <div className="min-w-0 flex-1">
                           <div className="flex items-center gap-2 flex-wrap">
                             <p className="text-sm font-semibold">{formatVND(inv.amount)} VND</p>
+                            {isPaid ? (
+                              <button
+                                onClick={() => openManualPayModal(inv)}
+                                className="group flex items-center gap-1 text-[10px] font-semibold uppercase tracking-wide rounded px-1.5 py-0.5 bg-green-900/30 text-green-400 hover:bg-green-900/50 transition-colors"
+                                title="Edit payment details"
+                              >
+                                Paid
+                                <Pencil className="h-2.5 w-2.5 opacity-0 group-hover:opacity-70 transition-opacity" />
+                              </button>
+                            ) : (
                             <span
                               className={cn(
                                 "text-[10px] font-semibold uppercase tracking-wide rounded px-1.5 py-0.5",
-                                isPaid
-                                  ? "bg-green-900/30 text-green-400"
-                                  : isOverdue
+                                isOverdue
                                   ? "bg-amber-900/30 text-amber-400"
                                   : isPendingReview
                                   ? "bg-sky-900/30 text-sky-400"
                                   : "bg-yellow-900/20 text-yellow-400"
                               )}
                             >
-                              {isPaid ? "Paid" : isOverdue ? "Overdue" : isPendingReview ? "Review Proof" : "Pending"}
+                              {isOverdue ? "Overdue" : isPendingReview ? "Review Proof" : "Pending"}
                             </span>
+                            )}
                             {inv.pdfUrl && (
                               <a
                                 href={inv.pdfUrl}
@@ -2040,17 +2075,19 @@ export default function VenueBillingDetailPage() {
         </div>
       )}
 
-      {/* ── Manual Mark-paid modal ─────────────────────────────────── */}
+      {/* ── Manual Mark-paid / Edit-payment modal ──────────────────── */}
       {manualPayModal && (
         <div
           className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 px-4"
           onClick={() => setManualPayModal(null)}
         >
           <div
-            className="w-full max-w-md rounded-2xl border border-neutral-700 bg-neutral-900 p-6 space-y-4"
+            className="w-full max-w-md rounded-2xl border border-neutral-700 bg-neutral-900 p-6 space-y-4 max-h-[90vh] overflow-y-auto"
             onClick={(e) => e.stopPropagation()}
           >
-            <h3 className="text-base font-semibold">Mark invoice as paid</h3>
+            <h3 className="text-base font-semibold">
+              {manualPayModal.status === "paid" ? "Edit Payment Details" : "Mark invoice as paid"}
+            </h3>
             <p className="text-sm text-neutral-400">
               Invoice: <span className="text-white font-semibold">{formatVND(manualPayModal.amount)} VND</span>
               {manualPayModal.notes && (
@@ -2058,10 +2095,21 @@ export default function VenueBillingDetailPage() {
               )}
             </p>
 
+            {/* Payment date */}
+            <div>
+              <label className="text-xs text-neutral-500 mb-1 block">Payment date</label>
+              <input
+                type="date"
+                value={manualPayDate}
+                onChange={(e) => setManualPayDate(e.target.value)}
+                className="w-full rounded-lg border border-neutral-700 bg-neutral-800 px-3 py-2 text-sm text-white"
+              />
+            </div>
+
             {/* Payment method */}
             <div>
               <label className="text-xs text-neutral-500 mb-1 block">Payment method</label>
-              <div className="flex gap-2">
+              <div className="flex gap-2 flex-wrap">
                 {(["manual", "bank_transfer", "cash", "payos", "sepay"] as const).map((m) => (
                   <button
                     key={m}
@@ -2103,6 +2151,66 @@ export default function VenueBillingDetailPage() {
               />
             </div>
 
+            {/* Proof / document */}
+            <div className="space-y-1.5">
+              <label className="text-xs text-neutral-500 block font-medium">
+                Proof document <span className="font-normal text-neutral-600">(image or PDF, optional)</span>
+              </label>
+              {manualPayProofUrl && manualPayProofUrl !== manualPayModal.proofUrl ? (
+                /* Newly uploaded file */
+                <div className="flex items-center gap-3 rounded-lg border border-neutral-700 bg-neutral-800/60 px-3 py-2">
+                  <FileText className="h-4 w-4 text-sky-400 shrink-0" />
+                  <a href={manualPayProofUrl} target="_blank" rel="noopener noreferrer" className="text-xs text-sky-400 hover:text-sky-300 truncate flex-1">
+                    {manualPayProofUrl.split("/").pop()}
+                  </a>
+                  <button onClick={() => setManualPayProofUrl(manualPayModal.proofUrl ?? "")} className="text-neutral-500 hover:text-red-400">
+                    <X className="h-3.5 w-3.5" />
+                  </button>
+                </div>
+              ) : manualPayModal.proofUrl ? (
+                /* Existing proof — allow replacing */
+                <div className="space-y-1.5">
+                  <div className="flex items-center gap-3 rounded-lg border border-neutral-700 bg-neutral-800/60 px-3 py-2">
+                    <FileText className="h-4 w-4 text-sky-400 shrink-0" />
+                    <a href={manualPayModal.proofUrl} target="_blank" rel="noopener noreferrer" className="text-xs text-sky-400 hover:text-sky-300 truncate flex-1">
+                      {manualPayModal.proofUrl.split("/").pop()}
+                    </a>
+                    <ExternalLink className="h-3.5 w-3.5 text-neutral-500" />
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => manualPayProofRef.current?.click()}
+                    disabled={manualPayProofUploading}
+                    className="flex items-center gap-2 w-full rounded-lg border border-dashed border-neutral-700 bg-neutral-800/40 px-4 py-2 text-xs text-neutral-500 hover:border-neutral-500 hover:text-neutral-300 disabled:opacity-50"
+                  >
+                    {manualPayProofUploading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Upload className="h-3.5 w-3.5" />}
+                    {manualPayProofUploading ? "Uploading…" : "Replace document"}
+                  </button>
+                </div>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => manualPayProofRef.current?.click()}
+                  disabled={manualPayProofUploading}
+                  className="flex items-center gap-2 w-full rounded-lg border border-dashed border-neutral-700 bg-neutral-800/40 px-4 py-3 text-sm text-neutral-500 hover:border-neutral-500 hover:text-neutral-300 disabled:opacity-50"
+                >
+                  {manualPayProofUploading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />}
+                  {manualPayProofUploading ? "Uploading…" : "Upload proof (image or PDF)"}
+                </button>
+              )}
+              <input
+                ref={manualPayProofRef}
+                type="file"
+                accept="application/pdf,image/jpeg,image/png,image/webp"
+                className="hidden"
+                onChange={(e) => {
+                  const file = e.target.files?.[0];
+                  if (file) void uploadManualPayProof(file);
+                  e.target.value = "";
+                }}
+              />
+            </div>
+
             <div className="flex gap-3 pt-1">
               <button
                 onClick={() => setManualPayModal(null)}
@@ -2117,10 +2225,12 @@ export default function VenueBillingDetailPage() {
               >
                 {manualMarkingPaid ? (
                   <Loader2 className="h-4 w-4 animate-spin" />
+                ) : manualPayModal.status === "paid" ? (
+                  <Save className="h-4 w-4" />
                 ) : (
                   <CheckCircle2 className="h-4 w-4" />
                 )}
-                Mark paid
+                {manualPayModal.status === "paid" ? "Save changes" : "Mark paid"}
               </button>
             </div>
           </div>

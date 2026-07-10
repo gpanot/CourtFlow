@@ -614,7 +614,7 @@ export interface BillingProofNotificationParams {
   proofMethod: string;
   proofRef?: string | null;
   paidAt: string;
-  proofUrl: string;
+  proofUrl?: string;
   adminUrl: string;
 }
 
@@ -654,7 +654,7 @@ export async function sendBillingProofNotification(
           ${params.proofRef ? `<tr><td style="padding:8px 12px;background:#f5f5f5;font-weight:600">Reference</td><td style="padding:8px 12px;background:#fafafa">${params.proofRef}</td></tr>` : ""}
         </table>
         <p style="margin-top:20px">
-          <a href="${params.proofUrl}" style="display:inline-block;padding:10px 20px;background:#e5e7eb;color:#111;text-decoration:none;border-radius:6px;font-weight:600;margin-right:12px">View Proof</a>
+          ${params.proofUrl ? `<a href="${params.proofUrl}" style="display:inline-block;padding:10px 20px;background:#e5e7eb;color:#111;text-decoration:none;border-radius:6px;font-weight:600;margin-right:12px">View Proof</a>` : ""}
           <a href="${params.adminUrl}" style="display:inline-block;padding:10px 20px;background:#7c3aed;color:#fff;text-decoration:none;border-radius:6px;font-weight:600">Review in Admin</a>
         </p>
         <p style="margin-top:32px;border-top:1px solid #e5e7eb;padding-top:16px;font-size:13px;color:#6b7280;">

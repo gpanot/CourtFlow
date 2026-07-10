@@ -19,15 +19,25 @@ export async function POST(req: NextRequest, { params }: Params) {
     const { invoiceId } = await params;
 
     const body = await req.json() as {
-      proofUrl: string;
+      proofUrl?: string | null;
       proofMethod: string;
       proofRef?: string;
       paidAt: string;
     };
 
-    if (!body.proofUrl || !body.proofMethod || !body.paidAt) {
+    if (!body.proofMethod || !body.paidAt) {
       return NextResponse.json(
-        { error: "proofUrl, proofMethod and paidAt are required" },
+        { error: "proofMethod and paidAt are required" },
+        { status: 400 }
+      );
+    }
+
+    // Bank transfer requires a proof document; cash/other do not
+    const proofRequired = body.proofMethod === "bank_transfer";
+    const proofUrl = body.proofUrl?.trim() || null;
+    if (proofRequired && !proofUrl) {
+      return NextResponse.json(
+        { error: "Proof document is required for bank transfer" },
         { status: 400 }
       );
     }
@@ -41,18 +51,25 @@ export async function POST(req: NextRequest, { params }: Params) {
     if (!invoice) {
       return NextResponse.json({ error: "Invoice not found" }, { status: 404 });
     }
-    if (invoice.status !== "pending" && invoice.status !== "overdue") {
+    // Allow re-submission for pending, overdue, and pending_review (correction).
+    // Also allow re-upload on paid invoices so the manager can attach a corrected document.
+    const allowedStatuses = ["pending", "overdue", "pending_review", "paid"];
+    if (!allowedStatuses.includes(invoice.status)) {
       return NextResponse.json(
-        { error: "Proof can only be submitted for pending or overdue invoices" },
+        { error: "Proof cannot be submitted for this invoice status" },
         { status: 400 }
       );
     }
 
+    // If already paid, keep it paid (just update proof for audit trail).
+    // Otherwise move to pending_review.
+    const newStatus = invoice.status === "paid" ? "paid" : "pending_review";
+
     const updated = await prisma.manualBillingInvoice.update({
       where: { id: invoiceId },
       data: {
-        status: "pending_review",
-        proofUrl: body.proofUrl,
+        status: newStatus,
+        proofUrl,
         proofMethod: body.proofMethod,
         proofRef: body.proofRef?.trim() || null,
         proofSubmittedAt: new Date(body.paidAt),
@@ -60,11 +77,11 @@ export async function POST(req: NextRequest, { params }: Params) {
       include: { venue: { select: { name: true } } },
     });
 
-    // Send notification email to billing admin (fire-and-forget)
-    const billingConfig = await prisma.billingConfig.findUnique({
+    // Send notification email to billing admin (fire-and-forget) — only for new submissions
+    const billingConfig = newStatus === "pending_review" ? await prisma.billingConfig.findUnique({
       where: { id: "default" },
       select: { notificationEmail: true },
-    });
+    }) : null;
     if (billingConfig?.notificationEmail) {
       const baseUrl = process.env.NEXTAUTH_URL ?? process.env.APP_URL ?? "https://app.thecourtflow.com";
       void sendBillingProofNotification({
@@ -74,7 +91,7 @@ export async function POST(req: NextRequest, { params }: Params) {
         proofMethod: updated.proofMethod ?? body.proofMethod,
         proofRef: updated.proofRef,
         paidAt: updated.proofSubmittedAt?.toISOString() ?? body.paidAt,
-        proofUrl: `${baseUrl}${updated.proofUrl}`,
+        proofUrl: updated.proofUrl ? `${baseUrl}${updated.proofUrl}` : undefined,
         adminUrl: `${baseUrl}/admin/courtpay-billing/venue/${updated.venueId}`,
       });
     }

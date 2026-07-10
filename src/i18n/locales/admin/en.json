@@ -942,6 +942,8 @@
     "checkIns": "Check-ins",
     "amount": "Amount",
     "status": "Status",
+    "payment": "Payment",
+    "editPayment": "Edit payment details",
     "paidAt": "Paid at",
     "paid": "Paid",
     "pending": "Pending",
@@ -973,11 +975,15 @@
       "reference": "Payment reference (optional)",
       "referencePlaceholder": "e.g. Bank transfer ref #12345",
       "proofLabel": "Proof of payment *",
+      "proofLabelOptional": "Proof of payment (optional)",
       "proofHint": "(image or PDF)",
       "uploadBtn": "Upload proof (image or PDF)",
+      "replaceBtn": "Replace document",
       "uploading": "Uploading…",
       "cancel": "Cancel",
-      "submit": "Submit Payment"
+      "submit": "Submit Payment",
+      "save": "Save Changes",
+      "editTitle": "Edit Payment Details"
     }
   },
   "live": {

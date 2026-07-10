@@ -8,7 +8,7 @@ type Params = { params: Promise<{ venueId: string; invoiceId: string }> };
 
 /**
  * PATCH /api/admin/billing/venue/[venueId]/manual-invoices/[invoiceId]
- * Actions: mark-paid, mark-unpaid, update pdf.
+ * Actions: mark-paid, mark-unpaid, update-payment, update pdf, approve-proof, reject-proof.
  */
 export async function PATCH(req: Request, { params }: Params) {
   try {
@@ -18,6 +18,8 @@ export async function PATCH(req: Request, { params }: Params) {
       action?: string;
       paidMethod?: string;
       paidRef?: string;
+      paidAt?: string;
+      proofUrl?: string | null;
       notes?: string | null;
       pdfUrl?: string | null;
       amount?: number;
@@ -37,10 +39,32 @@ export async function PATCH(req: Request, { params }: Params) {
         where: { id: invoiceId },
         data: {
           status: "paid",
-          paidAt: new Date(),
+          paidAt: body.paidAt ? new Date(body.paidAt) : new Date(),
           paidMethod: body.paidMethod ?? "manual",
           paidRef: body.paidRef?.trim() || null,
           notes: body.notes?.trim() || invoice.notes,
+          ...(body.proofUrl !== undefined && { proofUrl: body.proofUrl }),
+        },
+      });
+      return NextResponse.json(updated);
+    }
+
+    if (body.action === "update-payment") {
+      // Edit payment details on an already-paid invoice
+      if (invoice.status !== "paid") {
+        return NextResponse.json(
+          { error: "Invoice must be paid to update payment details" },
+          { status: 400 }
+        );
+      }
+      const updated = await prisma.manualBillingInvoice.update({
+        where: { id: invoiceId },
+        data: {
+          paidAt: body.paidAt ? new Date(body.paidAt) : invoice.paidAt ?? new Date(),
+          paidMethod: body.paidMethod ?? invoice.paidMethod ?? "manual",
+          paidRef: body.paidRef !== undefined ? (body.paidRef?.trim() || null) : invoice.paidRef,
+          notes: body.notes !== undefined ? (body.notes?.trim() || null) : invoice.notes,
+          ...(body.proofUrl !== undefined && { proofUrl: body.proofUrl }),
         },
       });
       return NextResponse.json(updated);

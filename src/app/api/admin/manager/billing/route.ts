@@ -74,8 +74,16 @@ export async function GET(request: NextRequest) {
       // manual-only fields
       dueDate: null,
       pdfUrl: null,
-      notes: null,
+      notes: inv.comment ?? null,
       invoiceType: inv.invoiceType,
+      // Payment fields
+      paidMethod: inv.confirmedBy ?? null,
+      paymentRef: inv.paymentRef ?? null,
+      // Proof fields (not applicable for auto invoices)
+      proofUrl: null,
+      proofSubmittedAt: null,
+      proofMethod: null,
+      proofRef: null,
     }));
 
     // Normalise manually-created invoices
@@ -96,6 +104,9 @@ export async function GET(request: NextRequest) {
       pdfUrl: inv.pdfUrl,
       notes: inv.notes,
       invoiceType: "manual",
+      // Payment fields (admin-confirmed)
+      paidMethod: inv.paidMethod ?? null,
+      paymentRef: inv.paidRef ?? null,
       // Proof fields (client-submitted payment proof)
       proofUrl: inv.proofUrl,
       proofSubmittedAt: inv.proofSubmittedAt,
