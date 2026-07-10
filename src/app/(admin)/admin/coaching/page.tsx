@@ -713,9 +713,10 @@ const LESSON_PAYMENT_LABELS: Record<string, string> = {
 };
 
 const LESSON_DATE_PRESETS = [
-  { label: "Last 7 days", days: 7 },
-  { label: "Last 30 days", days: 30 },
-  { label: "Last 90 days", days: 90 },
+  { label: "Last 7 days", days: 7, direction: "past" as const },
+  { label: "Last 30 days", days: 30, direction: "past" as const },
+  { label: "Last 90 days", days: 90, direction: "past" as const },
+  { label: "Next 21 days", days: 21, direction: "future" as const },
 ];
 
 function lessonLocalISODate(d: Date): string {
@@ -727,8 +728,9 @@ function lessonLocalISODate(d: Date): string {
 
 function AllLessonsTab({ venueId, initialPaymentFilter = "all" }: { venueId: string; initialPaymentFilter?: string }) {
   const { t } = useTranslation("translation", { i18n: adminI18n });
-  const defaultTo = lessonLocalISODate(new Date());
+  const today = new Date();
   const defaultFrom = lessonLocalISODate(new Date(Date.now() - 30 * 24 * 60 * 60 * 1000));
+  const defaultTo = lessonLocalISODate(new Date(today.getFullYear(), today.getMonth(), today.getDate() + 21));
 
   const [dateFrom, setDateFrom] = useState(defaultFrom);
   const [dateTo, setDateTo] = useState(defaultTo);
@@ -788,9 +790,15 @@ function AllLessonsTab({ venueId, initialPaymentFilter = "all" }: { venueId: str
   useEffect(() => { void fetchRows(); }, [fetchRows]);
   useEffect(() => { setPage(1); }, [venueId, dateFrom, dateTo, statusFilter, paymentFilter, coachFilter, debouncedSearch]);
 
-  const applyPreset = (days: number) => {
-    setDateTo(lessonLocalISODate(new Date()));
-    setDateFrom(lessonLocalISODate(new Date(Date.now() - days * 24 * 60 * 60 * 1000)));
+  const applyPreset = (days: number, direction: "past" | "future") => {
+    const now = new Date();
+    if (direction === "future") {
+      setDateFrom(lessonLocalISODate(now));
+      setDateTo(lessonLocalISODate(new Date(now.getFullYear(), now.getMonth(), now.getDate() + days)));
+    } else {
+      setDateTo(lessonLocalISODate(now));
+      setDateFrom(lessonLocalISODate(new Date(Date.now() - days * 24 * 60 * 60 * 1000)));
+    }
   };
 
   const fmtTime = (iso: string) =>
@@ -858,8 +866,8 @@ function AllLessonsTab({ venueId, initialPaymentFilter = "all" }: { venueId: str
           <Filter className="h-3.5 w-3.5 text-neutral-500 shrink-0" />
           {LESSON_DATE_PRESETS.map((p) => (
             <button
-              key={p.days}
-              onClick={() => applyPreset(p.days)}
+              key={`${p.direction}-${p.days}`}
+              onClick={() => applyPreset(p.days, p.direction)}
               className="rounded-full border border-neutral-700 px-3 py-1 text-xs font-medium text-neutral-400 hover:border-teal-500 hover:text-teal-300 transition-colors"
             >
               {p.label}

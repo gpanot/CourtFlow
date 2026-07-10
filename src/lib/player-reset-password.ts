@@ -110,6 +110,51 @@ function buildActivationEmailHtml(activationUrl: string, playerName: string): st
 }
 
 /**
+ * Wraps a payment URL in an account-setup link for a new, unverified player.
+ *
+ * Instead of: booking email → Pay now → payment page (fails — not logged in)
+ * This creates:  booking email → Pay now → /book/auth/setup-password → set password
+ *                → auto sign-in → payment page
+ *
+ * Uses the same PlayerPasswordResetToken infrastructure as the regular reset flow,
+ * but routes through the setup-password page with a 72-hour TTL.
+ *
+ * @param playerId   Prisma Player.id
+ * @param paymentUrl Absolute payment URL (e.g. https://…/book/pay/:id)
+ * @returns          The setup-password URL (or bare paymentUrl on error)
+ */
+export async function wrapPaymentUrlForNewPlayer(
+  playerId: string,
+  paymentUrl: string
+): Promise<string> {
+  try {
+    const url = new URL(paymentUrl);
+    const redirectTo = url.pathname + url.search;
+
+    const jti = randomUUID();
+    const expiresAt = new Date(Date.now() + ACTIVATION_TOKEN_TTL_SECONDS * 1000);
+    const payload: ResetTokenPayload = {
+      playerId,
+      type: TOKEN_TYPE_RESET,
+      jti,
+    };
+    const token = jwt.sign(payload, PLAYER_JWT_SECRET, {
+      expiresIn: ACTIVATION_TOKEN_TTL_SECONDS,
+    });
+
+    await prisma.playerPasswordResetToken.create({
+      data: { id: randomUUID(), playerId, jti, expiresAt },
+    });
+
+    const baseUrl = getBaseUrl();
+    return `${baseUrl}/book/auth/setup-password?token=${encodeURIComponent(token)}&next=${encodeURIComponent(redirectTo)}`;
+  } catch (err) {
+    console.warn("[wrapPaymentUrlForNewPlayer] Failed to create setup token — using bare URL:", err);
+    return paymentUrl;
+  }
+}
+
+/**
  * Send an account activation email to a player whose account was just created
  * by a staff member. Uses the same player_password_reset_tokens table as the
  * regular reset flow, but with a 72-hour TTL and welcome-flavored copy.

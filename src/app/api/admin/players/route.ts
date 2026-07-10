@@ -442,6 +442,8 @@ export async function POST(request: NextRequest) {
       skillLevel?: string;
       avatar?: string;
       email?: string;
+      venueId?: string;
+      skipActivationEmail?: boolean;
     }>(request);
 
     if (!body.name?.trim()) return error("Name is required", 400);
@@ -481,11 +483,15 @@ export async function POST(request: NextRequest) {
         avatar: body.avatar || "🏓",
         rankingScore: initialRankingScoreForSkillLevel(skill),
         registrationAt: new Date(),
+        ...(body.venueId ? { registrationVenueId: body.venueId } : {}),
       },
     });
 
     // If email provided, create a portal account with a random password hash.
     // The player sets their own password via the activation email.
+    // When skipActivationEmail=true (e.g. staff booking flow), the booking
+    // confirmation email (with the Pay now CTA) acts as the account setup invite —
+    // no separate activation email is sent.
     if (normalizedEmail) {
       const randomHash = await bcrypt.hash(randomUUID(), 12);
       await prisma.playerAccount.create({
@@ -499,8 +505,13 @@ export async function POST(request: NextRequest) {
           emailVerified: false,
         },
       });
-      sendAccountActivationEmail(player.id, normalizedEmail, player.name ?? "")
-        .catch((e) => console.error("[POST /api/admin/players] activation email failed:", (e as Error).message));
+      const skipActivation = body.skipActivationEmail === true;
+      if (!skipActivation) {
+        sendAccountActivationEmail(player.id, normalizedEmail, player.name ?? "")
+          .catch((e) => console.error("[POST /api/admin/players] activation email failed:", (e as Error).message));
+      } else {
+        console.log(`[POST /api/admin/players] skipActivationEmail=true for ${normalizedEmail} — booking email will serve as activation`);
+      }
     }
 
     enqueueStickerJobIfNeeded(player.id, player.gender).catch(console.error);

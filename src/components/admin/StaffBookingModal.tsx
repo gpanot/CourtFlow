@@ -1602,6 +1602,7 @@ export function StaffBookingModal({
       {showNewPlayerModal && (
         <div onClick={(e) => e.stopPropagation()}>
           <NewPlayerModal
+            venueId={venueId}
             onSuccess={(p) => {
               setSelectedPlayer(p);
               setPlayerCreatedInSession(true);
@@ -1620,9 +1621,11 @@ export function StaffBookingModal({
 // ─── New Player Modal ──────────────────────────────────────────────────────────
 
 function NewPlayerModal({
+  venueId,
   onSuccess,
   onClose,
 }: {
+  venueId: string;
   onSuccess: (player: PlayerResult) => void;
   onClose: () => void;
 }) {
@@ -1654,6 +1657,10 @@ function NewPlayerModal({
         email: form.email.trim().toLowerCase(),
         gender: form.gender,
         skillLevel: form.skillLevel,
+        venueId,
+        // Suppress the standalone activation email — the booking confirmation
+        // email (with Pay now CTA) acts as the account setup invitation.
+        skipActivationEmail: true,
       });
       onSuccess({ id: player.id, name: player.name, phone: player.phone, email: form.email.trim().toLowerCase() });
     } catch (e) {
@@ -1719,7 +1726,7 @@ function NewPlayerModal({
               placeholder="e.g. player@email.com"
               className="w-full rounded-lg border border-neutral-700 bg-neutral-800 px-3 py-2 text-sm text-white placeholder:text-neutral-600 focus:border-purple-500 focus:outline-none"
             />
-            <p className="mt-1 text-[11px] text-neutral-500">An invite to set up their account will be sent to this address</p>
+            <p className="mt-1 text-[11px] text-neutral-500">The booking confirmation email will include a link to set up their account</p>
           </div>
           <div>
             <label className="mb-1.5 block text-xs font-medium text-neutral-300">Gender</label>

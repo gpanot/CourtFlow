@@ -3,6 +3,7 @@ import { json, error } from "@/lib/api-helpers";
 import { consumePasswordResetToken, PasswordResetError } from "@/lib/player-reset-password";
 import { prisma } from "@/lib/db";
 import bcrypt from "bcryptjs";
+import { signPlayerToken } from "@/app/api/public/auth/login/route";
 
 export async function POST(request: NextRequest) {
   try {
@@ -36,12 +37,25 @@ export async function POST(request: NextRequest) {
       select: { id: true, providerAccountId: true },
     });
 
+    if (!account) {
+      console.error("[reset-password/confirm] No credentials account found for playerId:", playerId);
+      return error("Account not found.", 400);
+    }
+
     await prisma.playerAccount.update({
-      where: { id: account!.id },
+      where: { id: account.id },
       data: { passwordHash, emailVerified: true },
     });
 
-    return json({ ok: true, email: account?.providerAccountId ?? null });
+    // Issue a session token so the caller can sign the player in immediately
+    // (used by the /book/auth/setup-password page to auto-sign-in after account setup).
+    const sessionToken = signPlayerToken({
+      playerId,
+      email: account.providerAccountId,
+      type: "player_credentials",
+    });
+
+    return json({ ok: true, email: account.providerAccountId, sessionToken });
   } catch (e) {
     console.error("[reset-password/confirm] error:", (e as Error).message);
     return error("Something went wrong. Please try again.", 500);

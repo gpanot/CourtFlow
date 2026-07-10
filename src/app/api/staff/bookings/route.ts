@@ -11,6 +11,7 @@ import {
 } from "@/lib/booking";
 import { attachBookingToOpenBill, getPlayerOpenBillAccount } from "@/lib/open-bill";
 import { sendBookingEmail, wrapPaymentUrlWithMagicLogin } from "@/lib/email/send";
+import { wrapPaymentUrlForNewPlayer } from "@/lib/player-reset-password";
 
 export const dynamic = "force-dynamic";
 
@@ -163,10 +164,22 @@ export async function POST(request: NextRequest) {
     if (booking.player.email && !openBillAccount) {
       const appUrl = process.env.APP_URL ?? "";
       const rawPaymentUrl = `${appUrl}/book/pay/${booking.id}`;
-      const paymentUrl = await wrapPaymentUrlWithMagicLogin(booking.player.id, rawPaymentUrl);
+
+      // Check if the player has a verified account — if not, this is a new player
+      // and the "Pay now" link must route through account setup first.
+      const playerAccount = await prisma.playerAccount.findFirst({
+        where: { playerId: booking.player.id, provider: "credentials" },
+        select: { emailVerified: true },
+      });
+      const isNewUnverifiedPlayer = !playerAccount || playerAccount.emailVerified === false;
+
+      const paymentUrl = isNewUnverifiedPlayer
+        ? await wrapPaymentUrlForNewPlayer(booking.player.id, rawPaymentUrl)
+        : await wrapPaymentUrlWithMagicLogin(booking.player.id, rawPaymentUrl);
+
       const dateStr = booking.date.toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" });
       const timeStr = `${booking.startTime.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })} – ${booking.endTime.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}`;
-      console.log(`[staffBooking] sending confirmation email to=${booking.player.email} paymentUrl=${rawPaymentUrl}`);
+      console.log(`[staffBooking] sending confirmation email to=${booking.player.email} paymentUrl=${rawPaymentUrl} isNewUnverifiedPlayer=${isNewUnverifiedPlayer}`);
       void sendBookingEmail({
         to: booking.player.email,
         playerName: booking.player.name,

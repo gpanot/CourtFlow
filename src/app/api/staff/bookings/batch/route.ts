@@ -12,6 +12,7 @@ import {
   type PricingMatrix,
 } from "@/lib/booking";
 import { sendBookingEmail, wrapPaymentUrlWithMagicLogin } from "@/lib/email/send";
+import { wrapPaymentUrlForNewPlayer } from "@/lib/player-reset-password";
 export const dynamic = "force-dynamic";
 
 export async function POST(request: NextRequest) {
@@ -170,8 +171,18 @@ export async function POST(request: NextRequest) {
         `${result.group.endTime.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}`;
       // Link to the first booking so the player can pay
       const rawPaymentUrl = `${appUrl}/book/pay/${result.bookings[0].id}`;
-      const paymentUrl = await wrapPaymentUrlWithMagicLogin(body.playerId, rawPaymentUrl);
-      console.log(`[staffBatchBooking] sending email to=${player.email} courts="${courtLabels}" paymentUrl=${rawPaymentUrl}`);
+
+      // Check if the player has a verified account — if not, route through setup-password
+      const playerAccount = await prisma.playerAccount.findFirst({
+        where: { playerId: body.playerId, provider: "credentials" },
+        select: { emailVerified: true },
+      });
+      const isNewUnverifiedPlayer = !playerAccount || playerAccount.emailVerified === false;
+      const paymentUrl = isNewUnverifiedPlayer
+        ? await wrapPaymentUrlForNewPlayer(body.playerId, rawPaymentUrl)
+        : await wrapPaymentUrlWithMagicLogin(body.playerId, rawPaymentUrl);
+
+      console.log(`[staffBatchBooking] sending email to=${player.email} courts="${courtLabels}" paymentUrl=${rawPaymentUrl} isNewUnverifiedPlayer=${isNewUnverifiedPlayer}`);
       void sendBookingEmail({
         to: player.email,
         playerName: player.name,
