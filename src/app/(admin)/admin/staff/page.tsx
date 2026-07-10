@@ -357,7 +357,7 @@ export default function StaffPage() {
       {(modalMode === "create" || modalMode === "edit") && (
         <div className="fixed inset-0 z-50 flex items-end md:items-center justify-center bg-black/60" onClick={closeModal}>
           <div
-            className="w-full max-w-md rounded-t-2xl md:rounded-2xl border border-neutral-700 bg-neutral-900 p-5 md:p-6 pb-[calc(1.25rem+env(safe-area-inset-bottom))] md:pb-6 max-h-[85dvh] overflow-y-auto"
+            className="w-full max-w-[33.6rem] rounded-t-2xl md:rounded-2xl border border-neutral-700 bg-neutral-900 p-5 md:p-6 pb-[calc(1.25rem+env(safe-area-inset-bottom))] md:pb-6 max-h-[85dvh] overflow-y-auto"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex items-center justify-between mb-4">
