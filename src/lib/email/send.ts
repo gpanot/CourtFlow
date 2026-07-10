@@ -447,7 +447,7 @@ async function buildCourtInvoiceAttachment(
   }
 
   try {
-    // Dynamic import via eval keeps TSC from resolving the JSX module during server build
+    // Use Function() to prevent TSC (server build, no jsx) from statically resolving the .tsx module
     // eslint-disable-next-line @typescript-eslint/no-implied-eval, no-new-func, @typescript-eslint/no-explicit-any
     const { loadBookingInvoiceData, renderInvoicePdfBuffer } = await (Function('return import("../invoice-pdf-data")')() as Promise<any>);
     const data = await loadBookingInvoiceData(bookingId);
