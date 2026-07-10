@@ -172,20 +172,20 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
           return;
         }
         const allAccess = data.venues.flatMap((v) => v.appAccess ?? []);
-        // For staff: courtpass_staff/courtpay_staff gate individual nav items.
-        // For managers the flags stay true (all items always visible).
+        // For staff: courtpass_staff/courtpay_staff restrict which nav items are shown.
+        // If NEITHER flag is present the staff account is unrestricted (backward compat).
+        // If at least one flag is present, only the flagged sections are visible.
         const isStaffRole = role === "staff";
+        const hasAnyRestriction = isStaffRole && allAccess.some(
+          (a) => a === "courtpass_staff" || a === "courtpay_staff"
+        );
         setAppAccess({
           hasCourtflow: allAccess.includes("courtflow"),
           hasCourtpay: allAccess.includes("courtpay"),
-          // staff-only: if neither courtpass_staff nor courtpay_staff is set, default both to true
-          // so existing staff accounts without these flags keep full access (backward compat).
-          hasCourtpassStaff: !isStaffRole || !allAccess.some((a) => a === "courtpass_staff" || a === "courtpay_staff")
-            ? true
-            : allAccess.includes("courtpass_staff"),
-          hasCourtpayStaff: !isStaffRole || !allAccess.some((a) => a === "courtpass_staff" || a === "courtpay_staff")
-            ? true
-            : allAccess.includes("courtpay_staff"),
+          // When restricted: only show the section if the matching flag is present.
+          // When unrestricted (no flags, or non-staff role): show everything.
+          hasCourtpassStaff: !hasAnyRestriction || allAccess.includes("courtpass_staff"),
+          hasCourtpayStaff: !hasAnyRestriction || allAccess.includes("courtpay_staff"),
         });
         if (role === "staff") {
           setStaffAdminGranted(allAccess.includes("admin"));
