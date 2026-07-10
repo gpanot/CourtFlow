@@ -447,8 +447,9 @@ async function buildCourtInvoiceAttachment(
   }
 
   try {
-    // Dynamic import via path alias to allow JSX rendering in a non-JSX server file.
-    // The alias is resolved by Next.js at bundle time, so the chunk path is always correct.
+    // Dynamic import via alias. tsconfig.server.json now includes "jsx": "react-jsx" so
+    // it can type-check this .tsx module without errors. Next.js resolves the @/ alias
+    // at bundle time so the correct chunk path is always used at runtime.
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const { loadBookingInvoiceData, renderInvoicePdfBuffer } = await import("@/lib/invoice-pdf-data") as any;
     const data = await loadBookingInvoiceData(bookingId);
