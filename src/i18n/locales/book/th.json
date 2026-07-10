@@ -371,7 +371,12 @@
     "upcomingCount": "{{count}} ที่จะมาถึง",
     "myVenue": "สถานที่",
     "noVenueSelected": "ยังไม่ได้เลือกสถานที่",
-    "signOut": "ออกจากระบบ"
+    "signOut": "ออกจากระบบ",
+    "signOutConfirmTitle": "ออกจากระบบ?",
+    "signOutConfirmBody": "คุณจะต้องเข้าสู่ระบบอีกครั้งเพื่อจองสนาม",
+    "signOutContinue": "ดำเนินการต่อ",
+    "signOutSureTitle": "แน่ใจหรือไม่?",
+    "signOutSureBody": "การดำเนินการนี้จะออกจากระบบ CourtPass บนอุปกรณ์นี้"
   },
   "editProfile": {
     "title": "แก้ไขโปรไฟล์",

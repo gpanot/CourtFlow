@@ -9,6 +9,7 @@ import { signOutToIntro } from "../../lib/sign-out-to-intro";
 import { useTheme, type ThemePalette } from "../../components/ThemeProvider";
 import { AvatarPhotoCropper } from "@/components/avatar-photo-cropper";
 import { BookScreenTopBar } from "../../components/BookScreenTopBar";
+import { SignOutIconButton } from "../../components/SignOutConfirm";
 import { useTranslation } from "react-i18next";
 import { BOOK_LANGUAGES, persistBookLanguage, type BookLanguageCode } from "@/i18n/book-i18n";
 import { usePlayerVenue } from "../../components/PlayerVenueContext";
@@ -268,7 +269,7 @@ export default function EditProfilePage() {
   }
 
   return (
-    <div className="px-6 pt-4 pb-8">
+    <div className="px-4 pb-8">
       <BookScreenTopBar
         title={t("editProfile.title")}
         onBack={() => router.back()}
@@ -282,10 +283,11 @@ export default function EditProfilePage() {
               }
             : undefined
         }
+        right={<SignOutIconButton />}
       />
 
       {/* Avatar */}
-      <div className="flex flex-col items-center mb-5">
+      <div className="flex flex-col items-center mb-5 mt-4">
         <button
           onClick={() => fileRef.current?.click()}
           className="relative w-16 h-16 rounded-full overflow-hidden border-2 border-[var(--cm-border)] hover:border-[var(--cm-accent)] transition-colors"

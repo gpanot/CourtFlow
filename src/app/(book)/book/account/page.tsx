@@ -2,7 +2,6 @@
 export const dynamic = "force-dynamic";
 
 import { usePlayerSession } from "../components/usePlayerSession";
-import { signOutToIntro } from "../lib/sign-out-to-intro";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import Link from "next/link";
@@ -138,13 +137,6 @@ export default function AccountPage() {
         </div>
         <span className="text-[var(--cm-text-muted)]">→</span>
       </Link>
-
-      <button
-        onClick={() => signOutToIntro()}
-        className="w-full mt-4 py-3 bg-[var(--cm-bg-surface)] border border-[var(--cm-border)] text-[var(--cm-text-sec)] rounded-xl text-sm font-medium hover:opacity-80 transition-opacity"
-      >
-        {t("account.signOut")}
-      </button>
       </div>
     </div>
   );

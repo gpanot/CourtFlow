@@ -393,7 +393,12 @@
     "upcomingCount": "{{count}} upcoming",
     "myVenue": "My Venue",
     "noVenueSelected": "No venue selected",
-    "signOut": "Sign Out"
+    "signOut": "Sign Out",
+    "signOutConfirmTitle": "Sign out?",
+    "signOutConfirmBody": "You’ll need to sign in again to book courts.",
+    "signOutContinue": "Continue",
+    "signOutSureTitle": "Are you sure?",
+    "signOutSureBody": "This will sign you out of CourtPass on this device."
   },
   "editProfile": {
     "title": "Edit Profile",

@@ -393,7 +393,12 @@
     "upcomingCount": "{{count}} sắp tới",
     "myVenue": "Địa điểm",
     "noVenueSelected": "Chưa chọn địa điểm",
-    "signOut": "Đăng xuất"
+    "signOut": "Đăng xuất",
+    "signOutConfirmTitle": "Đăng xuất?",
+    "signOutConfirmBody": "Bạn sẽ cần đăng nhập lại để đặt sân.",
+    "signOutContinue": "Tiếp tục",
+    "signOutSureTitle": "Bạn chắc chắn?",
+    "signOutSureBody": "Thao tác này sẽ đăng xuất khỏi CourtPass trên thiết bị này."
   },
   "editProfile": {
     "title": "Sửa hồ sơ",
