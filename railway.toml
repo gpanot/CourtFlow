@@ -5,19 +5,14 @@ buildCommand = "echo 'Using Dockerfile'"
 [deploy]
 releaseCommand = "npx prisma migrate deploy"
 
-# ── Railway Cron Jobs ──────────────────────────────────────────────────────────
-# Configure these as separate Railway "Cron" services in the Railway dashboard.
-# Each cron calls the app URL with Authorization: Bearer $CRON_SECRET
+# ── Consolidated Cron Scheduler ───────────────────────────────────────────────
+# One always-on Railway service runs all scheduled jobs.
+# Service name: cron-scheduler
+# Start command: node cron/scheduler.mjs
+# Env vars: BASE_URL=https://courtpass.thecourtflow.com, CRON_SECRET
 #
-#  expire-holds         → GET /api/cron/expire-holds           every minute  (* * * * *)
-#    Hard-deletes pending booking/open-play holds whose holdExpiresAt has passed,
-#    immediately freeing slots for re-booking.
-#
-#  auto-close-sessions  → GET /api/cron/auto-close-sessions   every hour  (0 * * * *)
-#    Closes sessions that have been open for more than 6 hours.
-#
-#  generate-invoices    → GET /api/cron/generate-invoices      Mon 00:01  (1 0 * * 1)
-#    Generates weekly billing invoices and marks overdue ones.
-#
-#  open-bill-aging      → GET /api/cron/open-bill-aging        daily 02:00  (0 2 * * *)
-#    Auto-issues open bills on the 1st of month, marks overdue, sends escalation events.
+# Internal schedule (all handled by cron/scheduler.mjs):
+#   expire-holds         every minute   — deletes expired booking/open-play holds
+#   auto-close-sessions  every hour     — closes sessions open > 6 hours
+#   open-bill-aging      daily 02:00    — auto-issues open bills, marks overdue
+#   generate-invoices    Mon 00:01      — generates weekly/monthly billing invoices
