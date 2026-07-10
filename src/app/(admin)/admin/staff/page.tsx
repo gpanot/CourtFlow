@@ -559,9 +559,45 @@ export default function StaffPage() {
                                 Courtpass (Admin)
                               </button>
                             )}
+                            {/* CourtPass Staff & CourtPay Staff — staff-only page-level access restrictions */}
+                            {!isManagerOrAbove && (
+                              <>
+                                <button
+                                  type="button"
+                                  onClick={() => toggleVenueApp(vid, "courtpass_staff")}
+                                  className={cn(
+                                    "flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-sm transition-colors",
+                                    apps.includes("courtpass_staff")
+                                      ? "border-violet-500 bg-violet-600/20 text-violet-300"
+                                      : "border-neutral-700 text-neutral-400 hover:border-neutral-500"
+                                  )}
+                                >
+                                  {apps.includes("courtpass_staff") && <Check className="h-3 w-3" />}
+                                  CourtPass Staff
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => toggleVenueApp(vid, "courtpay_staff")}
+                                  className={cn(
+                                    "flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-sm transition-colors",
+                                    apps.includes("courtpay_staff")
+                                      ? "border-sky-500 bg-sky-600/20 text-sky-300"
+                                      : "border-neutral-700 text-neutral-400 hover:border-neutral-500"
+                                  )}
+                                >
+                                  {apps.includes("courtpay_staff") && <Check className="h-3 w-3" />}
+                                  CourtPay Staff
+                                </button>
+                              </>
+                            )}
                           </div>
                           {isManagerOrAbove && (
                             <p className="mt-1.5 text-[10px] text-neutral-600">Admin panel access is always granted to managers.</p>
+                          )}
+                          {!isManagerOrAbove && (apps.includes("courtpass_staff") || apps.includes("courtpay_staff")) && (
+                            <p className="mt-1.5 text-[10px] text-neutral-500">
+                              CourtPass Staff restricts access to CourtPass pages only. CourtPay Staff restricts to CP Players &amp; Analytics only.
+                            </p>
                           )}
                         </div>
                       );

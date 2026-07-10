@@ -20,6 +20,8 @@ interface NavItem {
   icon: React.ComponentType<{ className?: string }>;
   superadminOnly?: boolean;
   requiresApp?: "courtflow" | "courtpay";
+  /** For staff role: item only shown when this specific access kind is granted. */
+  requiresAccess?: "courtpass_staff" | "courtpay_staff";
 }
 
 interface NavSection {
@@ -33,15 +35,15 @@ const navSections: NavSection[] = [
   {
     label: "nav.courtpassBooking",
     items: [
-      { href: "/admin", label: "nav.overview", icon: LayoutDashboard },
-      { href: "/admin/venues", label: "nav.venues", icon: MapPin },
+      { href: "/admin", label: "nav.overview", icon: LayoutDashboard, requiresAccess: "courtpass_staff" },
+      { href: "/admin/venues", label: "nav.venues", icon: MapPin, requiresAccess: "courtpass_staff" },
       { href: "/admin/organizations", label: "nav.organizations", icon: Building2, superadminOnly: true },
-      { href: "/admin/bookings", label: "nav.bookings", icon: CalendarDays },
-      { href: "/admin/coaching", label: "nav.coaching", icon: GraduationCap },
-      { href: "/admin/memberships", label: "nav.memberships", icon: Crown },
+      { href: "/admin/bookings", label: "nav.bookings", icon: CalendarDays, requiresAccess: "courtpass_staff" },
+      { href: "/admin/coaching", label: "nav.coaching", icon: GraduationCap, requiresAccess: "courtpass_staff" },
+      { href: "/admin/memberships", label: "nav.memberships", icon: Crown, requiresAccess: "courtpass_staff" },
       { href: "/admin/program-passes", label: "nav.programPasses", icon: Ticket, superadminOnly: true },
       { href: "/admin/company-accounts", label: "nav.companyAccounts", icon: Briefcase, superadminOnly: true },
-      { href: "/admin/courtpass-players", label: "nav.courtpassPlayers", icon: UserCircle },
+      { href: "/admin/courtpass-players", label: "nav.courtpassPlayers", icon: UserCircle, requiresAccess: "courtpass_staff" },
       { href: "/admin/staff", label: "nav.staff", icon: Users },
       { href: "/admin/venue-analytics", label: "nav.venueAnalytics", icon: PieChart },
       { href: "/admin/my-billing", label: "nav.myBilling", icon: Wallet, superadminOnly: false },
@@ -63,10 +65,10 @@ const navSections: NavSection[] = [
     requiresApp: "courtpay",
     items: [
       { href: "/admin/courtpay", label: "nav.courtpay", icon: CreditCard },
-      { href: "/admin/courtpay-players", label: "nav.cpPlayers", icon: UserCircle },
+      { href: "/admin/courtpay-players", label: "nav.cpPlayers", icon: UserCircle, requiresAccess: "courtpay_staff" },
       { href: "/admin/courtpay-billing", label: "nav.cpBilling", icon: Receipt, superadminOnly: true },
       { href: "/admin/kiosk-shop", label: "nav.kioskShop", icon: ShoppingBag, superadminOnly: true },
-      { href: "/admin/courtpay-analytics", label: "nav.cpAnalytics", icon: BarChart3 },
+      { href: "/admin/courtpay-analytics", label: "nav.cpAnalytics", icon: BarChart3, requiresAccess: "courtpay_staff" },
       { href: "/admin/courtpay-settings", label: "nav.cpSettings", icon: Settings },
     ],
   },
@@ -83,20 +85,38 @@ const navSections: NavSection[] = [
 
 function getFilteredNav(
   userRole: string,
-  appAccess: { hasCourtflow: boolean; hasCourtpay: boolean } = { hasCourtflow: true, hasCourtpay: true }
+  appAccess: {
+    hasCourtflow: boolean;
+    hasCourtpay: boolean;
+    hasCourtpassStaff: boolean;
+    hasCourtpayStaff: boolean;
+  } = { hasCourtflow: true, hasCourtpay: true, hasCourtpassStaff: true, hasCourtpayStaff: true }
 ) {
   const isSuperAdmin = userRole === "superadmin";
-  // Superadmins always see everything; managers are gated by their venue app access
+  const isStaff = userRole === "staff";
+
+  // Superadmins/managers always see all sections; staff gated by venue app access
   const appFilter = (app: "courtflow" | "courtpay" | undefined) => {
     if (isSuperAdmin || !app) return true;
     return app === "courtflow" ? appAccess.hasCourtflow : appAccess.hasCourtpay;
+  };
+
+  // For staff: items tagged with requiresAccess are only shown when that access is granted.
+  // Managers and superadmins always see all items (requiresAccess is irrelevant for them).
+  const accessFilter = (requiresAccess: "courtpass_staff" | "courtpay_staff" | undefined) => {
+    if (!isStaff || !requiresAccess) return true;
+    return requiresAccess === "courtpass_staff"
+      ? appAccess.hasCourtpassStaff
+      : appAccess.hasCourtpayStaff;
   };
 
   const filteredSections = navSections
     .filter((section) => (isSuperAdmin || !section.superadminOnly) && appFilter(section.requiresApp))
     .map((section) => ({
       ...section,
-      items: section.items.filter((item) => isSuperAdmin || !item.superadminOnly),
+      items: section.items.filter(
+        (item) => (isSuperAdmin || !item.superadminOnly) && accessFilter(item.requiresAccess)
+      ),
     }))
     .filter((section) => section.items.length > 0);
   const allItems = filteredSections.flatMap((s) => s.items);
@@ -129,7 +149,12 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
     try { return JSON.parse(localStorage.getItem("admin-nav-sections") || "{}"); } catch { return {}; }
   });
   // App access flags derived from the manager's venue assignments (superadmins always have both)
-  const [appAccess, setAppAccess] = useState({ hasCourtflow: true, hasCourtpay: true });
+  const [appAccess, setAppAccess] = useState({
+    hasCourtflow: true,
+    hasCourtpay: true,
+    hasCourtpassStaff: true,
+    hasCourtpayStaff: true,
+  });
   // null = loading (only relevant for staff role); true/false = resolved
   const [staffAdminGranted, setStaffAdminGranted] = useState<boolean | null>(
     isAdminRole(role) ? true : null
@@ -147,9 +172,20 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
           return;
         }
         const allAccess = data.venues.flatMap((v) => v.appAccess ?? []);
+        // For staff: courtpass_staff/courtpay_staff gate individual nav items.
+        // For managers the flags stay true (all items always visible).
+        const isStaffRole = role === "staff";
         setAppAccess({
           hasCourtflow: allAccess.includes("courtflow"),
           hasCourtpay: allAccess.includes("courtpay"),
+          // staff-only: if neither courtpass_staff nor courtpay_staff is set, default both to true
+          // so existing staff accounts without these flags keep full access (backward compat).
+          hasCourtpassStaff: !isStaffRole || !allAccess.some((a) => a === "courtpass_staff" || a === "courtpay_staff")
+            ? true
+            : allAccess.includes("courtpass_staff"),
+          hasCourtpayStaff: !isStaffRole || !allAccess.some((a) => a === "courtpass_staff" || a === "courtpay_staff")
+            ? true
+            : allAccess.includes("courtpay_staff"),
         });
         if (role === "staff") {
           setStaffAdminGranted(allAccess.includes("admin"));

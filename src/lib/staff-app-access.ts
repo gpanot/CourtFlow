@@ -1,7 +1,7 @@
 /** Values stored per staff–venue assignment and returned to clients. */
-export type StaffAppAccessKind = "courtflow" | "courtpay" | "admin";
+export type StaffAppAccessKind = "courtflow" | "courtpay" | "admin" | "courtpass_staff" | "courtpay_staff";
 
-const ALLOWED = new Set<StaffAppAccessKind>(["courtflow", "courtpay", "admin"]);
+const ALLOWED = new Set<StaffAppAccessKind>(["courtflow", "courtpay", "admin", "courtpass_staff", "courtpay_staff"]);
 
 export function normalizeAppAccess(raw: string[] | undefined | null): StaffAppAccessKind[] {
   const list = (raw ?? [])
