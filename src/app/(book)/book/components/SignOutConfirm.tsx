@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { createPortal } from "react-dom";
 import { LogOut } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { signOutToIntro } from "../lib/sign-out-to-intro";
@@ -28,6 +29,62 @@ export function SignOutIconButton({ className }: SignOutIconButtonProps) {
     }
   }
 
+  const dialog =
+    step !== "closed" ? (
+      <div
+        className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 px-6"
+        onClick={() => !busy && setStep("closed")}
+      >
+        <div
+          className="w-full max-w-sm rounded-2xl bg-[var(--cm-sheet-bg)] border border-[var(--cm-border)] p-5 shadow-[var(--cm-shadow)]"
+          onClick={(e) => e.stopPropagation()}
+        >
+          <div className="flex items-center gap-3 mb-3">
+            <div className="flex h-10 w-10 items-center justify-center rounded-full bg-[var(--cm-red)]/10 text-[var(--cm-red)]">
+              <LogOut className="h-5 w-5" />
+            </div>
+            <div>
+              <p className="text-base font-semibold text-[var(--cm-text)]">
+                {step === "confirm" ? t("account.signOutConfirmTitle") : t("account.signOutSureTitle")}
+              </p>
+              <p className="text-sm text-[var(--cm-text-sec)] mt-0.5">
+                {step === "confirm" ? t("account.signOutConfirmBody") : t("account.signOutSureBody")}
+              </p>
+            </div>
+          </div>
+
+          <div className="flex gap-2 mt-4">
+            <button
+              type="button"
+              disabled={busy}
+              onClick={() => setStep("closed")}
+              className="flex-1 py-2.5 rounded-xl border border-[var(--cm-border)] bg-[var(--cm-bg-card)] text-sm font-semibold text-[var(--cm-text-sec)]"
+            >
+              {t("common.cancel")}
+            </button>
+            {step === "confirm" ? (
+              <button
+                type="button"
+                onClick={() => setStep("sure")}
+                className="flex-1 py-2.5 rounded-xl bg-[var(--cm-accent)] text-black text-sm font-semibold"
+              >
+                {t("account.signOutContinue")}
+              </button>
+            ) : (
+              <button
+                type="button"
+                disabled={busy}
+                onClick={() => void handleFinalSignOut()}
+                className="flex-1 py-2.5 rounded-xl bg-[var(--cm-red)] text-white text-sm font-semibold disabled:opacity-60"
+              >
+                {busy ? t("common.loading") : t("account.signOut")}
+              </button>
+            )}
+          </div>
+        </div>
+      </div>
+    ) : null;
+
   return (
     <>
       <button
@@ -42,60 +99,10 @@ export function SignOutIconButton({ className }: SignOutIconButtonProps) {
         <LogOut className="h-5 w-5" strokeWidth={2} />
       </button>
 
-      {step !== "closed" && (
-        <div
-          className="fixed inset-0 z-[70] flex items-center justify-center bg-black/50 px-6"
-          onClick={() => !busy && setStep("closed")}
-        >
-          <div
-            className="w-full max-w-sm rounded-2xl bg-[var(--cm-sheet-bg)] border border-[var(--cm-border)] p-5 shadow-[var(--cm-shadow)]"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="flex items-center gap-3 mb-3">
-              <div className="flex h-10 w-10 items-center justify-center rounded-full bg-[var(--cm-red)]/10 text-[var(--cm-red)]">
-                <LogOut className="h-5 w-5" />
-              </div>
-              <div>
-                <p className="text-base font-semibold text-[var(--cm-text)]">
-                  {step === "confirm" ? t("account.signOutConfirmTitle") : t("account.signOutSureTitle")}
-                </p>
-                <p className="text-sm text-[var(--cm-text-sec)] mt-0.5">
-                  {step === "confirm" ? t("account.signOutConfirmBody") : t("account.signOutSureBody")}
-                </p>
-              </div>
-            </div>
-
-            <div className="flex gap-2 mt-4">
-              <button
-                type="button"
-                disabled={busy}
-                onClick={() => setStep("closed")}
-                className="flex-1 py-2.5 rounded-xl border border-[var(--cm-border)] bg-[var(--cm-bg-card)] text-sm font-semibold text-[var(--cm-text-sec)]"
-              >
-                {t("common.cancel")}
-              </button>
-              {step === "confirm" ? (
-                <button
-                  type="button"
-                  onClick={() => setStep("sure")}
-                  className="flex-1 py-2.5 rounded-xl bg-[var(--cm-accent)] text-black text-sm font-semibold"
-                >
-                  {t("account.signOutContinue")}
-                </button>
-              ) : (
-                <button
-                  type="button"
-                  disabled={busy}
-                  onClick={() => void handleFinalSignOut()}
-                  className="flex-1 py-2.5 rounded-xl bg-[var(--cm-red)] text-white text-sm font-semibold disabled:opacity-60"
-                >
-                  {busy ? t("common.loading") : t("account.signOut")}
-                </button>
-              )}
-            </div>
-          </div>
-        </div>
-      )}
+      {/* Portal out of the fixed top bar so fixed inset-0 centers on the viewport */}
+      {typeof document !== "undefined" && dialog
+        ? createPortal(dialog, document.body)
+        : null}
     </>
   );
 }
