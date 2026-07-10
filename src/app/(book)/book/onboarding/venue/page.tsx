@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { usePlayerSession } from "../../components/usePlayerSession";
+import { usePlayerVenue } from "../../components/PlayerVenueContext";
 
 interface PortalVenue {
   id: string;
@@ -16,6 +17,7 @@ interface PortalVenue {
 
 export default function OnboardingVenuePage() {
   const { session, status } = usePlayerSession();
+  const { refresh: refreshVenue } = usePlayerVenue();
   const router = useRouter();
   const { t } = useTranslation();
 
@@ -64,6 +66,7 @@ export default function OnboardingVenuePage() {
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || t("onboarding.errors.saveFailed"));
+      refreshVenue();
       router.push("/book");
     } catch (e) {
       setError((e as Error).message);

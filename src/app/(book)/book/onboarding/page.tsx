@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { useEffect, useState, useCallback, useRef, Suspense } from "react";
 import { useTranslation } from "react-i18next";
 import { usePlayerSession } from "../components/usePlayerSession";
+import { usePlayerVenue } from "../components/PlayerVenueContext";
 import { signOutToIntro } from "@/app/(book)/book/lib/sign-out-to-intro";
 import { ScanFace } from "lucide-react";
 import {
@@ -78,6 +79,7 @@ interface PortalVenue {
 
 function OnboardingContent() {
   const { session, status, authHeader, refresh } = usePlayerSession();
+  const { refresh: refreshVenue } = usePlayerVenue();
   const router = useRouter();
   const { t } = useTranslation();
 
@@ -353,6 +355,7 @@ function OnboardingContent() {
       });
 
       refresh();
+      refreshVenue();
       router.push("/book");
     } catch (e) {
       console.error("[DEBUG onboarding] saveVenueAndNavigate error:", (e as Error).message);
