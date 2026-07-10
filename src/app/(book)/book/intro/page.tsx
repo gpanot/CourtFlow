@@ -7,6 +7,8 @@ import Image from "next/image";
 import { useTranslation } from "react-i18next";
 import { BookLanguageMenu } from "@/app/(book)/book/components/BookLanguageMenu";
 import { useTheme, type ThemePalette } from "../components/ThemeProvider";
+import { usePlayerSession } from "../components/usePlayerSession";
+import { portalFetch } from "@/lib/portal-fetch";
 
 const VALID_PALETTES: ThemePalette[] = ["green", "terracotta", "sage"];
 
@@ -17,6 +19,7 @@ function IntroContent() {
   const searchParams = useSearchParams();
   const { t } = useTranslation();
   const { setPalette } = useTheme();
+  const { status, session } = usePlayerSession();
   const [slide, setSlide] = useState(0);
   const touchStartX = useRef<number | null>(null);
 
@@ -28,6 +31,26 @@ function IntroContent() {
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // If the user is already fully authenticated and onboarded, skip intro.
+  useEffect(() => {
+    if (status !== "authenticated" || !session?.playerId) return;
+    portalFetch("/api/public/account")
+      .then((r) => r.json())
+      .then((profile) => {
+        const hasRealPhone =
+          profile.phone &&
+          !profile.phone.startsWith("oauth_") &&
+          !profile.phone.startsWith("email_");
+        if (hasRealPhone && profile.venue) {
+          router.replace("/book");
+        } else {
+          router.replace("/book/onboarding");
+        }
+      })
+      .catch(() => {});
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [status]);
 
   const slides = t("intro.slides", { returnObjects: true }) as {
     imageAlt: string;
