@@ -40,7 +40,7 @@ export function SignOutIconButton({ className }: SignOutIconButtonProps) {
           onClick={(e) => e.stopPropagation()}
         >
           <div className="flex items-center gap-3 mb-3">
-            <div className="flex h-10 w-10 items-center justify-center rounded-full bg-[var(--cm-red)]/10 text-[var(--cm-red)]">
+            <div className="flex h-10 w-10 items-center justify-center rounded-full bg-[var(--cm-red)]/10 text-[var(--cm-red)] shrink-0">
               <LogOut className="h-5 w-5" />
             </div>
             <div>
@@ -99,7 +99,6 @@ export function SignOutIconButton({ className }: SignOutIconButtonProps) {
         <LogOut className="h-5 w-5" strokeWidth={2} />
       </button>
 
-      {/* Portal out of the fixed top bar so fixed inset-0 centers on the viewport */}
       {typeof document !== "undefined" && dialog
         ? createPortal(dialog, document.body)
         : null}
