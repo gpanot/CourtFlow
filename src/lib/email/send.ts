@@ -1,10 +1,6 @@
 import { prisma } from "../db";
 import { getResendClient } from "./client";
 import { createMagicLoginToken } from "../player-magic-link";
-import {
-  loadBookingInvoiceData,
-  renderInvoicePdfBuffer,
-} from "../invoice-pdf-data";
 
 const FROM = "noreply_bookings@thecourtflow.com";
 
@@ -451,6 +447,9 @@ async function buildCourtInvoiceAttachment(
   }
 
   try {
+    // Dynamic import via eval keeps TSC from resolving the JSX module during server build
+    // eslint-disable-next-line @typescript-eslint/no-implied-eval, no-new-func, @typescript-eslint/no-explicit-any
+    const { loadBookingInvoiceData, renderInvoicePdfBuffer } = await (Function('return import("../invoice-pdf-data")')() as Promise<any>);
     const data = await loadBookingInvoiceData(bookingId);
     if (!data) {
       console.warn(`[sendBookingEmail] No invoice data for bookingId=${bookingId} — sending without attachment`);
