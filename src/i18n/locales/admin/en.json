@@ -465,6 +465,7 @@
     "noBookingsFilters": "No bookings found for these filters",
     "colPayment": "Payment",
     "colInvoice": "Invoice",
+    "colReceipt": "Receipt",
     "unpaidOnPage": "{{count}} unpaid on this page",
     "proofsToReview": "{{count}} proof to review",
     "proofsToReview_other": "{{count}} proofs to review",

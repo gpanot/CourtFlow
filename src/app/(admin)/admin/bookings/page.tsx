@@ -2584,6 +2584,8 @@ function AllBookingsTab({
                   <th className="text-left px-4 py-3 text-xs font-medium text-neutral-500 whitespace-nowrap">{t("bookings.colPayment")}</th>
                   <th className="text-right px-4 py-3 text-xs font-medium text-neutral-500 whitespace-nowrap">{t("bookings.price")}</th>
                   <th className="px-4 py-3 text-xs font-medium text-neutral-500 whitespace-nowrap">{t("bookings.colInvoice")}</th>
+                  <th className="px-4 py-3 text-xs font-medium text-neutral-500 whitespace-nowrap">{t("bookings.colReceipt")}</th>
+                  <th className="px-4 py-3" />
                 </tr>
               </thead>
               <tbody>
@@ -2684,26 +2686,28 @@ function AllBookingsTab({
                         />
                       </td>
                       <td className="px-4 py-3 whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
-                        <div className="flex items-center gap-1">
-                          <PaymentRequestButton
+                        <PaymentRequestButton
+                          type="booking"
+                          entityId={row.id}
+                          paymentRef={resolveBookingRef(row)}
+                        />
+                      </td>
+                      <td className="px-4 py-3 whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
+                        {isPaid && (row.invoiceNumber ?? row.bookingGroup?.invoiceNumber) && (
+                          <InvoiceDownloadButton
                             type="booking"
                             entityId={row.id}
-                            paymentRef={resolveBookingRef(row)}
+                            invoiceNumber={row.invoiceNumber ?? row.bookingGroup!.invoiceNumber!}
                           />
-                          {isPaid && (row.invoiceNumber ?? row.bookingGroup?.invoiceNumber) && (
-                            <InvoiceDownloadButton
-                              type="booking"
-                              entityId={row.id}
-                              invoiceNumber={row.invoiceNumber ?? row.bookingGroup!.invoiceNumber!}
-                            />
-                          )}
-                          <button
-                            onClick={() => onEditBooking(row)}
-                            className="rounded-lg p-1.5 text-neutral-500 hover:bg-neutral-700 hover:text-white transition-colors"
-                          >
-                            <Pencil className="h-3.5 w-3.5" />
-                          </button>
-                        </div>
+                        )}
+                      </td>
+                      <td className="px-4 py-3 whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
+                        <button
+                          onClick={() => onEditBooking(row)}
+                          className="rounded-lg p-1.5 text-neutral-500 hover:bg-neutral-700 hover:text-white transition-colors"
+                        >
+                          <Pencil className="h-3.5 w-3.5" />
+                        </button>
                       </td>
                     </tr>
                   );

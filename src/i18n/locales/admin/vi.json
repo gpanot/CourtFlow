@@ -463,6 +463,7 @@
     "noBookingsFilters": "Không tìm thấy đặt sân nào với bộ lọc này",
     "colPayment": "Thanh toán",
     "colInvoice": "Hoá đơn",
+    "colReceipt": "Biên lai",
     "unpaidOnPage": "{{count}} chưa thanh toán trên trang này",
     "proofsToReview": "{{count}} biên lai cần xem",
     "proofsToReview_other": "{{count}} biên lai cần xem",

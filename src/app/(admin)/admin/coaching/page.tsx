@@ -42,6 +42,7 @@ import {
   EyeOff,
 } from "lucide-react";
 import { InvoiceDownloadButton } from "@/components/admin/InvoiceDownloadButton";
+import { PaymentRequestButton } from "@/components/admin/PaymentRequestButton";
 import { CoachProfileEditor } from "@/components/admin/CoachProfileEditor";
 import {
   PaymentActionModal,
@@ -1015,7 +1016,8 @@ function AllLessonsTab({ venueId, initialPaymentFilter = "all" }: { venueId: str
                   <th className="text-left px-4 py-3 text-xs font-medium text-neutral-500 whitespace-nowrap">{t("coaching.status")}</th>
                   <th className="text-left px-4 py-3 text-xs font-medium text-neutral-500 whitespace-nowrap">{t("coaching.colPayment")}</th>
                   <th className="text-right px-4 py-3 text-xs font-medium text-neutral-500 whitespace-nowrap">{t("coaching.price")}</th>
-                  <th className="px-4 py-3" />
+                  <th className="px-4 py-3 text-xs font-medium text-neutral-500 whitespace-nowrap">{t("bookings.colInvoice")}</th>
+                  <th className="px-4 py-3 text-xs font-medium text-neutral-500 whitespace-nowrap">{t("bookings.colReceipt")}</th>
                 </tr>
               </thead>
               <tbody>
@@ -1112,15 +1114,20 @@ function AllLessonsTab({ venueId, initialPaymentFilter = "all" }: { venueId: str
                         />
                       </td>
                       <td className="px-4 py-3 whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
-                        <div className="flex items-center gap-1 justify-end">
-                          {isPaid && row.invoiceNumber && (
-                            <InvoiceDownloadButton
-                              type="lesson"
-                              entityId={row.id}
-                              invoiceNumber={row.invoiceNumber}
-                            />
-                          )}
-                        </div>
+                        <PaymentRequestButton
+                          type="lesson"
+                          entityId={row.id}
+                          paymentRef={row.paymentRef}
+                        />
+                      </td>
+                      <td className="px-4 py-3 whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
+                        {isPaid && row.invoiceNumber && (
+                          <InvoiceDownloadButton
+                            type="lesson"
+                            entityId={row.id}
+                            invoiceNumber={row.invoiceNumber}
+                          />
+                        )}
                       </td>
                     </tr>
                   );

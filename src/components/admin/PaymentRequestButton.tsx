@@ -50,8 +50,7 @@ export function PaymentRequestButton({
       disabled={loading}
       title="Download payment invoice image"
       className={cn(
-        "inline-flex items-center gap-1 rounded-lg px-2 py-1 text-xs font-medium",
-        "text-neutral-400 hover:bg-green-900/30 hover:text-green-400 transition-colors disabled:opacity-50",
+        "rounded-lg p-1.5 text-neutral-500 hover:bg-green-900/30 hover:text-green-400 transition-colors disabled:opacity-50",
         className,
       )}
     >
@@ -60,7 +59,6 @@ export function PaymentRequestButton({
       ) : (
         <ImageDown className="h-3.5 w-3.5" />
       )}
-      Invoice
     </button>
   );
 }
