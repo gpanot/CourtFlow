@@ -45,6 +45,7 @@ import {
   Pencil as PencilIcon,
 } from "lucide-react";
 import { InvoiceDownloadButton } from "@/components/admin/InvoiceDownloadButton";
+import { PaymentRequestButton } from "@/components/admin/PaymentRequestButton";
 import { BookingPriceDisplay } from "@/components/admin/BookingPriceDisplay";
 import { CancellationReasonBadge } from "@/components/admin/CancellationReasonBadge";
 import { isBookingWrittenOff } from "@/lib/booking-cancellation";
@@ -993,6 +994,18 @@ export default function BookingsPage() {
                   </div>
                 </div>
                 <div className="flex gap-1 shrink-0 flex-wrap justify-end">
+                  <PaymentRequestButton
+                    type="booking"
+                    entityId={b.id}
+                    paymentRef={b.paymentRef ?? b.bookingGroup?.paymentRef}
+                  />
+                  {(b.invoiceNumber ?? b.bookingGroup?.invoiceNumber) && (
+                    <InvoiceDownloadButton
+                      type="booking"
+                      entityId={b.id}
+                      invoiceNumber={b.invoiceNumber ?? b.bookingGroup!.invoiceNumber!}
+                    />
+                  )}
                   {b.status === "confirmed" && (
                     <button onClick={() => openEditModal(b)} className="rounded-lg px-2 py-1 text-xs text-blue-400 hover:bg-blue-900/30">{t("common.edit")}</button>
                   )}
@@ -1074,6 +1087,16 @@ export default function BookingsPage() {
                       />
                     </span>
                   </div>
+                </div>
+                <div className="flex flex-col items-end gap-1 shrink-0" onClick={(e) => e.stopPropagation()}>
+                  <PaymentRequestButton type="openplay" entityId={r.id} paymentRef={r.paymentRef} />
+                  {r.invoiceNumber && (
+                    <InvoiceDownloadButton
+                      type="openplay"
+                      entityId={r.id}
+                      invoiceNumber={r.invoiceNumber}
+                    />
+                  )}
                 </div>
               </div>
             );})}
@@ -1182,13 +1205,23 @@ export default function BookingsPage() {
                   <p className="text-xs text-neutral-500 mt-1">{lesson.package.name}</p>
                   {lesson.note && <p className="text-xs text-neutral-500 mt-0.5 italic">{lesson.note}</p>}
                 </div>
-                <button
-                  onClick={() => router.push(`/admin/coaching?tab=lessons&date=${selectedDate}`)}
-                  className="rounded-lg p-2 text-neutral-500 hover:bg-neutral-800 hover:text-teal-400 shrink-0"
-                  title={t("coaching.editLesson")}
-                >
-                  <Pencil className="h-4 w-4" />
-                </button>
+                <div className="flex flex-col items-end gap-1 shrink-0">
+                  <PaymentRequestButton type="lesson" entityId={lesson.id} paymentRef={lesson.paymentRef} />
+                  {lesson.invoiceNumber && (
+                    <InvoiceDownloadButton
+                      type="lesson"
+                      entityId={lesson.id}
+                      invoiceNumber={lesson.invoiceNumber}
+                    />
+                  )}
+                  <button
+                    onClick={() => router.push(`/admin/coaching?tab=lessons&date=${selectedDate}`)}
+                    className="rounded-lg p-2 text-neutral-500 hover:bg-neutral-800 hover:text-teal-400"
+                    title={t("coaching.editLesson")}
+                  >
+                    <Pencil className="h-4 w-4" />
+                  </button>
+                </div>
               </div>
             );})}
 
@@ -2550,7 +2583,7 @@ function AllBookingsTab({
                   <th className="text-left px-4 py-3 text-xs font-medium text-neutral-500 whitespace-nowrap">{t("bookings.status")}</th>
                   <th className="text-left px-4 py-3 text-xs font-medium text-neutral-500 whitespace-nowrap">{t("bookings.colPayment")}</th>
                   <th className="text-right px-4 py-3 text-xs font-medium text-neutral-500 whitespace-nowrap">{t("bookings.price")}</th>
-                  <th className="px-4 py-3" />
+                  <th className="px-4 py-3 text-xs font-medium text-neutral-500 whitespace-nowrap">{t("bookings.colInvoice")}</th>
                 </tr>
               </thead>
               <tbody>
@@ -2651,7 +2684,12 @@ function AllBookingsTab({
                         />
                       </td>
                       <td className="px-4 py-3 whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
-                        <div className="flex items-center gap-1 justify-end">
+                        <div className="flex items-center gap-1">
+                          <PaymentRequestButton
+                            type="booking"
+                            entityId={row.id}
+                            paymentRef={resolveBookingRef(row)}
+                          />
                           {isPaid && (row.invoiceNumber ?? row.bookingGroup?.invoiceNumber) && (
                             <InvoiceDownloadButton
                               type="booking"

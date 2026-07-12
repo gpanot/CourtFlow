@@ -24,6 +24,7 @@ import { cn } from "@/lib/cn";
 import { PaymentStatusBadge } from "@/components/admin/EditBookingModal";
 import { BookingPriceDisplay } from "@/components/admin/BookingPriceDisplay";
 import { DashboardPaymentCell } from "@/components/admin/DashboardPaymentCell";
+import { PaymentRequestButton } from "@/components/admin/PaymentRequestButton";
 import {
   PaymentActionModal,
   type PaymentActionTarget,
@@ -570,6 +571,7 @@ export default function AdminOverview() {
                 <th className="px-4 py-2.5 text-left font-medium">{t("overview.status")}</th>
                 <th className="px-4 py-2.5 text-left font-medium">{t("overview.payment")}</th>
                 <th className="px-4 py-2.5 text-right font-medium">{t("overview.price")}</th>
+                <th className="px-4 py-2.5 text-left font-medium">{t("overview.invoice")}</th>
               </tr>
             </thead>
             <tbody>
@@ -649,11 +651,17 @@ export default function AdminOverview() {
                       fmtPrice(entry.priceValue)
                     )}
                   </td>
+                  <td className="px-4 py-2.5" onClick={(e) => e.stopPropagation()}>
+                    <PaymentRequestButton
+                      type={entry.kind}
+                      entityId={entry.id}
+                    />
+                  </td>
                 </tr>
               ))}
               {recentEntries.length === 0 && (
                 <tr>
-                  <td colSpan={9} className="px-4 py-8 text-center text-neutral-500">
+                  <td colSpan={10} className="px-4 py-8 text-center text-neutral-500">
                     {t("overview.noBookings")}
                   </td>
                 </tr>
@@ -732,6 +740,13 @@ export default function AdminOverview() {
                 ) : (
                   <span className="text-xs font-medium text-neutral-300 shrink-0 self-center">{fmtPrice(entry.priceValue)}</span>
                 )}
+              </div>
+              <div className="mt-1" onClick={(e) => e.stopPropagation()}>
+                <PaymentRequestButton
+                  type={entry.kind}
+                  entityId={entry.id}
+                  className="text-xs"
+                />
               </div>
             </div>
           ))}

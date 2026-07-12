@@ -117,7 +117,11 @@ export const api = {
 };
 
 /** Download a binary file (e.g. PDF) with staff auth — plain <a href> won't send the token. */
-export async function downloadFile(url: string, filename: string): Promise<void> {
+export async function downloadFile(
+  url: string,
+  filename: string,
+  options?: { useServerFilename?: boolean },
+): Promise<void> {
   const token = typeof window !== "undefined"
     ? useSessionStore.getState().token
     : null;
@@ -144,11 +148,19 @@ export async function downloadFile(url: string, filename: string): Promise<void>
     throw new Error(message);
   }
 
+  // Prefer the server-supplied filename from Content-Disposition when requested
+  let resolvedFilename = filename;
+  if (options?.useServerFilename) {
+    const disposition = res.headers.get("content-disposition") ?? "";
+    const match = disposition.match(/filename="([^"]+)"/);
+    if (match?.[1]) resolvedFilename = match[1];
+  }
+
   const blob = await res.blob();
   const objectUrl = URL.createObjectURL(blob);
   const anchor = document.createElement("a");
   anchor.href = objectUrl;
-  anchor.download = filename;
+  anchor.download = resolvedFilename;
   document.body.appendChild(anchor);
   anchor.click();
   anchor.remove();

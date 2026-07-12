@@ -526,6 +526,7 @@ export async function GET(request: NextRequest) {
       })),
     });
   } catch (e) {
+    console.error("[dashboard] ERROR:", e);
     const msg = (e as Error).message;
     if (msg.includes("authorization") || msg.includes("token") || msg.includes("access required")) {
       return error(msg, 401);
