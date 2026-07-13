@@ -3,6 +3,7 @@ import { prisma } from "@/lib/db";
 import { json, error } from "@/lib/api-helpers";
 import { requireAdminAccess } from "@/lib/auth";
 import { assertVenueAccess } from "@/lib/venue-scope";
+import { getBookingConfig } from "@/lib/booking";
 
 export const dynamic = "force-dynamic";
 
@@ -27,6 +28,7 @@ export async function GET(request: NextRequest) {
     const dateTo = new Date(to + "T23:59:59Z");
 
     const [
+      venue,
       courts,
       bookings,
       memberships,
@@ -38,7 +40,12 @@ export async function GET(request: NextRequest) {
       players,
       openPlayRegistrations,
       courtPayPayments,
+      courtBlocks,
     ] = await Promise.all([
+      prisma.venue.findUnique({
+        where: { id: venueId },
+        select: { settings: true },
+      }),
       prisma.court.findMany({
         where: { venueId, isBookable: true },
         select: { id: true, label: true },
@@ -170,6 +177,20 @@ export async function GET(request: NextRequest) {
           confirmedAt: true,
           type: true,
           partyCount: true,
+        },
+      }),
+      // Court blocks (maintenance, private events, program pass blocks, etc.)
+      prisma.courtBlock.findMany({
+        where: {
+          venueId,
+          date: { gte: dateFrom, lte: dateTo },
+        },
+        select: {
+          id: true,
+          type: true,
+          courtIds: true,
+          startTime: true,
+          endTime: true,
         },
       }),
     ]);
@@ -354,8 +375,9 @@ export async function GET(request: NextRequest) {
     const totalDays = Math.max(1, Math.ceil((dateTo.getTime() - dateFrom.getTime()) / 86400000));
     const bookableCourtCount = courts.length;
 
-    // Assume 12 bookable hours per day per court (6am-6pm as reasonable default)
-    const hoursPerDayPerCourt = 12;
+    // Use real venue opening hours from bookingConfig
+    const bookingConfig = getBookingConfig((venue?.settings as Record<string, unknown>) ?? {});
+    const hoursPerDayPerCourt = bookingConfig.bookingEndHour - bookingConfig.bookingStartHour;
     const totalAvailableHours = bookableCourtCount * hoursPerDayPerCourt * totalDays;
 
     let totalBookedHours = 0;
@@ -611,6 +633,148 @@ export async function GET(request: NextRequest) {
       bookingRevenue + openPlayRevenue + courtPayRevenue + lessonRevenue
       + openBillCollected + programPassRevenue;
 
+    // --- PERFORMANCE SCORECARD ---
+    // Hours per block type (each courtId × duration)
+    const blockHoursByType: Record<string, number> = {};
+    for (const block of courtBlocks) {
+      const dur = (new Date(block.endTime).getTime() - new Date(block.startTime).getTime()) / 3600000;
+      const courtCount = block.courtIds.length || 1;
+      const hrs = dur * courtCount;
+      blockHoursByType[block.type] = (blockHoursByType[block.type] || 0) + hrs;
+    }
+
+    // Total hours occupied across all sources
+    const totalBlockHours = Object.values(blockHoursByType).reduce((s, h) => s + h, 0);
+    const totalAllSourceHours = totalBookedHours + coachingCourtHours + totalBlockHours;
+    const perfAvailableHours = totalAvailableHours; // already uses real bookingConfig hours
+
+    const revenuePerCourtHour = totalAllSourceHours > 0
+      ? Math.round(totalRevenue / totalAllSourceHours)
+      : 0;
+    const courtEfficiencyPct = perfAvailableHours > 0
+      ? Math.round((totalAllSourceHours / perfAvailableHours) * 100)
+      : 0;
+
+    // Revenue recognized = cash + outstanding open-bill accrued (not yet paid)
+    const outstandingOpenBill = Math.max(0, openBillAccrued - openBillCollected);
+    const revenueRecognized = totalRevenue + outstandingOpenBill;
+    const collectedPct = revenueRecognized > 0
+      ? Math.round((totalRevenue / revenueRecognized) * 100)
+      : 100;
+
+    // Occupancy by source — build list only for sources with hours > 0
+    const BLOCK_TYPE_META: Record<string, { label: string; color: string }> = {
+      maintenance:          { label: "Maintenance",      color: "#898781" },
+      private_event:        { label: "Private event",    color: "#6b7280" },
+      private_competition:  { label: "Private comp",     color: "#7c3aed" },
+      competition:          { label: "Competition",      color: "#9333ea" },
+      open_play:            { label: "Open play (block)",color: "#1baf7a" },
+      alobo:                { label: "Alobo",            color: "#0ea5e9" },
+      program_pass:         { label: "Program passes",   color: "#4a3aa7" },
+    };
+
+    const occupancySources: { source: string; label: string; hours: number; pct: number; color: string }[] = [];
+
+    if (totalBookedHours > 0) {
+      occupancySources.push({
+        source: "walk_in",
+        label: "Walk-in / bookings",
+        hours: Math.round(totalBookedHours * 10) / 10,
+        pct: perfAvailableHours > 0 ? Math.round((totalBookedHours / perfAvailableHours) * 100) : 0,
+        color: "#2a78d6",
+      });
+    }
+    if (coachingCourtHours > 0) {
+      occupancySources.push({
+        source: "coaching",
+        label: "Coaching",
+        hours: Math.round(coachingCourtHours * 10) / 10,
+        pct: perfAvailableHours > 0 ? Math.round((coachingCourtHours / perfAvailableHours) * 100) : 0,
+        color: "#eda100",
+      });
+    }
+    for (const [type, hrs] of Object.entries(blockHoursByType)) {
+      if (hrs <= 0) continue;
+      const meta = BLOCK_TYPE_META[type] ?? { label: type, color: "#898781" };
+      occupancySources.push({
+        source: type,
+        label: meta.label,
+        hours: Math.round(hrs * 10) / 10,
+        pct: perfAvailableHours > 0 ? Math.round((hrs / perfAvailableHours) * 100) : 0,
+        color: meta.color,
+      });
+    }
+    // Sort by hours desc
+    occupancySources.sort((a, b) => b.hours - a.hours);
+
+    // Revenue mix — channels must add up exactly to totalRevenue (cashCollected)
+    // MRR is a rate, not collected cash, so it is excluded from the mix.
+    const revenueMixSources = [
+      { channel: "court_bookings", label: "Court bookings",  revenue: bookingRevenue + openBillCollected, color: "#2a78d6" },
+      { channel: "program_passes", label: "Program passes",  revenue: programPassRevenue, color: "#4a3aa7" },
+      { channel: "coaching",       label: "Coaching",        revenue: lessonRevenue, color: "#eda100" },
+      { channel: "open_play",      label: "Open play",       revenue: openPlayRevenue, color: "#1baf7a" },
+      { channel: "court_pay",      label: "CourtPay (walk-in)", revenue: courtPayRevenue, color: "#6366f1" },
+    ];
+    // totalRevMix should equal totalRevenue; verify for any float drift
+    const totalRevMix = revenueMixSources.reduce((s, r) => s + r.revenue, 0);
+    const revenueMix = revenueMixSources.map((r) => ({
+      ...r,
+      pct: totalRevMix > 0 ? Math.round((r.revenue / totalRevMix) * 100) : 0,
+    }));
+
+    // Channel performance
+    const avgPerBooking = confirmedBookings.length > 0
+      ? Math.round((bookingRevenue + openBillCollected) / confirmedBookings.length)
+      : 0;
+    const avgPerLesson = confirmedLessons.length > 0
+      ? Math.round(lessonRevenue / confirmedLessons.length)
+      : 0;
+
+    const performance = {
+      cashCollected: totalRevenue,
+      revenueRecognized,
+      outstanding: outstandingOpenBill,
+      collectedPct,
+      revenuePerCourtHour,
+      courtEfficiencyPct,
+      totalAvailableHours: perfAvailableHours,
+      totalAllSourceHours: Math.round(totalAllSourceHours * 10) / 10,
+      occupancyBySource: occupancySources,
+      revenueMix,
+      channelPerf: {
+        courtBookings: {
+          revenue: bookingRevenue + openBillCollected,
+          bookings: confirmedBookings.length,
+          avgPerBooking,
+        },
+        programPasses: {
+          revenue: programPassRevenue,
+          unpaidCount: programPassUnpaidCount,
+        },
+        coaching: {
+          revenue: lessonRevenue,
+          lessons: confirmedLessons.length,
+          avgPerLesson,
+        },
+        openPlay: {
+          revenue: openPlayRevenue,
+          registrations: openPlayRegistrations.length,
+          paidCount: openPlayPaidCount,
+          unpaidCount: openPlayUnpaidCount,
+        },
+        courtPay: {
+          revenue: courtPayRevenue,
+          transactions: courtPayTransactions,
+          playersServed: courtPayPlayersServed,
+        },
+      },
+      players: {
+        total: totalPlayers,
+        newInPeriod: newPlayersInPeriod.length,
+      },
+    };
+
     return json({
       courtBookings: {
         totalBookings: confirmedBookings.length,
@@ -743,6 +907,7 @@ export async function GET(request: NextRequest) {
         overdueCount: programPassOverdueCount,
       },
       totalRevenue,
+      performance,
     });
   } catch (e) {
     const msg = e instanceof Error ? e.message : "Server error";

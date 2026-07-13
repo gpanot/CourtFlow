@@ -13,6 +13,7 @@ import {
 } from "lucide-react";
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell, Legend, ReferenceLine,
+  PieChart, Pie,
 } from "recharts";
 
 export const dynamic = "force-dynamic";
@@ -125,6 +126,26 @@ interface AnalyticsData {
     overdueCount: number;
   };
   totalRevenue?: number;
+  performance?: {
+    cashCollected: number;
+    revenueRecognized: number;
+    outstanding: number;
+    collectedPct: number;
+    revenuePerCourtHour: number;
+    courtEfficiencyPct: number;
+    totalAvailableHours: number;
+    totalAllSourceHours: number;
+    occupancyBySource: { source: string; label: string; hours: number; pct: number; color: string }[];
+    revenueMix: { channel: string; label: string; revenue: number; pct: number; color: string }[];
+    channelPerf: {
+      courtBookings: { revenue: number; bookings: number; avgPerBooking: number };
+      programPasses: { revenue: number; unpaidCount: number };
+      coaching: { revenue: number; lessons: number; avgPerLesson: number };
+      openPlay: { revenue: number; registrations: number; paidCount: number; unpaidCount: number };
+      courtPay: { revenue: number; transactions: number; playersServed: number };
+    };
+    players: { total: number; newInPeriod: number };
+  };
 }
 
 type RangeKey = "today" | "7d" | "30d" | "90d" | "custom" | "month";
@@ -335,6 +356,7 @@ export default function VenueAnalyticsPage() {
   } = useAdminVenuePicker({ autoSelect: true });
   const [data, setData] = useState<AnalyticsData | null>(null);
   const [loading, setLoading] = useState(false);
+  const [activeTab, setActiveTab] = useState<"analytics" | "performance">("analytics");
   const [rangeKey, setRangeKey] = useState<RangeKey>("30d");
   const [customFrom, setCustomFrom] = useState("");
   const [customTo, setCustomTo] = useState("");
@@ -585,6 +607,24 @@ export default function VenueAnalyticsPage() {
         </div>
       </div>
 
+      {/* Tab switcher */}
+      <div className="flex gap-1 rounded-xl border border-neutral-800 bg-neutral-900 p-1 w-fit">
+        {(["analytics", "performance"] as const).map((tab) => (
+          <button
+            key={tab}
+            onClick={() => setActiveTab(tab)}
+            className={cn(
+              "rounded-lg px-4 py-1.5 text-sm font-medium transition-colors capitalize",
+              activeTab === tab
+                ? "bg-purple-600 text-white"
+                : "text-neutral-400 hover:text-white"
+            )}
+          >
+            {tab.charAt(0).toUpperCase() + tab.slice(1)}
+          </button>
+        ))}
+      </div>
+
       {rangeKey === "custom" && (
         <div className="flex items-center gap-2">
           <input type="date" value={customFrom} onChange={(e) => setCustomFrom(e.target.value)}
@@ -599,6 +639,10 @@ export default function VenueAnalyticsPage() {
 
       {data && !loading && (
         <>
+          {activeTab === "performance" && data.performance && (
+            <PerformanceTab perf={data.performance} />
+          )}
+          {activeTab === "analytics" && <>
           {/* ===== REVENUE SUMMARY (TOP) ===== */}
           {data.totalRevenue !== undefined && (
             <Section title="Total Revenue — All Sources" icon={DollarSign}>
@@ -1222,9 +1266,237 @@ export default function VenueAnalyticsPage() {
               )}
             </div>
           </Section>
+          </>}
         </>
       )}
     </div>
+  );
+}
+
+// ---------- PERFORMANCE TAB ----------
+
+function PerformanceTab({ perf }: {
+  perf: NonNullable<AnalyticsData["performance"]>;
+}) {
+  const totalOccupancyHours = perf.occupancyBySource.reduce((s, o) => s + o.hours, 0);
+
+  return (
+    <div className="space-y-6 max-w-2xl">
+      {/* 1 — Cash vs Revenue Recognized */}
+      <div className="rounded-xl border border-neutral-800 bg-neutral-900 p-4">
+        <p className="text-sm text-neutral-400 mb-3">Cash vs revenue, this period</p>
+        <div className="grid grid-cols-2 gap-4 mb-3">
+          <div>
+            <p className="text-xs text-neutral-500 mb-0.5">Cash collected</p>
+            <p className="text-2xl font-semibold tabular-nums">{fmtK(perf.cashCollected)}</p>
+          </div>
+          <div>
+            <p className="text-xs text-neutral-500 mb-0.5">Revenue recognized</p>
+            <p className="text-2xl font-semibold tabular-nums">{fmtK(perf.revenueRecognized)}</p>
+          </div>
+        </div>
+        {/* Stacked bar */}
+        <div className="flex h-2.5 rounded-full overflow-hidden gap-0.5 mb-2">
+          <div style={{ width: `${perf.collectedPct}%`, background: "#1baf7a" }} title={`Collected ${perf.collectedPct}%`} />
+          <div style={{ width: `${100 - perf.collectedPct}%`, background: "#eda100" }} title={`Outstanding ${100 - perf.collectedPct}%`} />
+        </div>
+        <div className="flex justify-between text-xs text-neutral-500">
+          <span className="flex items-center gap-1.5">
+            <span className="inline-block w-2 h-2 rounded-sm" style={{ background: "#1baf7a" }} />
+            Collected {perf.collectedPct}%
+          </span>
+          {perf.outstanding > 0 && (
+            <span className="flex items-center gap-1.5">
+              <span className="inline-block w-2 h-2 rounded-sm" style={{ background: "#eda100" }} />
+              Outstanding {fmtK(perf.outstanding)}, open bill accounts
+            </span>
+          )}
+        </div>
+      </div>
+
+      {/* 2 — Three KPI cards */}
+      <div className="grid grid-cols-3 gap-3">
+        <div className="rounded-xl border border-neutral-800 bg-neutral-900 p-4">
+          <p className="text-xs text-neutral-500 mb-1">Revenue / court hour</p>
+          <p className="text-2xl font-semibold tabular-nums">{fmtPrice(perf.revenuePerCourtHour)}</p>
+        </div>
+        <div className="rounded-xl border border-neutral-800 bg-neutral-900 p-4">
+          <p className="text-xs text-neutral-500 mb-1">Court efficiency</p>
+          <p className="text-2xl font-semibold tabular-nums">{perf.courtEfficiencyPct}%</p>
+          <p className="text-[11px] text-neutral-500 mt-1">
+            {fmtHours(perf.totalAllSourceHours)} / {fmtHours(perf.totalAvailableHours)} hrs available
+          </p>
+        </div>
+        <div className="rounded-xl border border-neutral-800 bg-neutral-900 p-4">
+          <p className="text-xs text-neutral-500 mb-1">Players</p>
+          <p className="text-2xl font-semibold tabular-nums">{perf.players.total.toLocaleString()}</p>
+          {perf.players.newInPeriod > 0 && (
+            <p className="text-[11px] text-emerald-400 mt-1">+{perf.players.newInPeriod} new this period</p>
+          )}
+        </div>
+      </div>
+
+      {/* 3 — Court Occupancy by Source */}
+      <div className="rounded-xl border border-neutral-800 bg-neutral-900 p-4">
+        <div className="flex justify-between items-baseline mb-3">
+          <span className="text-sm text-neutral-400">Court occupancy by source</span>
+          <span className="text-xl font-semibold tabular-nums">
+            {fmtHours(totalOccupancyHours)}
+            <span className="text-sm text-neutral-400 font-normal"> hrs booked</span>
+          </span>
+        </div>
+        {/* Stacked bar */}
+        {totalOccupancyHours > 0 && (
+          <div className="flex h-2.5 rounded-full overflow-hidden gap-0.5 mb-3">
+            {perf.occupancyBySource.map((s) => (
+              <div
+                key={s.source}
+                style={{ width: `${(s.hours / totalOccupancyHours) * 100}%`, background: s.color }}
+                title={`${s.label} ${s.pct}%`}
+              />
+            ))}
+          </div>
+        )}
+        {/* Legend */}
+        <div className="flex flex-wrap gap-x-4 gap-y-1.5 text-xs text-neutral-400">
+          {perf.occupancyBySource.map((s) => (
+            <span key={s.source} className="flex items-center gap-1.5">
+              <span className="inline-block w-2 h-2 rounded-sm flex-shrink-0" style={{ background: s.color }} />
+              {s.label} {s.pct}%
+            </span>
+          ))}
+        </div>
+      </div>
+
+      {/* 4 — Revenue Mix by Channel */}
+      <div>
+        <p className="text-sm text-neutral-400 mb-3">Revenue mix by channel</p>
+        <div className="grid grid-cols-2 gap-4 items-center rounded-xl border border-neutral-800 bg-neutral-900 p-4">
+          {/* Mini doughnut using recharts */}
+          <RevenueDoughnut mix={perf.revenueMix} />
+          {/* Legend */}
+          <div className="flex flex-col gap-2 text-sm">
+            {perf.revenueMix.map((m) => (
+              <div key={m.channel} className="grid grid-cols-[16px_1fr_auto] gap-2 items-center">
+                <span className="w-2.5 h-2.5 rounded-sm" style={{ background: m.color }} />
+                <span className="text-neutral-300">{m.label}</span>
+                <span className="text-neutral-500 text-xs tabular-nums">{m.pct}% · {fmtK(m.revenue)}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      {/* 5 — Channel Performance */}
+      <div>
+        <p className="text-sm text-neutral-400 mb-3">Channel performance</p>
+        <div className="grid grid-cols-2 gap-3">
+          {/* Court bookings */}
+          <div className="rounded-xl border border-neutral-800 bg-neutral-900 p-4">
+            <div className="flex items-center gap-2 mb-3">
+              <Calendar className="h-5 w-5" style={{ color: "#2a78d6" }} />
+              <span className="text-sm font-semibold">Court bookings</span>
+            </div>
+            <PerfRow label="Revenue" value={fmtK(perf.channelPerf.courtBookings.revenue)} />
+            <PerfRow label="Bookings" value={String(perf.channelPerf.courtBookings.bookings)} />
+            <PerfRow label="Avg / booking" value={fmtPrice(perf.channelPerf.courtBookings.avgPerBooking)} />
+          </div>
+          {/* Program passes */}
+          <div className="rounded-xl border border-neutral-800 bg-neutral-900 p-4">
+            <div className="flex items-center gap-2 mb-3">
+              <Ticket className="h-5 w-5" style={{ color: "#4a3aa7" }} />
+              <span className="text-sm font-semibold">Program passes</span>
+            </div>
+            <PerfRow label="Revenue" value={fmtK(perf.channelPerf.programPasses.revenue)} />
+            <PerfRow label="Unpaid (active)" value={String(perf.channelPerf.programPasses.unpaidCount)} />
+          </div>
+          {/* Coaching */}
+          <div className="rounded-xl border border-neutral-800 bg-neutral-900 p-4">
+            <div className="flex items-center gap-2 mb-3">
+              <GraduationCap className="h-5 w-5" style={{ color: "#eda100" }} />
+              <span className="text-sm font-semibold">Coaching</span>
+            </div>
+            <PerfRow label="Revenue" value={fmtK(perf.channelPerf.coaching.revenue)} />
+            <PerfRow label="Lessons" value={String(perf.channelPerf.coaching.lessons)} />
+            <PerfRow label="Avg / lesson" value={fmtPrice(perf.channelPerf.coaching.avgPerLesson)} />
+          </div>
+          {/* Open play */}
+          <div className="rounded-xl border border-neutral-800 bg-neutral-900 p-4">
+            <div className="flex items-center gap-2 mb-3">
+              <Users className="h-5 w-5" style={{ color: "#1baf7a" }} />
+              <span className="text-sm font-semibold">Open play</span>
+            </div>
+            <PerfRow label="Revenue" value={fmtK(perf.channelPerf.openPlay.revenue)} />
+            <PerfRow label="Registrations" value={String(perf.channelPerf.openPlay.registrations)} />
+            <PerfRow
+              label="Paid / unpaid"
+              value={`${perf.channelPerf.openPlay.paidCount} / ${perf.channelPerf.openPlay.unpaidCount}`}
+            />
+          </div>
+          {/* CourtPay — only show if there's data */}
+          {perf.channelPerf.courtPay.revenue > 0 && (
+            <div className="rounded-xl border border-neutral-800 bg-neutral-900 p-4">
+              <div className="flex items-center gap-2 mb-3">
+                <CreditCard className="h-5 w-5" style={{ color: "#6366f1" }} />
+                <span className="text-sm font-semibold">CourtPay (walk-in)</span>
+              </div>
+              <PerfRow label="Revenue" value={fmtK(perf.channelPerf.courtPay.revenue)} />
+              <PerfRow label="Transactions" value={String(perf.channelPerf.courtPay.transactions)} />
+              <PerfRow label="Players served" value={String(perf.channelPerf.courtPay.playersServed)} />
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function PerfRow({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="flex justify-between text-sm py-1">
+      <span className="text-neutral-500">{label}</span>
+      <span className="tabular-nums">{value}</span>
+    </div>
+  );
+}
+
+function fmtK(value: number): string {
+  if (value === 0) return "0";
+  if (Math.abs(value) >= 1_000_000) return `${(value / 1_000_000).toFixed(2)}M`;
+  if (Math.abs(value) >= 1_000) return `${Math.round(value / 1_000)}K`;
+  return new Intl.NumberFormat("vi-VN").format(value);
+}
+
+function fmtHours(h: number): string {
+  return Number.isInteger(h) ? String(h) : h.toFixed(1);
+}
+
+function RevenueDoughnut({ mix }: { mix: { channel: string; revenue: number; pct: number; color: string }[] }) {
+  const filtered = mix.filter((m) => m.revenue > 0);
+  if (filtered.length === 0) return <div className="h-40 flex items-center justify-center text-xs text-neutral-500">No data</div>;
+  return (
+    <ResponsiveContainer width="100%" height={160}>
+      <PieChart>
+        <Pie
+          data={filtered}
+          dataKey="revenue"
+          innerRadius="58%"
+          outerRadius="85%"
+          paddingAngle={2}
+          startAngle={90}
+          endAngle={-270}
+        >
+          {filtered.map((m) => (
+            <Cell key={m.channel} fill={m.color} />
+          ))}
+        </Pie>
+        <Tooltip
+          formatter={(value) => [fmtK(Number(value)), ""]}
+          contentStyle={{ background: "#171717", border: "1px solid #404040", borderRadius: 8, fontSize: 12 }}
+          labelStyle={{ display: "none" }}
+        />
+      </PieChart>
+    </ResponsiveContainer>
   );
 }
 
