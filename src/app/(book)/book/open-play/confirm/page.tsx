@@ -9,22 +9,32 @@ import { usePlayerVenue } from "../../components/PlayerVenueContext";
 import { useTranslation } from "react-i18next";
 import { useBookFormatters } from "../../lib/useBookFormatters";
 import { formatDateKey } from "@/lib/date";
+import { PromoCodeInput, usePromoSession } from "@/modules/marketing/components/PromoCodeInput";
+import { clearPromoSession } from "@/modules/marketing/hooks/usePromoCapture";
 
 function OpenPlayConfirmContent() {
   const searchParams = useSearchParams();
   const router = useRouter();
-  const { status } = usePlayerSession();
+  const { status, session } = usePlayerSession();
   const { t } = useTranslation();
   const { formatPrice } = useBookFormatters();
   const { i18n } = useTranslation();
   const { venueId: playerVenueId } = usePlayerVenue();
   const [creating, setCreating] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [appliedPromo, setAppliedPromo] = useState<{
+    code: string;
+    discountAmount: number;
+    finalPrice: number;
+    discountType: string;
+  } | null>(null);
+  const { deviceSessionId, utmSource } = usePromoSession();
 
   const scheduleEntryId = searchParams.get("scheduleEntryId") || "";
   const dateStr = searchParams.get("date") || "";
   const title = searchParams.get("title") || "Open Play";
-  const price = parseInt(searchParams.get("price") || "0", 10);
+  const originalPrice = parseInt(searchParams.get("price") || "0", 10);
+  const totalPrice = appliedPromo ? appliedPromo.finalPrice : originalPrice;
 
   useEffect(() => {
     if (status === "unauthenticated") {
@@ -45,16 +55,22 @@ function OpenPlayConfirmContent() {
           scheduleEntryId,
           date: dateStr,
           venueId: playerVenueId || undefined,
+          promoCode: appliedPromo?.code ?? null,
+          deviceSessionId,
+          utmSource,
         }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || t("confirm.bookingFailed"));
+      if (appliedPromo) clearPromoSession();
       router.replace(`/book/open-play/pay/${data.registration.id}`);
     } catch (e) {
       setError((e as Error).message);
       setCreating(false);
     }
   }
+
+  const isFree = totalPrice === 0;
 
   return (
     <div className="px-6 pt-12 pb-8">
@@ -71,11 +87,26 @@ function OpenPlayConfirmContent() {
         <Row label={t("common.session")} value={title} />
         <Row label={t("common.date")} value={dateStr ? formatDateKey(dateStr, i18n.language) : ""} />
         <div className="border-t border-[var(--cm-border)] pt-2 mt-2">
-          <Row label={t("common.total")} value={price > 0 ? formatPrice(price) : t("home.openPlayFree")} bold />
+          <Row
+            label={t("common.total")}
+            value={isFree ? t("promo.free") : formatPrice(totalPrice)}
+            bold
+          />
         </div>
       </div>
 
-      <p className="text-xs text-[var(--cm-text-sec)] mb-6">
+      {session?.playerId && playerVenueId && originalPrice > 0 && (
+        <PromoCodeInput
+          venueId={playerVenueId}
+          playerId={session.playerId}
+          bookingType="open_play"
+          originalPrice={originalPrice}
+          onPromoChange={setAppliedPromo}
+          formatPrice={formatPrice}
+        />
+      )}
+
+      <p className="text-xs text-[var(--cm-text-sec)] mb-6 mt-4">
         {t("openPlay.cancellationNote")}
       </p>
 
@@ -84,7 +115,11 @@ function OpenPlayConfirmContent() {
         disabled={creating}
         className="w-full py-3 bg-[var(--cm-accent)] text-black rounded-xl font-medium text-sm disabled:opacity-40"
       >
-        {creating ? t("confirm.creating") : price > 0 ? t("confirm.confirmPay", { price: formatPrice(price) }) : t("openPlay.joinFree")}
+        {creating
+          ? t("confirm.creating")
+          : isFree
+          ? t("openPlay.joinFree")
+          : t("confirm.confirmPay", { price: formatPrice(totalPrice) })}
       </button>
     </div>
   );

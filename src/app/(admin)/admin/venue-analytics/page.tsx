@@ -108,17 +108,53 @@ interface AnalyticsData {
     discountTotal: number;
     vatTotal: number;
   };
+  openPlay?: {
+    totalRegistrations: number;
+    revenue: number;
+    paidCount: number;
+    unpaidCount: number;
+  };
+  courtPay?: {
+    totalTransactions: number;
+    revenue: number;
+    playersServed: number;
+  };
+  totalRevenue?: number;
 }
 
-type RangeKey = "today" | "7d" | "30d" | "90d" | "custom";
+type RangeKey = "today" | "7d" | "30d" | "90d" | "custom" | "month";
 
 const RANGE_LABELS: Record<RangeKey, string> = {
   today: "Today",
   "7d": "Last 7 days",
   "30d": "Last 30 days",
   "90d": "Last 90 days",
+  month: "Month",
   custom: "Custom",
 };
+
+// Generate last 12 months as { value: "YYYY-MM", label: "Month YYYY" }
+function getMonthOptions(): { value: string; label: string }[] {
+  const opts = [];
+  const now = new Date();
+  for (let i = 0; i < 12; i++) {
+    const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+    const value = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+    const label = d.toLocaleString("en-US", { month: "long", year: "numeric" });
+    opts.push({ value, label });
+  }
+  return opts;
+}
+
+const MONTH_OPTIONS = getMonthOptions();
+
+function getMonthRange(monthValue: string): { from: string; to: string } {
+  const [year, month] = monthValue.split("-").map(Number);
+  const from = `${year}-${String(month).padStart(2, "0")}-01`;
+  const lastDay = new Date(year, month, 0).getDate();
+  const to = `${year}-${String(month).padStart(2, "0")}-${String(lastDay).padStart(2, "0")}`;
+  return { from, to };
+}
 
 const DAY_LABELS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
@@ -151,10 +187,11 @@ function fmtUsd(dollars: number) {
   return `$${dollars.toLocaleString("en-US")}`;
 }
 
-function getRangeDates(key: RangeKey): { from: string; to: string } {
+function getRangeDates(key: RangeKey, selectedMonth?: string): { from: string; to: string } {
   const now = new Date();
   const to = localISO(now);
   if (key === "today") return { from: to, to };
+  if (key === "month") return selectedMonth ? getMonthRange(selectedMonth) : getMonthRange(MONTH_OPTIONS[0].value);
   const days = key === "7d" ? 7 : key === "30d" ? 30 : 90;
   const from = new Date(now);
   from.setDate(from.getDate() - days + 1);
@@ -296,10 +333,13 @@ export default function VenueAnalyticsPage() {
   const [rangeKey, setRangeKey] = useState<RangeKey>("30d");
   const [customFrom, setCustomFrom] = useState("");
   const [customTo, setCustomTo] = useState("");
+  const [selectedMonth, setSelectedMonth] = useState(MONTH_OPTIONS[0].value);
 
   const currentRange = useMemo(() => {
-    return rangeKey === "custom" ? { from: customFrom, to: customTo } : getRangeDates(rangeKey);
-  }, [rangeKey, customFrom, customTo]);
+    if (rangeKey === "custom") return { from: customFrom, to: customTo };
+    if (rangeKey === "month") return getMonthRange(selectedMonth);
+    return getRangeDates(rangeKey);
+  }, [rangeKey, customFrom, customTo, selectedMonth]);
 
   const fetchData = useCallback(async () => {
     if (!selectedVenueId) return;
@@ -528,6 +568,15 @@ export default function VenueAnalyticsPage() {
             </select>
             <ChevronDown className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-neutral-500" />
           </div>
+          {rangeKey === "month" && (
+            <div className="relative">
+              <select value={selectedMonth} onChange={(e) => setSelectedMonth(e.target.value)}
+                className="appearance-none rounded-lg border border-neutral-700 bg-neutral-800 pl-3 pr-8 py-2 text-sm text-white focus:border-purple-500 focus:outline-none">
+                {MONTH_OPTIONS.map((m) => <option key={m.value} value={m.value}>{m.label}</option>)}
+              </select>
+              <ChevronDown className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-neutral-500" />
+            </div>
+          )}
         </div>
       </div>
 
@@ -545,6 +594,75 @@ export default function VenueAnalyticsPage() {
 
       {data && !loading && (
         <>
+          {/* ===== REVENUE SUMMARY (TOP) ===== */}
+          {data.totalRevenue !== undefined && (
+            <Section title="Total Revenue — All Sources" icon={DollarSign}>
+              <div className="overflow-x-auto pb-1 -mx-1 px-1">
+                <div className="flex min-w-max items-stretch gap-2 md:gap-3">
+                <div className="min-w-[140px] flex-1">
+                  <StatCard
+                    icon={DollarSign}
+                    label="Cash Collected"
+                    value={fmtPrice(data.totalRevenue)}
+                    sub="All paid revenue streams"
+                    color="text-purple-400"
+                  />
+                </div>
+                <RevenueEquationOp>=</RevenueEquationOp>
+                <div className="min-w-[140px] flex-1">
+                  <StatCard
+                    icon={Calendar}
+                    label="Court Bookings"
+                    value={fmtPrice(data.courtBookings.bookingRevenue)}
+                    sub={`${data.courtBookings.totalBookings} bookings`}
+                    color="text-blue-400"
+                  />
+                </div>
+                <RevenueEquationOp>+</RevenueEquationOp>
+                <div className="min-w-[140px] flex-1">
+                  <StatCard
+                    icon={Activity}
+                    label="Open Play"
+                    value={fmtPrice(data.openPlay?.revenue ?? 0)}
+                    sub={`${data.openPlay?.totalRegistrations ?? 0} registrations`}
+                    color="text-cyan-400"
+                  />
+                </div>
+                <RevenueEquationOp>+</RevenueEquationOp>
+                <div className="min-w-[140px] flex-1">
+                  <StatCard
+                    icon={CreditCard}
+                    label="CourtPay (Walk-in)"
+                    value={fmtPrice(data.courtPay?.revenue ?? 0)}
+                    sub={`${data.courtPay?.totalTransactions ?? 0} payments · ${data.courtPay?.playersServed ?? 0} players`}
+                    color="text-indigo-400"
+                  />
+                </div>
+                <RevenueEquationOp>+</RevenueEquationOp>
+                <div className="min-w-[140px] flex-1">
+                  <StatCard
+                    icon={GraduationCap}
+                    label="Coaching"
+                    value={fmtPrice(data.coaching.lessonRevenue)}
+                    sub={`${data.coaching.totalLessons} lessons`}
+                    color="text-orange-400"
+                  />
+                </div>
+                <RevenueEquationOp>+</RevenueEquationOp>
+                <div className="min-w-[140px] flex-1">
+                  <StatCard
+                    icon={FileText}
+                    label="Open Bill (paid)"
+                    value={fmtPrice(data.openBill?.collected ?? 0)}
+                    sub="Bills paid in period"
+                    color="text-green-400"
+                  />
+                </div>
+              </div>
+              </div>
+            </Section>
+          )}
+
           {/* ===== OVERVIEW ROW ===== */}
           <div className="grid grid-cols-2 gap-3 md:grid-cols-5 md:gap-4">
             <StatCard icon={Building2} label={t("venueAnalytics.bookableCourts")} value={String(data.overview.bookableCourtCount)} color="text-purple-400" />
@@ -557,15 +675,15 @@ export default function VenueAnalyticsPage() {
           {/* ===== COURT BOOKINGS ===== */}
           <Section title={t("venueAnalytics.courtBookings")} icon={Calendar} onExport={exportCourtBookings}>
             <div className="grid grid-cols-2 gap-3 md:grid-cols-3 lg:grid-cols-6 md:gap-4">
-              <StatCard icon={BarChart3} label={t("venueAnalytics.totalBookings")} value={String(data.courtBookings.totalBookings)} sub={data.courtBookings.cancelledBookings > 0 ? `${data.courtBookings.cancelledBookings} ${t("venueAnalytics.cancelled")}` : undefined} color="text-blue-400" />
-              <StatCard icon={TrendingUp} label={t("venueAnalytics.utilization")} value={`${data.courtBookings.utilizationPct}%`} sub={`${data.courtBookings.totalBookedHours}h / ${data.courtBookings.totalAvailableHours}h`} color="text-emerald-400" />
               <StatCard
                 icon={DollarSign}
                 label={t("venueAnalytics.bookingRevenue")}
                 value={fmtPrice(data.courtBookings.bookingRevenue)}
-                sub={data.openBill && data.openBill.accrued > 0 ? "Cash only (excl. open bills)" : undefined}
+                  sub={(data.openBill?.accrued ?? 0) > 0 || (data.openBill?.collected ?? 0) > 0 ? "Cash only (excl. open bills)" : undefined}
                 color="text-green-400"
               />
+              <StatCard icon={BarChart3} label={t("venueAnalytics.totalBookings")} value={String(data.courtBookings.totalBookings)} sub={data.courtBookings.cancelledBookings > 0 ? `${data.courtBookings.cancelledBookings} ${t("venueAnalytics.cancelled")}` : undefined} color="text-blue-400" />
+              <StatCard icon={TrendingUp} label={t("venueAnalytics.utilization")} value={`${data.courtBookings.utilizationPct}%`} sub={`${data.courtBookings.totalBookedHours}h / ${data.courtBookings.totalAvailableHours}h`} color="text-emerald-400" />
               <StatCard icon={Clock} label={t("venueAnalytics.hoursBooked")} value={String(data.courtBookings.totalBookedHours)} color="text-indigo-400" />
               <StatCard icon={TrendingUp} label={`${t("venueAnalytics.projected")} ${data.monthProjection.monthLabel}`} value={fmtPrice(data.monthProjection.projectedRevenue)} sub={`${fmtPrice(data.monthProjection.actualRevenue)} ${t("venueAnalytics.actualSoFar")}`} color="text-purple-400" />
               <StatCard icon={Clock} label={t("venueAnalytics.projectedHours")} value={String(data.monthProjection.projectedHours)} sub={`${data.monthProjection.actualHours}h ${t("venueAnalytics.actualSoFar")}`} color="text-pink-400" />
@@ -767,17 +885,17 @@ export default function VenueAnalyticsPage() {
               <div className="grid grid-cols-2 gap-3 md:grid-cols-4 md:gap-4">
                 <StatCard
                   icon={DollarSign}
-                  label="Net accrued (open/issued)"
-                  value={fmtPrice(data.openBill.accrued)}
-                  sub="Post-discount + VAT"
-                  color="text-amber-400"
-                />
-                <StatCard
-                  icon={DollarSign}
                   label="Net collected (paid)"
                   value={fmtPrice(data.openBill.collected)}
                   sub="Bills paid in period"
                   color="text-green-400"
+                />
+                <StatCard
+                  icon={DollarSign}
+                  label="Net accrued (open/issued)"
+                  value={fmtPrice(data.openBill.accrued)}
+                  sub="Post-discount + VAT"
+                  color="text-amber-400"
                 />
                 <StatCard
                   icon={DollarSign}
@@ -795,17 +913,40 @@ export default function VenueAnalyticsPage() {
                 />
               </div>
               <p className="text-xs text-neutral-500 mt-2">
-                Open-bill bookings are excluded from the Booking Revenue figure above. Total cash collected = Booking Revenue + Open Bill Collected.
+                Open-bill court bookings are excluded from Booking Revenue and counted here when the bill is paid.
               </p>
+            </Section>
+          )}
+
+          {/* ===== OPEN PLAY ===== */}
+          {data.openPlay && data.openPlay.totalRegistrations > 0 && (
+            <Section title="Open Play" icon={Activity}>
+              <div className="grid grid-cols-2 gap-3 md:grid-cols-4 md:gap-4">
+                <StatCard icon={DollarSign} label="Revenue" value={fmtPrice(data.openPlay.revenue)} color="text-green-400" />
+                <StatCard icon={BarChart3} label="Registrations" value={String(data.openPlay.totalRegistrations)} color="text-cyan-400" />
+                <StatCard icon={UserCheck} label="Paid" value={String(data.openPlay.paidCount)} color="text-emerald-400" />
+                <StatCard icon={XCircle} label="Unpaid / Pending" value={String(data.openPlay.unpaidCount)} color="text-amber-400" />
+              </div>
+            </Section>
+          )}
+
+          {/* ===== COURTPAY ===== */}
+          {data.courtPay && data.courtPay.totalTransactions > 0 && (
+            <Section title="CourtPay (Walk-in Sessions)" icon={CreditCard}>
+              <div className="grid grid-cols-2 gap-3 md:grid-cols-3 md:gap-4">
+                <StatCard icon={CreditCard} label="Payments Collected" value={String(data.courtPay.totalTransactions)} color="text-blue-400" />
+                <StatCard icon={DollarSign} label="Revenue" value={fmtPrice(data.courtPay.revenue)} color="text-green-400" />
+                <StatCard icon={Users} label="Players Served" value={String(data.courtPay.playersServed)} sub="incl. group payments" color="text-purple-400" />
+              </div>
             </Section>
           )}
 
           {/* ===== COACHING ===== */}
           <Section title={t("venueAnalytics.coachingSectionTitle")} icon={GraduationCap} onExport={exportCoaching}>
             <div className="grid grid-cols-2 gap-3 md:grid-cols-4 md:gap-4">
+              <StatCard icon={DollarSign} label={t("venueAnalytics.lessonRevenue")} value={fmtPrice(data.coaching.lessonRevenue)} sub={data.coaching.unpaidCount > 0 ? `${data.coaching.unpaidCount} ${t("venueAnalytics.unpaid")}` : undefined} color="text-green-400" />
               <StatCard icon={BarChart3} label={t("venueAnalytics.totalLessons")} value={String(data.coaching.totalLessons)} sub={data.coaching.cancelledLessons > 0 ? `${data.coaching.cancelledLessons} ${t("venueAnalytics.cancelled")}` : undefined} color="text-orange-400" />
               <StatCard icon={Clock} label={t("venueAnalytics.coachingHours")} value={String(data.coaching.totalHours)} color="text-indigo-400" />
-              <StatCard icon={DollarSign} label={t("venueAnalytics.lessonRevenue")} value={fmtPrice(data.coaching.lessonRevenue)} sub={data.coaching.unpaidCount > 0 ? `${data.coaching.unpaidCount} ${t("venueAnalytics.unpaid")}` : undefined} color="text-green-400" />
               <StatCard icon={Users} label={t("venueAnalytics.typeSplit")} value={`${data.coaching.lessonTypeBreakdown.private}P / ${data.coaching.lessonTypeBreakdown.group}G`} sub={t("venueAnalytics.privateGroup")} color="text-purple-400" />
             </div>
             <div className="grid gap-4 md:grid-cols-2 mt-4">
@@ -1067,6 +1208,14 @@ function Section({ title, icon: Icon, onExport, children }: {
       </div>
       {children}
     </section>
+  );
+}
+
+function RevenueEquationOp({ children }: { children: string }) {
+  return (
+    <span className="flex shrink-0 items-center justify-center self-center px-0.5 text-lg font-bold text-neutral-500 md:text-xl">
+      {children}
+    </span>
   );
 }
 

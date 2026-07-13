@@ -78,6 +78,7 @@ model Venue {
   registeredPlayers     Player[]               @relation("PlayerRegistrationVenue")
   pricingGroups         PricingGroup[]
   programPassTypes      ProgramPassType[]
+  promoCodes            PromoCode[]
   sessions              Session[]
   signupDuplicateLogs   SignupDuplicateLog[]
   staffAssignments      StaffVenueAssignment[]
@@ -159,6 +160,8 @@ model Player {
   coachStaff            StaffMember?               @relation("PlayerCoachLink", fields: [coachStaffId], references: [id], onUpdate: NoAction)
   playerIdentity        PlayerIdentity?            @relation(fields: [playerIdentityId], references: [id])
   registrationVenue     Venue?                     @relation("PlayerRegistrationVenue", fields: [registrationVenueId], references: [id])
+  promoLinkClicks       PromoLinkClick[]
+  promoRedemptions      PromoRedemption[]
   pushSubscriptions     PushSubscription[]
   queueEntries          QueueEntry[]
   signupDuplicateLogs   SignupDuplicateLog[]
@@ -1598,6 +1601,73 @@ model CompanyOpenBill {
   @@map("company_open_bills")
 }
 
+/// This model contains an expression index which requires additional setup for migrations. Visit https://pris.ly/d/expression-indexes for more info.
+model PromoCode {
+  id                       String             @id @default(cuid())
+  venueId                  String             @map("venue_id")
+  name                     String
+  code                     String
+  discountType             PromoDiscountType  @map("discount_type")
+  discountValue            Int?               @map("discount_value")
+  appliesTo                PromoAppliesTo     @default(all) @map("applies_to")
+  maxRedemptions           Int?               @map("max_redemptions")
+  redemptionCount          Int                @default(0) @map("redemption_count")
+  maxRedemptionsPerPlayer  Int?               @default(1) @map("max_redemptions_per_player")
+  startsAt                 DateTime           @map("starts_at") @db.Timestamp(6)
+  endsAt                   DateTime?          @map("ends_at") @db.Timestamp(6)
+  isActive                 Boolean            @default(true) @map("is_active")
+  postText                 String?            @map("post_text")
+  headline                 String?
+  createdAt                DateTime           @default(now()) @map("created_at") @db.Timestamp(6)
+  updatedAt                DateTime           @default(now()) @map("updated_at") @db.Timestamp(6)
+  venue                    Venue              @relation(fields: [venueId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  linkClicks               PromoLinkClick[]
+  redemptions              PromoRedemption[]
+
+  @@index([isActive])
+  @@index([venueId])
+  @@map("promo_codes")
+}
+
+model PromoLinkClick {
+  id              String            @id @default(cuid())
+  promoCodeId     String            @map("promo_code_id")
+  playerId        String?           @map("player_id")
+  utmSource       String?           @map("utm_source")
+  deviceSessionId String            @map("device_session_id")
+  clickedAt       DateTime          @default(now()) @map("clicked_at") @db.Timestamp(6)
+  player          Player?           @relation(fields: [playerId], references: [id], onUpdate: NoAction)
+  promoCode       PromoCode         @relation(fields: [promoCodeId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  redemptions     PromoRedemption[]
+
+  @@index([deviceSessionId])
+  @@index([playerId])
+  @@index([promoCodeId])
+  @@map("promo_link_clicks")
+}
+
+model PromoRedemption {
+  id             String          @id @default(cuid())
+  promoCodeId    String          @map("promo_code_id")
+  playerId       String          @map("player_id")
+  bookingId      String?         @map("booking_id")
+  bookingType    PromoBookingType @map("booking_type")
+  utmSource      String?         @map("utm_source")
+  discountAmount Int             @map("discount_amount")
+  originalPrice  Int             @map("original_price")
+  finalPrice     Int             @map("final_price")
+  firstClickId   String?         @map("first_click_id")
+  redeemedAt     DateTime        @default(now()) @map("redeemed_at") @db.Timestamp(6)
+  firstClick     PromoLinkClick? @relation(fields: [firstClickId], references: [id], onUpdate: NoAction)
+  player         Player          @relation(fields: [playerId], references: [id], onUpdate: NoAction)
+  promoCode      PromoCode       @relation(fields: [promoCodeId], references: [id], onUpdate: NoAction)
+
+  @@index([bookingId])
+  @@index([playerId])
+  @@index([promoCodeId])
+  @@map("promo_redemptions")
+}
+
 enum SkillLevel {
   beginner
   intermediate
@@ -1731,4 +1801,23 @@ enum ClassPassStatus {
   paused
   expired
   cancelled
+}
+
+enum PromoAppliesTo {
+  court_booking
+  coaching
+  open_play
+  all
+}
+
+enum PromoBookingType {
+  court_booking
+  coaching
+  open_play
+}
+
+enum PromoDiscountType {
+  percent
+  fixed
+  free
 }

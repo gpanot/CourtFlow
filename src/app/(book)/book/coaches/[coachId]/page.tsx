@@ -14,6 +14,8 @@ import { toDateKey } from "@/lib/date";
 import { hasGroupPlayerPricing, calculateSessionPrice } from "@/lib/coach-package-pricing";
 import { cellsPerLesson, validateLessonSelection, lessonSessionCount } from "@/lib/lesson-slot-selection";
 import { GRID_GRANULARITY_MINUTES } from "@/lib/booking";
+import { PromoCodeInput, usePromoSession } from "@/modules/marketing/components/PromoCodeInput";
+import { clearPromoSession } from "@/modules/marketing/hooks/usePromoCapture";
 
 function getSessionBlockSlots(
   slotStartIso: string,
@@ -125,7 +127,7 @@ function formatPackageDuration(durationMin: number): string {
 export default function CoachProfilePage() {
   const { coachId } = useParams<{ coachId: string }>();
   const router = useRouter();
-  const { status } = usePlayerSession();
+  const { status, session } = usePlayerSession();
   const { t } = useTranslation();
   const { formatDate, formatPrice } = useBookFormatters();
   const { venueId: playerVenueId } = usePlayerVenue();
@@ -143,6 +145,13 @@ export default function CoachProfilePage() {
   const [step, setStep] = useState<"profile" | "booking" | "summary">("profile");
   const [otherCoaches, setOtherCoaches] = useState<OtherCoach[]>([]);
   const [playerCount, setPlayerCount] = useState<number>(2);
+  const [appliedPromo, setAppliedPromo] = useState<{
+    code: string;
+    discountAmount: number;
+    finalPrice: number;
+    discountType: string;
+  } | null>(null);
+  const { deviceSessionId, utmSource } = usePromoSession();
   const MAX_COACH_SESSIONS = 4;
 
   // Computed client-side only to avoid SSR/hydration date mismatch
@@ -296,6 +305,9 @@ export default function CoachProfilePage() {
           creditId,
           venueId: playerVenueId || undefined,
           ...(hasGroupPlayerPricing(selectedPkg) ? { playerCount } : {}),
+          promoCode: appliedPromo?.code ?? null,
+          deviceSessionId,
+          utmSource,
         }),
       });
       const data = await res.json();
@@ -303,6 +315,8 @@ export default function CoachProfilePage() {
         console.warn("[coach-booking] 4xx response:", JSON.stringify(data));
         throw new Error(data.error || t("coaches.bookingFailed"));
       }
+
+      if (appliedPromo) clearPromoSession();
 
       if (data.paidWithCredit) {
         router.push("/book/bookings");
@@ -544,6 +558,10 @@ export default function CoachProfilePage() {
         bookingError={bookingError}
         onBack={() => setStep("booking")}
         onConfirm={confirmBooking}
+        venueId={playerVenueId ?? undefined}
+        playerId={session?.playerId ?? undefined}
+        appliedPromo={appliedPromo}
+        onPromoChange={setAppliedPromo}
       />
     );
   }
@@ -821,6 +839,10 @@ function CoachSessionSummary({
   bookingError,
   onBack,
   onConfirm,
+  venueId,
+  playerId,
+  appliedPromo,
+  onPromoChange,
 }: {
   coach: CoachProfile;
   pkg: Package;
@@ -831,6 +853,10 @@ function CoachSessionSummary({
   bookingError: string | null;
   onBack: () => void;
   onConfirm: (payWithCredit?: boolean, creditId?: string) => void;
+  venueId?: string;
+  playerId?: string;
+  appliedPromo: { code: string; discountAmount: number; finalPrice: number; discountType: string } | null;
+  onPromoChange: (promo: { code: string; discountAmount: number; finalPrice: number; discountType: string } | null) => void;
 }) {
   const { t } = useTranslation();
   const { formatDate, formatPrice } = useBookFormatters();
@@ -842,9 +868,10 @@ function CoachSessionSummary({
   const isGroupPkg = hasGroupPlayerPricing(pkg);
   // slots are 30-min cells; convert to session count before pricing
   const summarySessionCount = lessonSessionCount(slots.length, pkg);
-  const totalPrice = isGroupPkg
+  const originalTotalPrice = isGroupPkg
     ? calculateSessionPrice(pkg, { playerCount, slotCount: summarySessionCount })
     : pkg.priceValue * summarySessionCount;
+  const totalPrice = appliedPromo ? appliedPromo.finalPrice : originalTotalPrice;
   const [credits, setCredits] = useState<{ id: string; remaining: number }[]>([]);
 
   useEffect(() => {
@@ -911,9 +938,20 @@ function CoachSessionSummary({
           </>
         )}
         <div className="border-t border-[var(--cm-border)] pt-2 mt-2">
-          <Row label={t("common.total")} value={formatPrice(totalPrice)} bold />
+          <Row label={t("common.total")} value={appliedPromo && appliedPromo.finalPrice === 0 ? t("promo.free") : formatPrice(totalPrice)} bold />
         </div>
       </div>
+
+      {venueId && playerId && (
+        <PromoCodeInput
+          venueId={venueId}
+          playerId={playerId}
+          bookingType="coaching"
+          originalPrice={originalTotalPrice}
+          onPromoChange={onPromoChange}
+          formatPrice={formatPrice}
+        />
+      )}
 
       {hasCredits && (
         <button

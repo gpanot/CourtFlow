@@ -22,6 +22,9 @@ export async function POST(request: NextRequest) {
       creditId,
       venueId: bodyVenueId,
       playerCount,
+      promoCode = null,
+      deviceSessionId = null,
+      utmSource = null,
     } = body as {
       coachId: string;
       packageId: string;
@@ -32,6 +35,9 @@ export async function POST(request: NextRequest) {
       creditId?: string;
       venueId?: string;
       playerCount?: number;
+      promoCode?: string | null;
+      deviceSessionId?: string | null;
+      utmSource?: string | null;
     };
     const venueId = bodyVenueId || getPortalVenueId();
 
@@ -45,6 +51,9 @@ export async function POST(request: NextRequest) {
       creditId,
       venueId,
       playerCount,
+      promoCode,
+      deviceSessionId,
+      utmSource,
     });
 
     return json(result, 201);

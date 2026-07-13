@@ -8,11 +8,13 @@ import { useEffect, useState, Suspense, useMemo } from "react";
 import { usePlayerVenue } from "../components/PlayerVenueContext";
 import { useTranslation } from "react-i18next";
 import { useBookFormatters } from "../lib/useBookFormatters";
+import { PromoCodeInput, usePromoSession } from "@/modules/marketing/components/PromoCodeInput";
+import { clearPromoSession } from "@/modules/marketing/hooks/usePromoCapture";
 
 function ConfirmContent() {
   const searchParams = useSearchParams();
   const router = useRouter();
-  const { status } = usePlayerSession();
+  const { status, session } = usePlayerSession();
   const { t } = useTranslation();
   const { formatDateField, formatTime, formatPrice } = useBookFormatters();
   const { venueId: playerVenueId } = usePlayerVenue();
@@ -23,6 +25,13 @@ function ConfirmContent() {
   const [courtBreakdowns, setCourtBreakdowns] = useState<
     { courtId: string; courtLabel: string; total: number }[]
   >([]);
+  const [appliedPromo, setAppliedPromo] = useState<{
+    code: string;
+    discountAmount: number;
+    finalPrice: number;
+    discountType: string;
+  } | null>(null);
+  const { deviceSessionId, utmSource } = usePromoSession();
 
   const courtId = searchParams.get("courtId") || "";
   const courtIdsParam = searchParams.get("courtIds"); // comma-separated; present for multi-court
@@ -125,10 +134,14 @@ function ConfirmContent() {
             startTime: startTimeStr,
             slotCount,
             venueId: playerVenueId || undefined,
+            promoCode: appliedPromo?.code ?? null,
+            deviceSessionId,
+            utmSource,
           }),
         });
         const data = await res.json();
         if (!res.ok) throw new Error(data.error || t("confirm.bookingFailed"));
+        if (appliedPromo) clearPromoSession();
         router.replace(`/book/pay/group/${data.group.id}`);
       } else {
         const res = await portalFetch("/api/public/bookings", {
@@ -140,10 +153,14 @@ function ConfirmContent() {
             startTime: startTimeStr,
             slotCount,
             venueId: playerVenueId || undefined,
+            promoCode: appliedPromo?.code ?? null,
+            deviceSessionId,
+            utmSource,
           }),
         });
         const data = await res.json();
         if (!res.ok) throw new Error(data.error || t("confirm.bookingFailed"));
+        if (appliedPromo) clearPromoSession();
         router.replace(`/book/pay/${data.booking.id}`);
       }
     } catch (e) {
@@ -155,11 +172,12 @@ function ConfirmContent() {
   const singleCourtPrice = slotPrices.length > 0
     ? slotPrices.reduce((sum, sp) => sum + sp.price, 0)
     : urlPrice;
-  const totalPrice = isMultiCourt
+  const originalTotalPrice = isMultiCourt
     ? (courtBreakdowns.length > 0
         ? courtBreakdowns.reduce((sum, c) => sum + c.total, 0)
         : urlPrice)
     : singleCourtPrice;
+  const totalPrice = appliedPromo ? appliedPromo.finalPrice : originalTotalPrice;
 
   const fmtTime = (d: Date) => formatTime(d);
 
@@ -219,7 +237,18 @@ function ConfirmContent() {
         </div>
       </div>
 
-      <p className="text-xs text-[var(--cm-text-sec)] mb-6">
+      {session?.playerId && playerVenueId && (
+        <PromoCodeInput
+          venueId={playerVenueId}
+          playerId={session.playerId}
+          bookingType="court_booking"
+          originalPrice={originalTotalPrice}
+          onPromoChange={setAppliedPromo}
+          formatPrice={formatPrice}
+        />
+      )}
+
+      <p className="text-xs text-[var(--cm-text-sec)] mb-6 mt-4">
         {t("confirm.freeCancellation")}
       </p>
 

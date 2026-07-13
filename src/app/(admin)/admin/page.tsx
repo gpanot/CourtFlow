@@ -526,13 +526,13 @@ export default function AdminOverview() {
             </a>
           </div>
           <div className="grid grid-cols-2 gap-3">
-            <div className="rounded-lg bg-neutral-800/60 p-3">
+            <div className="rounded-lg bg-amber-500/10 p-3">
               <p className="text-xs text-neutral-500 mb-1">Accrued (not yet paid)</p>
               <p className="text-base font-semibold text-amber-400">{fmtPrice(data.openBill.monthAccrued)}</p>
             </div>
-            <div className="rounded-lg bg-neutral-800/60 p-3">
+            <div className="rounded-lg bg-green-500/10 p-3">
               <p className="text-xs text-neutral-500 mb-1 flex items-center gap-1">
-                <CheckCircle2 className="h-3 w-3 text-green-500" /> Collected
+                <CheckCircle2 className="h-3 w-3 text-green-400" /> Collected
               </p>
               <p className="text-base font-semibold text-green-400">{fmtPrice(data.openBill.monthCollected)}</p>
             </div>

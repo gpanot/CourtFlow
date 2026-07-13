@@ -72,6 +72,8 @@ export async function DELETE(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  // Intentional: promo redemption_count is NOT reversed on cancellation —
+  // a cap slot is consumed permanently at redemption time.
   try {
     const { playerId } = await requirePortalAuth(request);
     const { id } = await params;

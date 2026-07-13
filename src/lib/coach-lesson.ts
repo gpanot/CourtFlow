@@ -9,6 +9,7 @@ import { buildLessonEmailContext, sendLessonEventEmails } from "./email/send";
 import { sendCoachLessonPushFromCtx } from "./staff-push";
 import { toDateKey, parseDateKey } from "./date";
 import { hasGroupPlayerPricing, calculateSessionPrice } from "./coach-package-pricing";
+import { validatePromoCode, redeemPromoCode } from "../modules/marketing/lib/promo-code";
 
 const HOLD_MINUTES = 5;
 
@@ -80,6 +81,10 @@ export interface CreateCoachLessonInput {
   venueId: string;
   /** Number of players in the session — required for scalable group packages */
   playerCount?: number;
+  /** Optional promo code to apply — all promo logic delegated to the marketing module */
+  promoCode?: string | null;
+  deviceSessionId?: string | null;
+  utmSource?: string | null;
 }
 
 export type CreateCoachLessonResult =
@@ -150,6 +155,9 @@ export async function createCoachLesson(
     creditId,
     venueId,
     playerCount,
+    promoCode = null,
+    deviceSessionId = null,
+    utmSource = null,
   } = input;
 
   // Look up package by id + coachId only — do NOT filter by the client-provided venueId.
@@ -205,7 +213,23 @@ export async function createCoachLesson(
   const slots = Math.max(1, Math.min(4, slotCount ?? 1));
   endTime.setMinutes(endTime.getMinutes() + pkg.durationMin * slots);
 
-  const totalPrice = calculateSessionPrice(pkg, { playerCount, slotCount: slots });
+  const originalTotalPrice = calculateSessionPrice(pkg, { playerCount, slotCount: slots });
+
+  // Validate promo before availability check — no-op when promoCode is absent.
+  // All discount math and DB writes are delegated to the marketing module; no promo
+  // logic is duplicated here (isolation rule for this seam).
+  let promoResult: Awaited<ReturnType<typeof validatePromoCode>> | null = null;
+  if (promoCode && !payWithCredit) {
+    promoResult = await validatePromoCode({
+      code: promoCode,
+      venueId: resolvedVenueId,
+      playerId,
+      bookingType: "coaching",
+      originalPrice: originalTotalPrice,
+    });
+  }
+
+  const totalPrice = promoResult?.valid ? promoResult.finalPrice : originalTotalPrice;
 
   // Three-layer availability check (Google Calendar is layer 4, inside isCoachAvailable)
   const zonedStart = toZonedTime(startTime, venueTimezone);
@@ -345,25 +369,47 @@ export async function createCoachLesson(
 
   // VietQR / manual QR path — lesson starts as pending_approval
   const paymentRef = await generatePaymentRef("coach-lesson");
-  const lesson = await prisma.coachLesson.create({
-    data: {
-      venueId: resolvedVenueId,
-      coachId,
-      playerId,
-      courtId: assignedCourtId,
-      packageId,
-      date: dateForWrite,
-      startTime,
-      endTime,
-      priceValue: totalPrice,
-      playerCount: playerCount ?? null,
-      paymentStatus: "pending",
-      paymentRef,
-      status: "pending_approval",
-    },
-  });
-
   const holdExpiresAt = new Date(Date.now() + HOLD_MINUTES * 60 * 1000);
+
+  const lesson = await prisma.$transaction(async (tx) => {
+    const newLesson = await tx.coachLesson.create({
+      data: {
+        venueId: resolvedVenueId,
+        coachId,
+        playerId,
+        courtId: assignedCourtId,
+        packageId,
+        date: dateForWrite,
+        startTime,
+        endTime,
+        priceValue: totalPrice,
+        playerCount: playerCount ?? null,
+        paymentStatus: "pending",
+        paymentRef,
+        status: "pending_approval",
+      },
+    });
+
+    // Redeem promo atomically with the lesson write — delegated entirely to marketing module
+    if (promoResult?.valid) {
+      await redeemPromoCode(
+        {
+          promoId: promoResult.promo.id,
+          playerId,
+          bookingId: newLesson.id,
+          bookingType: "coaching",
+          originalPrice: originalTotalPrice,
+          discountAmount: promoResult.discountAmount,
+          finalPrice: promoResult.finalPrice,
+          deviceSessionId,
+          utmSource,
+        },
+        tx
+      );
+    }
+
+    return newLesson;
+  });
 
   const qrUrl = buildVietQRUrl({
     bankBin: venue.bankName || "",

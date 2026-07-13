@@ -6,6 +6,10 @@ import { assertVenueAccess } from "@/lib/venue-scope";
 
 export const dynamic = "force-dynamic";
 
+function isCashBooking(b: { paymentStatus: string | null; companyOpenBillId?: string | null }) {
+  return !b.companyOpenBillId && b.paymentStatus !== "open_bill";
+}
+
 export async function GET(request: NextRequest) {
   try {
     const auth = await await requireAdminAccess(request.headers);
@@ -54,6 +58,7 @@ export async function GET(request: NextRequest) {
           status: true,
           priceValue: true,
           paymentStatus: true,
+          companyOpenBillId: true,
         },
       }),
       prisma.membership.findMany({
@@ -188,7 +193,7 @@ export async function GET(request: NextRequest) {
           date: { gte: currentMonthStart, lte: currentMonthEnd },
           status: { in: ["confirmed", "completed"] },
         },
-        select: { date: true, priceValue: true, startTime: true, endTime: true, paymentStatus: true },
+        select: { date: true, priceValue: true, startTime: true, endTime: true, paymentStatus: true, companyOpenBillId: true },
       }),
       prisma.booking.findMany({
         where: {
@@ -196,7 +201,7 @@ export async function GET(request: NextRequest) {
           date: { gte: last90Start, lt: currentMonthStart },
           status: { in: ["confirmed", "completed"] },
         },
-        select: { date: true, priceValue: true, startTime: true, endTime: true, paymentStatus: true },
+        select: { date: true, priceValue: true, startTime: true, endTime: true, paymentStatus: true, companyOpenBillId: true },
       }),
       prisma.session.findMany({
         where: {
@@ -210,7 +215,7 @@ export async function GET(request: NextRequest) {
           venueId,
           date: { gte: prevMonthStart, lte: prevMonthEnd },
         },
-        select: { status: true, priceValue: true, startTime: true, endTime: true, paymentStatus: true },
+        select: { status: true, priceValue: true, startTime: true, endTime: true, paymentStatus: true, companyOpenBillId: true },
       }),
       prisma.coachLesson.findMany({
         where: {
@@ -259,8 +264,7 @@ export async function GET(request: NextRequest) {
     const monthRevenueByDay: Record<number, number> = {};
     const monthHoursByDay: Record<number, number> = {};
     for (const b of monthBookings) {
-      // Exclude open-bill bookings from cash revenue — they're tracked via company_open_bills
-      if (b.paymentStatus === "open_bill") continue;
+      if (!isCashBooking(b)) continue;
       const day = new Date(b.date).getUTCDate();
       monthRevenueByDay[day] = (monthRevenueByDay[day] || 0) + b.priceValue;
       monthHoursByDay[day] = (monthHoursByDay[day] || 0) +
@@ -270,7 +274,7 @@ export async function GET(request: NextRequest) {
     // 90-day daily averages for projection — exclude open_bill bookings
     const last90Days = Math.max(1, Math.ceil((currentMonthStart.getTime() - last90Start.getTime()) / 86400000));
     const totalRevenue90 = last90Bookings
-      .filter((b) => b.paymentStatus !== "open_bill")
+      .filter(isCashBooking)
       .reduce((s, b) => s + b.priceValue, 0);
     let totalHours90 = 0;
     for (const b of last90Bookings) {
@@ -316,8 +320,8 @@ export async function GET(request: NextRequest) {
     // --- COURT BOOKING ANALYTICS ---
     const confirmedBookings = bookings.filter((b) => b.status === "confirmed" || b.status === "completed");
     const cancelledBookings = bookings.filter((b) => b.status === "cancelled");
-    // Cash-paying confirmed bookings only — open_bill bookings are tracked via company_open_bills
-    const cashConfirmedBookings = confirmedBookings.filter((b) => b.paymentStatus !== "open_bill");
+    // Cash-paying confirmed bookings only — open-bill bookings tracked via company_open_bills
+    const cashConfirmedBookings = confirmedBookings.filter(isCashBooking);
 
     const totalDays = Math.max(1, Math.ceil((dateTo.getTime() - dateFrom.getTime()) / 86400000));
     const bookableCourtCount = courts.length;
@@ -430,8 +434,7 @@ export async function GET(request: NextRequest) {
     // --- MONTH OVER MONTH COMPARISON ---
     const prevConfirmed = prevMonthBookings.filter((b) => b.status === "confirmed" || b.status === "completed");
     const prevCancelled = prevMonthBookings.filter((b) => b.status === "cancelled");
-    // Exclude open_bill bookings from cash MoM revenue
-    const prevCashConfirmed = prevConfirmed.filter((b) => b.paymentStatus !== "open_bill");
+      const prevCashConfirmed = prevConfirmed.filter(isCashBooking);
     const prevRevenue = prevCashConfirmed.reduce((s, b) => s + b.priceValue, 0);
     let prevBookedHours = 0;
     for (const b of prevConfirmed) {
@@ -573,7 +576,8 @@ export async function GET(request: NextRequest) {
     const courtPayPlayersServed = sessionFeePayments.reduce((s, p) => s + p.partyCount, 0);
 
     // --- TOTAL REVENUE SUMMARY ---
-    const totalRevenue = bookingRevenue + openPlayRevenue + courtPayRevenue + lessonRevenue;
+    const totalRevenue =
+      bookingRevenue + openPlayRevenue + courtPayRevenue + lessonRevenue + openBillCollected;
 
     return json({
       courtBookings: {
@@ -611,7 +615,7 @@ export async function GET(request: NextRequest) {
           },
           current: {
             bookings: monthBookings.length,
-            revenue: monthBookings.filter((b) => b.paymentStatus !== "open_bill").reduce((s, b) => s + b.priceValue, 0),
+            revenue: monthBookings.filter(isCashBooking).reduce((s, b) => s + b.priceValue, 0),
             hours: Math.round(actualMonthHours * 10) / 10,
             utilPct: (() => {
               const curAvail = bookableCourtCount * hoursPerDayPerCourt * todayDate;

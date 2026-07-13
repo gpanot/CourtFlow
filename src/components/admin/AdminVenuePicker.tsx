@@ -22,6 +22,8 @@ import { useAdminVenueStore } from "@/stores/admin-venue-store";
 export interface AdminVenueOption {
   id: string;
   name: string;
+  /** ISO 4217 currency code from Organization.currency (e.g. "VND", "THB"). Available when fetched via useAdminVenuePicker. */
+  currency?: string;
 }
 
 // ── Hook ──────────────────────────────────────────────────────────────────────
@@ -50,8 +52,13 @@ export function useAdminVenuePicker(opts: UseAdminVenuePickerOptions = {}) {
     api
       .get<AdminVenueOption[]>("/api/admin/venues")
       .then((data) => {
-        // API returns full venue objects — keep only id + name
-        const list: AdminVenueOption[] = data.map((v) => ({ id: v.id, name: v.name }));
+        // API returns full venue objects — keep id, name, and org currency
+        const raw = data as (AdminVenueOption & { organization?: { currency?: string } })[];
+        const list: AdminVenueOption[] = raw.map((v) => ({
+          id: v.id,
+          name: v.name,
+          currency: v.organization?.currency ?? undefined,
+        }));
         setVenues(list);
         opts.onVenuesLoaded?.(list);
 

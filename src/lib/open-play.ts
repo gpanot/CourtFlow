@@ -2,6 +2,7 @@ import { prisma } from "./db";
 import { getScheduleConfig } from "./booking";
 import { generatePaymentRef } from "@/modules/courtpay/lib/payment-reference";
 import { toDateKey } from "@/lib/date";
+import { validatePromoCode, redeemPromoCode } from "@/modules/marketing/lib/promo-code";
 
 /** Returns a Date at noon local time (UTC+7) for a given local-midnight Date.
  *  Prisma serialises Date via .toISOString(); noon local = 05:00 UTC which always
@@ -169,7 +170,10 @@ export async function createOpenPlayRegistration(
   venueId: string,
   scheduleEntryId: string,
   date: Date,
-  discountPct?: number
+  discountPct?: number,
+  promoCode?: string | null,
+  deviceSessionId?: string | null,
+  utmSource?: string | null
 ) {
   const localMidnight = new Date(date);
   localMidnight.setHours(0, 0, 0, 0);
@@ -203,9 +207,24 @@ export async function createOpenPlayRegistration(
   }
 
   const basePrice = entry.priceValue ?? 0;
-  const priceValue = discountPct && discountPct > 0
+  const discountedPrice = discountPct && discountPct > 0
     ? Math.round(basePrice * (100 - discountPct) / 100)
     : basePrice;
+
+  // Validate promo before the transaction — all promo logic delegated to marketing module;
+  // no promo-specific logic is duplicated here (isolation rule for this seam).
+  let promoResult: Awaited<ReturnType<typeof validatePromoCode>> | null = null;
+  if (promoCode && discountedPrice > 0) {
+    promoResult = await validatePromoCode({
+      code: promoCode,
+      venueId,
+      playerId,
+      bookingType: "open_play",
+      originalPrice: discountedPrice,
+    });
+  }
+
+  const priceValue = promoResult?.valid ? promoResult.finalPrice : discountedPrice;
   const holdExpiresAt = new Date(Date.now() + 5 * 60 * 1000);
 
   // Generate payment ref before the transaction to avoid nested Prisma client calls
@@ -249,6 +268,25 @@ export async function createOpenPlayRegistration(
           paymentProofUrl: null,
         },
       });
+
+      // Redeem promo on re-register path as well — must be atomic with the record update
+      if (promoResult?.valid) {
+        await redeemPromoCode(
+          {
+            promoId: promoResult.promo.id,
+            playerId,
+            bookingId: updated.id,
+            bookingType: "open_play",
+            originalPrice: discountedPrice,
+            discountAmount: promoResult.discountAmount,
+            finalPrice: promoResult.finalPrice,
+            deviceSessionId: deviceSessionId ?? null,
+            utmSource: utmSource ?? null,
+          },
+          tx
+        );
+      }
+
       return updated;
     }
 
@@ -269,7 +307,7 @@ export async function createOpenPlayRegistration(
       throw Object.assign(new Error("Session is full"), { status: 409 });
     }
 
-    return tx.openPlayRegistration.create({
+    const newReg = await tx.openPlayRegistration.create({
       data: {
         venueId,
         scheduleEntryId,
@@ -284,5 +322,25 @@ export async function createOpenPlayRegistration(
         status: "confirmed",
       },
     });
+
+    // Redeem promo atomically with the registration write — delegated to marketing module
+    if (promoResult?.valid) {
+      await redeemPromoCode(
+        {
+          promoId: promoResult.promo.id,
+          playerId,
+          bookingId: newReg.id,
+          bookingType: "open_play",
+          originalPrice: discountedPrice,
+          discountAmount: promoResult.discountAmount,
+          finalPrice: promoResult.finalPrice,
+          deviceSessionId: deviceSessionId ?? null,
+          utmSource: utmSource ?? null,
+        },
+        tx
+      );
+    }
+
+    return newReg;
   });
 }

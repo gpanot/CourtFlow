@@ -44,6 +44,9 @@ export async function POST(request: NextRequest) {
       scheduleEntryId: string;
       date: string;
       venueId?: string;
+      promoCode?: string | null;
+      deviceSessionId?: string | null;
+      utmSource?: string | null;
     };
 
     if (!body.scheduleEntryId || !body.date) {
@@ -57,7 +60,16 @@ export async function POST(request: NextRequest) {
     });
     if (!venue) return error("Venue not found", 404);
 
-    const reg = await createOpenPlayRegistration(playerId, venueId, body.scheduleEntryId, parseDateKey(body.date));
+    const reg = await createOpenPlayRegistration(
+      playerId,
+      venueId,
+      body.scheduleEntryId,
+      parseDateKey(body.date),
+      undefined,
+      body.promoCode,
+      body.deviceSessionId,
+      body.utmSource
+    );
 
     const qrUrl = buildVietQRUrl({
       bankBin: venue.bankName || "",

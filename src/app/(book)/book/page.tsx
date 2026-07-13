@@ -11,6 +11,7 @@ import { useBookFormatters } from "./lib/useBookFormatters";
 import { BookTabTopBar } from "./components/BookTabTopBar";
 import { resolveUploadUrl } from "@/lib/resolve-upload-url";
 import { portalFetch } from "@/lib/portal-fetch";
+import { usePromoCapture } from "@/modules/marketing/hooks/usePromoCapture";
 
 const NAME_PROMPT_DISMISSED_KEY = "name_prompt_dismissed";
 
@@ -150,6 +151,9 @@ export default function VenueHomePage() {
   const { t } = useTranslation();
   const { formatDate, formatTime, formatPrice } = useBookFormatters();
   const { venueId: playerVenueId, loading: venueLoading } = usePlayerVenue();
+
+  // Capture ?promo= and ?utm_source= from marketing links on first mount
+  usePromoCapture({ venueId: playerVenueId ?? undefined });
   const venueReady = status !== "authenticated" || !venueLoading;
   const [venue, setVenue] = useState<VenueInfo | null>(null);
   const [grid, setGrid] = useState<CourtSlot[]>([]);

@@ -6,6 +6,9 @@
  * - One-time paid lessons: no refund.
  * - Fires emails to student, coach, and staff.
  * - Returns 403 if within 48h of start (student must call staff).
+ *
+ * Intentional: promo redemption_count is NOT reversed on cancellation —
+ * a cap slot is consumed permanently at redemption time.
  */
 import { NextRequest } from "next/server";
 import { json, error } from "@/lib/api-helpers";

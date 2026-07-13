@@ -7,7 +7,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { cn } from "@/lib/cn";
 import { applyThemeMode, getStoredThemeMode, setStoredThemeMode, type ThemeMode } from "@/lib/theme-mode";
-import { LayoutDashboard, MapPin, Users, UserCircle, BarChart3, Monitor, Banknote, Crown, CalendarDays, GraduationCap, LogOut, Menu, X, CreditCard, Receipt, ScanFace, Sun, Moon, ChevronLeft, ChevronDown, ChevronRight, ShoppingBag, AlertTriangle, PieChart, ShieldAlert, Wallet, Settings, Building2, Ticket, Briefcase } from "lucide-react";
+import { LayoutDashboard, MapPin, Users, UserCircle, BarChart3, Monitor, Banknote, Crown, CalendarDays, GraduationCap, LogOut, Menu, X, CreditCard, Receipt, ScanFace, Sun, Moon, ChevronLeft, ChevronDown, ChevronRight, ShoppingBag, AlertTriangle, PieChart, ShieldAlert, Wallet, Settings, Building2, Ticket, Briefcase, Megaphone } from "lucide-react";
 import { SetupWizardBanner } from "@/components/setup-wizard-banner";
 import { AiChatWidget } from "@/components/admin/AiChatWidget";
 import { AdminBookingNotifications } from "@/components/admin/AdminBookingNotifications";
@@ -44,6 +44,7 @@ const navSections: NavSection[] = [
       { href: "/admin/program-passes", label: "nav.programPasses", icon: Ticket, superadminOnly: true },
       { href: "/admin/company-accounts", label: "nav.companyAccounts", icon: Briefcase, superadminOnly: true },
       { href: "/admin/courtpass-players", label: "nav.courtpassPlayers", icon: UserCircle, requiresAccess: "courtpass_staff" },
+      { href: "/admin/marketing-campaigns", label: "nav.marketingCampaigns", icon: Megaphone, requiresAccess: "courtpass_staff" },
       { href: "/admin/staff", label: "nav.staff", icon: Users },
       { href: "/admin/venue-analytics", label: "nav.venueAnalytics", icon: PieChart },
       { href: "/admin/my-billing", label: "nav.myBilling", icon: Wallet, superadminOnly: false },

@@ -14,6 +14,7 @@ import {
 } from "@/lib/booking";
 import { generatePaymentRef } from "@/modules/courtpay/lib/payment-reference";
 import { buildVietQRUrl } from "@/lib/vietqr";
+import { validatePromoCode, redeemPromoCode } from "@/modules/marketing/lib/promo-code";
 
 export const dynamic = "force-dynamic";
 
@@ -30,7 +31,16 @@ export async function POST(request: NextRequest) {
       venueId?: string;
     };
 
-    const { date: dateStr, startTime: startTimeStr, slotCount: rawSlotCount, courtIds, venueId: bodyVenueId } = body;
+    const {
+      date: dateStr,
+      startTime: startTimeStr,
+      slotCount: rawSlotCount,
+      courtIds,
+      venueId: bodyVenueId,
+      promoCode = null,
+      deviceSessionId = null,
+      utmSource = null,
+    } = body as typeof body & { promoCode?: string | null; deviceSessionId?: string | null; utmSource?: string | null };
 
     if (!dateStr || !startTimeStr || !rawSlotCount || !Array.isArray(courtIds) || courtIds.length < 2) {
       return error("date, startTime, slotCount, and courtIds[] (min 2) are required", 400);
@@ -91,6 +101,20 @@ export async function POST(request: NextRequest) {
     const endTime = new Date(startTime.getTime() + durationMs);
 
     const pricing = resolveGroupBookingPrice(config, courtsInput, venueTimezone, courtMatrices);
+
+    // Validate promo before the transaction
+    let promoResult: Awaited<ReturnType<typeof validatePromoCode>> | null = null;
+    if (promoCode) {
+      promoResult = await validatePromoCode({
+        code: promoCode,
+        venueId,
+        playerId,
+        bookingType: "court_booking",
+        originalPrice: pricing.total,
+      });
+    }
+    const effectiveTotal = promoResult?.valid ? promoResult.finalPrice : pricing.total;
+
     const paymentRef = await generatePaymentRef("booking");
     const holdExpiresAt = new Date(Date.now() + HOLD_MINUTES * 60 * 1000);
 
@@ -131,7 +155,7 @@ export async function POST(request: NextRequest) {
             date: dateForWrite,
             startTime,
             endTime,
-            totalPriceValue: pricing.total,
+            totalPriceValue: effectiveTotal,
             paymentRef,
             paymentStatus: "pending",
             holdExpiresAt,
@@ -162,6 +186,24 @@ export async function POST(request: NextRequest) {
           })
         );
 
+        // Redeem promo atomically inside the transaction (references the group)
+        if (promoResult?.valid) {
+          await redeemPromoCode(
+            {
+              promoId: promoResult.promo.id,
+              playerId,
+              bookingId: group.id,
+              bookingType: "court_booking",
+              originalPrice: pricing.total,
+              discountAmount: promoResult.discountAmount,
+              finalPrice: promoResult.finalPrice,
+              deviceSessionId,
+              utmSource,
+            },
+            tx
+          );
+        }
+
         return { group, bookings: bookingRows };
       });
 
@@ -169,7 +211,7 @@ export async function POST(request: NextRequest) {
         bankBin: venue.bankName || "",
         accountNumber: venue.bankAccount || "",
         accountName: venue.bankOwnerName || "",
-        amount: pricing.total,
+        amount: effectiveTotal,
         description: paymentRef,
       });
 
@@ -181,7 +223,7 @@ export async function POST(request: NextRequest) {
             paymentRef,
             holdExpiresAt: holdExpiresAt.toISOString(),
             qrUrl,
-            amount: pricing.total,
+            amount: effectiveTotal,
             bankName: venue.bankName,
             bankAccount: venue.bankAccount,
             bankOwnerName: venue.bankOwnerName,

@@ -20,6 +20,7 @@ import {
   attachBookingToOpenBill,
   getOpenBillVenueSettings,
 } from "@/lib/open-bill";
+import { validatePromoCode, redeemPromoCode } from "@/modules/marketing/lib/promo-code";
 
 export const dynamic = "force-dynamic";
 
@@ -35,12 +36,18 @@ export async function POST(request: NextRequest) {
       startTime: startTimeStr,
       venueId: bodyVenueId,
       slotCount: rawSlotCount,
+      promoCode = null,
+      deviceSessionId = null,
+      utmSource = null,
     } = body as {
       courtId: string;
       date: string;
       startTime: string;
       venueId?: string;
       slotCount?: number;
+      promoCode?: string | null;
+      deviceSessionId?: string | null;
+      utmSource?: string | null;
     };
     const venueId = bodyVenueId || getPortalVenueId();
 
@@ -102,6 +109,19 @@ export async function POST(request: NextRequest) {
       }
     }
 
+    // Validate promo code if provided (before opening the transaction)
+    let promoResult: Awaited<ReturnType<typeof validatePromoCode>> | null = null;
+    if (promoCode) {
+      promoResult = await validatePromoCode({
+        code: promoCode,
+        venueId,
+        playerId,
+        bookingType: "court_booking",
+        originalPrice: totalPrice,
+      });
+    }
+
+    const effectiveTotalPrice = promoResult?.valid ? promoResult.finalPrice : totalPrice;
     const paymentRef = openBillAccount ? null : await generatePaymentRef("booking");
     const holdExpiresAt = openBillAccount ? null : new Date(Date.now() + HOLD_MINUTES * 60 * 1000);
 
@@ -133,7 +153,7 @@ export async function POST(request: NextRequest) {
           throw new Error("CONFLICT");
         }
 
-        return tx.booking.create({
+        const newBooking = await tx.booking.create({
           data: {
             courtId,
             venueId,
@@ -142,7 +162,7 @@ export async function POST(request: NextRequest) {
             startTime,
             endTime,
             status: "confirmed",
-            priceValue: totalPrice,
+            priceValue: effectiveTotalPrice,
             coPlayerIds: [],
             paymentStatus: openBillAccount ? "open_bill" : "pending",
             holdExpiresAt,
@@ -150,6 +170,26 @@ export async function POST(request: NextRequest) {
           },
           include: { court: { select: { id: true, label: true } } },
         });
+
+        // Redeem promo inside the same transaction (atomic)
+        if (promoResult?.valid) {
+          await redeemPromoCode(
+            {
+              promoId: promoResult.promo.id,
+              playerId,
+              bookingId: newBooking.id,
+              bookingType: "court_booking",
+              originalPrice: totalPrice,
+              discountAmount: promoResult.discountAmount,
+              finalPrice: promoResult.finalPrice,
+              deviceSessionId,
+              utmSource,
+            },
+            tx
+          );
+        }
+
+        return newBooking;
       });
 
       // Attach open-bill booking to the current bill (outside the main tx — idempotent)
@@ -176,7 +216,7 @@ export async function POST(request: NextRequest) {
         bankBin: venue.bankName || "",
         accountNumber: venue.bankAccount || "",
         accountName: venue.bankOwnerName || "",
-        amount: totalPrice,
+        amount: effectiveTotalPrice,
         description: paymentRef!,
       });
 
@@ -187,7 +227,7 @@ export async function POST(request: NextRequest) {
             paymentRef,
             holdExpiresAt: holdExpiresAt!.toISOString(),
             qrUrl,
-            amount: totalPrice,
+            amount: effectiveTotalPrice,
             bankName: venue.bankName,
             bankAccount: venue.bankAccount,
             bankOwnerName: venue.bankOwnerName,

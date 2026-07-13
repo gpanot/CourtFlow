@@ -486,5 +486,22 @@
     "placeholder": "Your name",
     "save": "Save",
     "doItLater": "Do it later"
+  },
+  "promo": {
+    "haveCode": "Have a promo code?",
+    "placeholder": "Enter code",
+    "apply": "Apply",
+    "remove": "Remove",
+    "applied": "Promo applied",
+    "discount": "Discount",
+    "free": "FREE",
+    "errors": {
+      "notFound": "Promo code not found",
+      "expired": "This promo code has expired",
+      "limitReached": "This promo code has reached its limit",
+      "notApplicable": "This code is not valid for this booking type",
+      "alreadyUsed": "You've already used this promo code",
+      "notStarted": "This promo code is not active yet"
+    }
   }
 }

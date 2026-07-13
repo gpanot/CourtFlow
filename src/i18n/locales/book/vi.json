@@ -486,5 +486,22 @@
     "placeholder": "Tên của bạn",
     "save": "Lưu",
     "doItLater": "Để sau"
+  },
+  "promo": {
+    "haveCode": "Bạn có mã khuyến mãi?",
+    "placeholder": "Nhập mã",
+    "apply": "Áp dụng",
+    "remove": "Xóa",
+    "applied": "Đã áp dụng mã",
+    "discount": "Giảm giá",
+    "free": "MIỄN PHÍ",
+    "errors": {
+      "notFound": "Không tìm thấy mã khuyến mãi",
+      "expired": "Mã khuyến mãi đã hết hạn",
+      "limitReached": "Mã khuyến mãi đã đạt giới hạn",
+      "notApplicable": "Mã này không áp dụng cho loại đặt sân này",
+      "alreadyUsed": "Bạn đã sử dụng mã khuyến mãi này rồi",
+      "notStarted": "Mã khuyến mãi chưa được kích hoạt"
+    }
   }
 }

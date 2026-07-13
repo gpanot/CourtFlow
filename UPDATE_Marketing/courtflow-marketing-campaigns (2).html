@@ -1,0 +1,1154 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Marketing Campaigns · CourtFlow</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #0a0a0a;
+    --surface: #171717;
+    --surface-2: #262626;
+    --border: #2e2e2e;
+    --text: #fafafa;
+    --text-dim: #a3a3a3;
+    --text-faint: #6b6b6b;
+    --emerald: #10b981;
+    --amber: #f59e0b;
+    --blue: #3b82f6;
+    --purple: #a855f7;
+    --orange: #f97316;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Inter', -apple-system, sans-serif;
+    font-size: 14px;
+    line-height: 1.5;
+    -webkit-font-smoothing: antialiased;
+  }
+  .app { display: flex; min-height: 100vh; }
+
+  /* Sidebar */
+  .sidebar {
+    width: 220px;
+    background: var(--surface);
+    border-right: 1px solid var(--border);
+    padding: 20px 12px;
+    flex-shrink: 0;
+  }
+  .sidebar-brand {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 10px 20px;
+    font-weight: 800;
+    font-size: 15px;
+    letter-spacing: -0.02em;
+  }
+  .sidebar-brand .dot { width: 8px; height: 8px; border-radius: 2px; background: var(--emerald); }
+  .nav-group { margin-bottom: 18px; }
+  .nav-label {
+    font-size: 10.5px;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--text-faint);
+    padding: 0 10px 6px;
+    font-weight: 600;
+  }
+  .nav-item {
+    display: flex;
+    align-items: center;
+    gap: 9px;
+    padding: 7px 10px;
+    border-radius: 8px;
+    color: var(--text-dim);
+    font-size: 13px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: background 0.12s, color 0.12s;
+  }
+  .nav-item:hover { background: var(--surface-2); color: var(--text); }
+  .nav-item.active { background: var(--surface-2); color: var(--text); }
+  .nav-item.active .nav-ico { color: var(--orange); }
+  .nav-ico { width: 15px; height: 15px; flex-shrink: 0; color: var(--text-faint); }
+
+  /* Main */
+  .main { flex: 1; min-width: 0; }
+  .topbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 18px 32px;
+    border-bottom: 1px solid var(--border);
+  }
+  .topbar h1 { font-size: 17px; font-weight: 700; letter-spacing: -0.01em; }
+  .topbar p { font-size: 12.5px; color: var(--text-faint); margin-top: 2px; }
+  .venue-pill {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    padding: 7px 12px;
+    border-radius: 9px;
+    font-size: 13px;
+    font-weight: 500;
+    cursor: pointer;
+  }
+  .venue-pill .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--emerald); }
+
+  .content { padding: 24px 32px 60px; max-width: 1180px; }
+
+  /* Tabs */
+  .tabs {
+    display: flex;
+    gap: 4px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    padding: 4px;
+    border-radius: 10px;
+    width: fit-content;
+    margin-bottom: 24px;
+  }
+  .tab {
+    padding: 8px 16px;
+    border-radius: 7px;
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text-dim);
+    cursor: pointer;
+    transition: all 0.15s;
+  }
+  .tab:hover { color: var(--text); }
+  .tab.active { background: var(--surface-2); color: var(--text); }
+
+  .panel { display: none; }
+  .panel.active { display: block; animation: fadein 0.2s ease; }
+  @keyframes fadein { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: translateY(0); } }
+
+  /* KPI row */
+  .kpi-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 24px; }
+  .kpi-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 16px 18px;
+  }
+  .kpi-label { font-size: 12px; color: var(--text-faint); font-weight: 500; margin-bottom: 8px; }
+  .kpi-value { font-size: 24px; font-weight: 700; letter-spacing: -0.02em; font-variant-numeric: tabular-nums; }
+  .kpi-delta { font-size: 11.5px; margin-top: 6px; font-weight: 600; }
+  .kpi-delta.up { color: var(--emerald); }
+  .kpi-delta.flat { color: var(--text-faint); }
+
+  /* Campaign list */
+  .list-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 14px;
+  }
+  .list-header h2 { font-size: 14px; font-weight: 700; }
+  .btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 8px 14px;
+    border-radius: 8px;
+    font-size: 13px;
+    font-weight: 600;
+    border: none;
+    cursor: pointer;
+    transition: opacity 0.15s;
+  }
+  .btn:hover { opacity: 0.88; }
+  .btn-primary { background: var(--orange); color: #0a0a0a; }
+  .btn-ghost { background: var(--surface-2); color: var(--text); border: 1px solid var(--border); }
+
+  table { width: 100%; border-collapse: collapse; }
+  .table-wrap {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    overflow: hidden;
+  }
+  th {
+    text-align: left;
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--text-faint);
+    font-weight: 600;
+    padding: 12px 16px;
+    border-bottom: 1px solid var(--border);
+    background: rgba(255,255,255,0.015);
+  }
+  td { padding: 13px 16px; border-bottom: 1px solid var(--border); font-size: 13px; }
+  tr:last-child td { border-bottom: none; }
+  tr.row:hover { background: rgba(255,255,255,0.02); }
+  tr.row[onclick] { cursor: pointer; }
+
+  /* Campaign detail drawer */
+  .drawer-overlay {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.55);
+    z-index: 50;
+  }
+  .drawer-overlay.open { display: block; animation: fadein 0.15s ease; }
+  .drawer {
+    position: fixed;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    width: 640px;
+    max-width: 92vw;
+    background: var(--bg);
+    border-left: 1px solid var(--border);
+    z-index: 51;
+    overflow-y: auto;
+    transform: translateX(100%);
+    transition: transform 0.22s ease;
+  }
+  .drawer.open { transform: translateX(0); }
+  .drawer-header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    padding: 22px 26px 18px;
+    border-bottom: 1px solid var(--border);
+    position: sticky;
+    top: 0;
+    background: var(--bg);
+    z-index: 2;
+  }
+  .drawer-title { font-size: 16px; font-weight: 700; margin-bottom: 4px; }
+  .drawer-subtitle { font-size: 12.5px; color: var(--text-faint); }
+  .drawer-close {
+    background: var(--surface-2);
+    border: 1px solid var(--border);
+    color: var(--text-dim);
+    width: 28px; height: 28px;
+    border-radius: 8px;
+    display: flex; align-items: center; justify-content: center;
+    cursor: pointer;
+    flex-shrink: 0;
+  }
+  .drawer-close:hover { color: var(--text); }
+  .drawer-body { padding: 22px 26px 40px; }
+
+  .drawer-kpi-row { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-bottom: 24px; }
+  .drawer-kpi {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 13px 14px;
+  }
+  .drawer-kpi-label { font-size: 11px; color: var(--text-faint); font-weight: 500; margin-bottom: 6px; }
+  .drawer-kpi-value { font-size: 18px; font-weight: 700; font-variant-numeric: tabular-nums; }
+
+  .redemption-table-wrap {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    overflow: hidden;
+  }
+  .redemption-table-wrap table { width: 100%; }
+  .redemption-table-wrap th {
+    font-size: 10.5px;
+    padding: 10px 14px;
+  }
+  .redemption-table-wrap td { padding: 11px 14px; font-size: 12.5px; }
+  .player-cell { font-weight: 600; }
+  .player-phone { font-size: 11px; color: var(--text-faint); margin-top: 1px; }
+  .convert-badge {
+    font-size: 11px;
+    font-weight: 600;
+    padding: 3px 8px;
+    border-radius: 6px;
+    display: inline-block;
+  }
+  .convert-badge.instant { background: rgba(16,185,129,0.12); color: var(--emerald); }
+  .convert-badge.same-day { background: rgba(59,130,246,0.12); color: var(--blue); }
+  .convert-badge.deliberated { background: rgba(245,158,11,0.12); color: var(--amber); }
+  .convert-badge.unknown { background: var(--surface-2); color: var(--text-faint); }
+  .sort-hint { font-size: 11.5px; color: var(--text-faint); margin: -10px 0 12px; }
+  .campaign-name { font-weight: 600; }
+  .campaign-code {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11.5px;
+    color: var(--text-dim);
+    background: var(--surface-2);
+    padding: 2px 7px;
+    border-radius: 5px;
+    display: inline-block;
+    margin-top: 3px;
+  }
+  .status-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    font-size: 11.5px;
+    font-weight: 600;
+    padding: 3px 9px;
+    border-radius: 20px;
+  }
+  .status-pill.active { background: rgba(16,185,129,0.12); color: var(--emerald); }
+  .status-pill.ended { background: rgba(163,163,163,0.12); color: var(--text-faint); }
+  .status-pill.scheduled { background: rgba(59,130,246,0.12); color: var(--blue); }
+  .channel-badge {
+    font-size: 11px;
+    font-weight: 600;
+    padding: 3px 8px;
+    border-radius: 6px;
+    background: var(--surface-2);
+    color: var(--text-dim);
+  }
+  .num { font-variant-numeric: tabular-nums; font-weight: 600; }
+
+  /* Create tab layout */
+  .create-grid { display: grid; grid-template-columns: 1fr 380px; gap: 20px; align-items: start; }
+  .form-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 22px;
+  }
+  .form-card h3 { font-size: 13px; font-weight: 700; margin-bottom: 16px; }
+  .field { margin-bottom: 16px; }
+  .field label {
+    display: block;
+    font-size: 12.5px;
+    font-weight: 600;
+    color: var(--text-dim);
+    margin-bottom: 6px;
+  }
+  .field input, .field select {
+    width: 100%;
+    background: var(--surface-2);
+    border: 1px solid var(--border);
+    color: var(--text);
+    padding: 9px 12px;
+    border-radius: 8px;
+    font-size: 13.5px;
+    font-family: inherit;
+  }
+  .field input:focus, .field select:focus {
+    outline: none;
+    border-color: var(--orange);
+  }
+  .field input:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+  }
+  .field-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  .hint { font-size: 11.5px; color: var(--text-faint); margin-top: 5px; }
+  .segment-chips { display: flex; flex-wrap: wrap; gap: 8px; }
+  .chip {
+    padding: 7px 12px;
+    border-radius: 8px;
+    background: var(--surface-2);
+    border: 1px solid var(--border);
+    font-size: 12.5px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.15s;
+  }
+  .chip.selected { border-color: var(--orange); background: rgba(249,115,22,0.1); color: var(--orange); }
+
+  /* Preview card */
+  .preview-sticky { position: sticky; top: 24px; }
+  .preview-label {
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--text-faint);
+    font-weight: 600;
+    margin-bottom: 10px;
+  }
+  .fb-card {
+    background: #ffffff;
+    border-radius: 10px;
+    overflow: hidden;
+    color: #050505;
+    font-family: 'Inter', sans-serif;
+    box-shadow: 0 0 0 1px var(--border);
+  }
+  .fb-header { display: flex; align-items: center; gap: 8px; padding: 12px 14px 8px; }
+  .fb-avatar {
+    width: 36px; height: 36px; border-radius: 50%;
+    background: linear-gradient(135deg, var(--emerald), var(--blue));
+    flex-shrink: 0;
+  }
+  .fb-name { font-size: 13.5px; font-weight: 700; color: #050505; }
+  .fb-meta { font-size: 11.5px; color: #65676b; }
+  .fb-body { padding: 0 14px 10px; font-size: 13.5px; color: #050505; line-height: 1.4; }
+  .fb-link-name { font-size: 13px; color: #050505; }
+  .fb-image {
+    height: 160px;
+    background: linear-gradient(135deg, #171717, #262626);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    position: relative;
+    overflow: hidden;
+  }
+  .fb-image::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background-image: repeating-linear-gradient(45deg, rgba(249,115,22,0.06) 0 2px, transparent 2px 40px);
+  }
+  .fb-image-text { font-size: 22px; font-weight: 800; color: var(--text); text-align: center; z-index: 1; padding: 0 20px; letter-spacing: -0.02em; }
+  .fb-image-sub { font-size: 12px; color: var(--orange); font-weight: 700; margin-top: 4px; z-index: 1; letter-spacing: 0.04em; }
+  .fb-domain-bar {
+    background: #f0f2f5;
+    padding: 9px 14px;
+  }
+  .fb-domain { font-size: 10.5px; text-transform: uppercase; color: #65676b; letter-spacing: 0.03em; }
+  .fb-headline { font-size: 14px; font-weight: 700; color: #050505; margin-top: 2px; }
+  .fb-cta {
+    background: #e4e6eb;
+    color: #050505;
+    font-size: 12px;
+    font-weight: 700;
+    padding: 5px 10px;
+    border-radius: 5px;
+    float: right;
+    margin-top: -22px;
+  }
+  .fb-actions {
+    display: flex;
+    border-top: 1px solid #e4e6eb;
+    padding: 4px 8px;
+  }
+  .fb-action {
+    flex: 1;
+    text-align: center;
+    padding: 7px;
+    font-size: 12.5px;
+    font-weight: 600;
+    color: #65676b;
+  }
+
+  .link-preview-card {
+    margin-top: 16px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 16px;
+  }
+  .link-preview-title {
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--text-faint);
+    font-weight: 600;
+    margin-bottom: 12px;
+  }
+  .channel-link-list { display: flex; flex-direction: column; gap: 8px; }
+  .channel-link-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    background: var(--surface-2);
+    border: 1px solid var(--border);
+    border-radius: 9px;
+    padding: 10px 10px 10px 12px;
+  }
+  .channel-link-icon {
+    width: 26px; height: 26px;
+    border-radius: 7px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+  }
+  .channel-link-icon svg { width: 13px; height: 13px; }
+  .channel-link-body { flex: 1; min-width: 0; }
+  .channel-link-name { font-size: 11.5px; font-weight: 700; margin-bottom: 2px; }
+  .channel-link-url {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10.5px;
+    color: var(--text-dim);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .copy-btn {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    color: var(--text-dim);
+    font-size: 11px;
+    font-weight: 600;
+    padding: 6px 10px;
+    border-radius: 6px;
+    cursor: pointer;
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    transition: all 0.15s;
+  }
+  .copy-btn svg { width: 11px; height: 11px; }
+  .copy-btn:hover { color: var(--text); border-color: #3a3a3a; }
+  .copy-btn.copied { color: var(--emerald); border-color: var(--emerald); }
+  .copy-all-row {
+    display: flex;
+    justify-content: flex-end;
+    margin-top: 10px;
+  }
+  .copy-all-btn {
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--text-faint);
+    background: none;
+    border: none;
+    cursor: pointer;
+    padding: 2px;
+  }
+  .copy-all-btn:hover { color: var(--text-dim); }
+
+  /* Analytics tab */
+  .analytics-grid { display: grid; grid-template-columns: 1.4fr 1fr; gap: 16px; margin-bottom: 16px; }
+  .chart-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 20px;
+  }
+  .chart-card h3 { font-size: 13px; font-weight: 700; margin-bottom: 18px; }
+  .bars { display: flex; align-items: flex-end; gap: 10px; height: 140px; }
+  .bar-col { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 8px; height: 100%; justify-content: flex-end; }
+  .bar { width: 100%; border-radius: 4px 4px 0 0; background: var(--orange); position: relative; }
+  .bar-label { font-size: 10.5px; color: var(--text-faint); font-weight: 500; }
+
+  .funnel-row { display: flex; flex-direction: column; gap: 10px; }
+  .funnel-step { display: flex; align-items: center; gap: 12px; }
+  .funnel-bar-bg { flex: 1; height: 26px; background: var(--surface-2); border-radius: 6px; overflow: hidden; }
+  .funnel-bar-fill { height: 100%; border-radius: 6px; display: flex; align-items: center; padding-left: 10px; font-size: 11.5px; font-weight: 700; color: #0a0a0a; }
+  .funnel-label { font-size: 12px; color: var(--text-dim); width: 96px; flex-shrink: 0; }
+  .funnel-num { font-size: 12.5px; font-weight: 700; width: 46px; text-align: right; font-variant-numeric: tabular-nums; }
+
+  .channel-split { display: flex; flex-direction: column; gap: 12px; }
+  .channel-item { display: flex; align-items: center; gap: 10px; }
+  .channel-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+  .channel-name { font-size: 12.5px; color: var(--text-dim); flex: 1; }
+  .channel-pct { font-size: 12.5px; font-weight: 700; font-variant-numeric: tabular-nums; }
+
+  .feed-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 10px 0;
+    border-bottom: 1px solid var(--border);
+  }
+  .feed-item:last-child { border-bottom: none; }
+  .feed-left { display: flex; align-items: center; gap: 10px; }
+  .feed-avatar { width: 28px; height: 28px; border-radius: 50%; background: var(--surface-2); display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 700; color: var(--text-dim); }
+  .feed-name { font-size: 12.5px; font-weight: 600; }
+  .feed-time { font-size: 11px; color: var(--text-faint); }
+  .feed-amount { font-size: 12.5px; font-weight: 700; color: var(--emerald); }
+</style>
+</head>
+<body>
+<div class="app">
+
+  <aside class="sidebar">
+    <div class="sidebar-brand"><span class="dot"></span>CourtFlow</div>
+
+    <div class="nav-group">
+      <div class="nav-label">Operations</div>
+      <div class="nav-item"><svg class="nav-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M12 1v6M12 17v6M4.2 4.2l4.2 4.2M15.6 15.6l4.2 4.2M1 12h6M17 12h6M4.2 19.8l4.2-4.2M15.6 8.4l4.2-4.2"/></svg>Live</div>
+      <div class="nav-item"><svg class="nav-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M3 10h18M8 2v4M16 2v4"/></svg>Bookings</div>
+      <div class="nav-item"><svg class="nav-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="8" r="4"/><path d="M4 21v-1a8 8 0 0116 0v1"/></svg>Coaching</div>
+      <div class="nav-item"><svg class="nav-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="5" width="20" height="14" rx="2"/><path d="M2 10h20"/></svg>Memberships</div>
+    </div>
+
+    <div class="nav-group">
+      <div class="nav-label">Growth</div>
+      <div class="nav-item"><svg class="nav-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 3v18h18M7 14l4-4 3 3 5-6"/></svg>Grow (CRM)</div>
+      <div class="nav-item active"><svg class="nav-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 11l18-8-8 18-2-8-8-2z"/></svg>Marketing Campaigns</div>
+    </div>
+
+    <div class="nav-group">
+      <div class="nav-label">Platform</div>
+      <div class="nav-item"><svg class="nav-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/></svg>Staff</div>
+      <div class="nav-item"><svg class="nav-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 20V10M18 20V4M6 20v-4"/></svg>Analytics</div>
+    </div>
+  </aside>
+
+  <div class="main">
+    <div class="topbar">
+      <div>
+        <h1>Marketing Campaigns</h1>
+        <p>Promo links, redemptions, and acquisition performance</p>
+      </div>
+      <div class="venue-pill"><span class="dot"></span>002 Pickleball Club</div>
+    </div>
+
+    <div class="content">
+
+      <div class="tabs">
+        <div class="tab active" onclick="showTab('campaigns')">Campaigns</div>
+        <div class="tab" onclick="showTab('create')">Create</div>
+        <div class="tab" onclick="showTab('analytics')">Analytics</div>
+      </div>
+
+      <!-- CAMPAIGNS TAB -->
+      <div class="panel active" id="panel-campaigns">
+        <div class="kpi-row">
+          <div class="kpi-card">
+            <div class="kpi-label">Active links</div>
+            <div class="kpi-value">4</div>
+            <div class="kpi-delta flat">2 scheduled</div>
+          </div>
+          <div class="kpi-card">
+            <div class="kpi-label">Total redemptions</div>
+            <div class="kpi-value">312</div>
+            <div class="kpi-delta up">+58 this week</div>
+          </div>
+          <div class="kpi-card">
+            <div class="kpi-label">Revenue generated</div>
+            <div class="kpi-value">42.6M ₫</div>
+            <div class="kpi-delta up">+11.2M this week</div>
+          </div>
+          <div class="kpi-card">
+            <div class="kpi-label">Avg conversion</div>
+            <div class="kpi-value">18.4%</div>
+            <div class="kpi-delta flat">click → booking</div>
+          </div>
+        </div>
+
+        <div class="list-header">
+          <h2>All campaigns</h2>
+          <button class="btn btn-primary" onclick="showTab('create')">+ New campaign</button>
+        </div>
+
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Campaign</th>
+                <th>Channel</th>
+                <th>Status</th>
+                <th>Clicks</th>
+                <th>Redeemed / Cap</th>
+                <th>Revenue</th>
+                <th>Ends</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr class="row" onclick="openCampaignDetail('warmup20')">
+                <td>
+                  <div class="campaign-name">Weekend Warmup 20%</div>
+                  <div class="campaign-code">WARMUP20</div>
+                </td>
+                <td><span class="channel-badge">Facebook</span></td>
+                <td><span class="status-pill active">● Active</span></td>
+                <td class="num">1,204</td>
+                <td class="num">187 / 200</td>
+                <td class="num">24.1M ₫</td>
+                <td>Jul 20</td>
+              </tr>
+              <tr class="row" onclick="openCampaignDetail('firstgame')">
+                <td>
+                  <div class="campaign-name">New Player First Session</div>
+                  <div class="campaign-code">FIRSTGAME</div>
+                </td>
+                <td><span class="channel-badge">WhatsApp</span></td>
+                <td><span class="status-pill active">● Active</span></td>
+                <td class="num">340</td>
+                <td class="num">89 / ∞</td>
+                <td class="num">9.8M ₫</td>
+                <td>Jul 31</td>
+              </tr>
+              <tr class="row">
+                <td>
+                  <div class="campaign-name">Off-Peak Tuesday</div>
+                  <div class="campaign-code">TUESLOW</div>
+                </td>
+                <td><span class="channel-badge">Facebook</span></td>
+                <td><span class="status-pill scheduled">● Scheduled</span></td>
+                <td class="num">-</td>
+                <td class="num">0 / 100</td>
+                <td class="num">-</td>
+                <td>Jul 15</td>
+              </tr>
+              <tr class="row">
+                <td>
+                  <div class="campaign-name">Coach Trial Package</div>
+                  <div class="campaign-code">TRYCOACH</div>
+                </td>
+                <td><span class="channel-badge">Instagram</span></td>
+                <td><span class="status-pill scheduled">● Scheduled</span></td>
+                <td class="num">-</td>
+                <td class="num">0 / 50</td>
+                <td class="num">-</td>
+                <td>Jul 18</td>
+              </tr>
+              <tr class="row" onclick="openCampaignDetail('openpadel')">
+                <td>
+                  <div class="campaign-name">Grand Opening Padel</div>
+                  <div class="campaign-code">OPENPADEL</div>
+                </td>
+                <td><span class="channel-badge">Facebook</span></td>
+                <td><span class="status-pill ended">● Ended</span></td>
+                <td class="num">2,890</td>
+                <td class="num">36 / ∞</td>
+                <td class="num">8.7M ₫</td>
+                <td>Jun 30</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- CREATE TAB -->
+      <div class="panel" id="panel-create">
+        <div class="create-grid">
+          <div>
+            <div class="form-card">
+              <h3>Campaign details</h3>
+              <div class="field">
+                <label>Campaign name</label>
+                <input type="text" id="campName" value="Weekend Warmup 20%" oninput="updatePreview()">
+              </div>
+              <div class="field-row">
+                <div class="field">
+                  <label>Promo code</label>
+                  <input type="text" id="campCode" value="WARMUP20" oninput="updatePreview()">
+                  <div class="hint">Players enter this or land via link</div>
+                </div>
+                <div class="field">
+                  <label>Discount type</label>
+                  <select id="campDiscountType" onchange="onDiscountTypeChange()">
+                    <option value="percent" selected>Percent off</option>
+                    <option value="fixed">Fixed amount off</option>
+                    <option value="free">Free (100% off)</option>
+                  </select>
+                </div>
+              </div>
+              <div class="field-row">
+                <div class="field">
+                  <label id="campDiscountValueLabel">Discount value</label>
+                  <input type="text" id="campDiscountValue" value="20" oninput="updatePreview()">
+                  <div class="hint" id="campDiscountValueHint">Percent, e.g. 20 for 20% off</div>
+                </div>
+                <div class="field">
+                  <label>Applies to</label>
+                  <select>
+                    <option>Court bookings</option>
+                    <option>Coaching sessions</option>
+                    <option>Open play</option>
+                    <option>All bookings</option>
+                  </select>
+                </div>
+              </div>
+              <div class="field-row">
+                <div class="field">
+                  <label>Start date</label>
+                  <input type="text" value="Jul 12, 2026">
+                </div>
+                <div class="field">
+                  <label>End date</label>
+                  <input type="text" value="Jul 20, 2026">
+                </div>
+              </div>
+              <div class="field-row">
+                <div class="field">
+                  <label>Max redemptions</label>
+                  <input type="text" placeholder="Unlimited" value="200">
+                  <div class="hint">Total times this code can be used, across all players</div>
+                </div>
+                <div class="field">
+                  <label>Max per player</label>
+                  <input type="text" placeholder="1" value="1">
+                  <div class="hint">How many times one player can redeem it</div>
+                </div>
+              </div>
+            </div>
+
+            <div class="form-card" style="margin-top:16px;">
+              <h3>Ad copy</h3>
+              <div class="field">
+                <label>Post text</label>
+                <input type="text" id="campBody" value="Courts are calling. Book this weekend and save 20% on your session." oninput="updatePreview()">
+              </div>
+              <div class="field">
+                <label>Headline shown on link card</label>
+                <input type="text" id="campHeadline" value="20% off weekend court bookings" oninput="updatePreview()">
+              </div>
+            </div>
+          </div>
+
+          <div class="preview-sticky">
+            <div class="preview-label">Live preview</div>
+            <div class="fb-card">
+              <div class="fb-header">
+                <div class="fb-avatar"></div>
+                <div>
+                  <div class="fb-name">002 Pickleball Club</div>
+                  <div class="fb-meta">Sponsored · <span id="fb-source-label">facebook</span></div>
+                </div>
+              </div>
+              <div class="fb-body" id="fb-body-text">Courts are calling. Book this weekend and save 20% on your session.</div>
+              <div class="fb-image">
+                <div style="text-align:center;">
+                  <div class="fb-image-text" id="fb-image-discount">20% OFF</div>
+                  <div class="fb-image-sub" id="fb-image-code">CODE: WARMUP20</div>
+                </div>
+              </div>
+              <div class="fb-domain-bar">
+                <div class="fb-domain">courtpass.thecourtflow.com</div>
+                <div class="fb-headline" id="fb-headline-text">20% off weekend court bookings</div>
+                <div class="fb-cta">Book Now</div>
+              </div>
+              <div class="fb-actions">
+                <div class="fb-action">👍 Like</div>
+                <div class="fb-action">💬 Comment</div>
+                <div class="fb-action">↗ Share</div>
+              </div>
+            </div>
+
+            <div class="link-preview-card">
+              <div class="link-preview-title">Ready-to-use links by channel</div>
+              <div class="channel-link-list" id="channelLinkList"></div>
+              <div class="copy-all-row">
+                <button class="copy-all-btn" onclick="copyAllLinks(this)">Copy all as list</button>
+              </div>
+            </div>
+
+            <button class="btn btn-primary" style="width:100%; justify-content:center; margin-top:14px; padding:11px;">Launch campaign</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- ANALYTICS TAB -->
+      <div class="panel" id="panel-analytics">
+        <div class="analytics-grid">
+          <div class="chart-card">
+            <h3>Redemptions by day</h3>
+            <div class="bars">
+              <div class="bar-col"><div class="bar" style="height:38%"></div><div class="bar-label">Jul 6</div></div>
+              <div class="bar-col"><div class="bar" style="height:52%"></div><div class="bar-label">Jul 7</div></div>
+              <div class="bar-col"><div class="bar" style="height:44%"></div><div class="bar-label">Jul 8</div></div>
+              <div class="bar-col"><div class="bar" style="height:61%"></div><div class="bar-label">Jul 9</div></div>
+              <div class="bar-col"><div class="bar" style="height:80%"></div><div class="bar-label">Jul 10</div></div>
+              <div class="bar-col"><div class="bar" style="height:95%"></div><div class="bar-label">Jul 11</div></div>
+              <div class="bar-col"><div class="bar" style="height:70%"></div><div class="bar-label">Jul 12</div></div>
+            </div>
+          </div>
+          <div class="chart-card">
+            <h3>Channel split</h3>
+            <div class="channel-split">
+              <div class="channel-item"><span class="channel-dot" style="background:var(--blue)"></span><span class="channel-name">Facebook</span><span class="channel-pct">64%</span></div>
+              <div class="channel-item"><span class="channel-dot" style="background:var(--emerald)"></span><span class="channel-name">WhatsApp</span><span class="channel-pct">21%</span></div>
+              <div class="channel-item"><span class="channel-dot" style="background:var(--purple)"></span><span class="channel-name">Instagram</span><span class="channel-pct">11%</span></div>
+              <div class="channel-item"><span class="channel-dot" style="background:var(--text-faint)"></span><span class="channel-name">Direct / Zalo</span><span class="channel-pct">4%</span></div>
+            </div>
+          </div>
+        </div>
+
+        <div class="analytics-grid">
+          <div class="chart-card">
+            <h3>Conversion funnel</h3>
+            <div class="funnel-row">
+              <div class="funnel-step">
+                <div class="funnel-label">Link clicks</div>
+                <div class="funnel-bar-bg"><div class="funnel-bar-fill" style="width:100%; background:var(--orange);">4,434</div></div>
+              </div>
+              <div class="funnel-step">
+                <div class="funnel-label">Reached booking</div>
+                <div class="funnel-bar-bg"><div class="funnel-bar-fill" style="width:58%; background:var(--amber);">2,571</div></div>
+              </div>
+              <div class="funnel-step">
+                <div class="funnel-label">Started checkout</div>
+                <div class="funnel-bar-bg"><div class="funnel-bar-fill" style="width:22%; background:var(--blue);">975</div></div>
+              </div>
+              <div class="funnel-step">
+                <div class="funnel-label">Redeemed</div>
+                <div class="funnel-bar-bg"><div class="funnel-bar-fill" style="width:7%; background:var(--emerald);">312</div></div>
+              </div>
+            </div>
+          </div>
+          <div class="chart-card">
+            <h3>Recent redemptions</h3>
+            <div class="feed-item">
+              <div class="feed-left"><div class="feed-avatar">TN</div><div><div class="feed-name">Thao N.</div><div class="feed-time">12 min ago · WARMUP20</div></div></div>
+              <div class="feed-amount">−48,000 ₫</div>
+            </div>
+            <div class="feed-item">
+              <div class="feed-left"><div class="feed-avatar">DL</div><div><div class="feed-name">Duy L.</div><div class="feed-time">40 min ago · FIRSTGAME</div></div></div>
+              <div class="feed-amount">−60,000 ₫</div>
+            </div>
+            <div class="feed-item">
+              <div class="feed-left"><div class="feed-avatar">HP</div><div><div class="feed-name">Hoang P.</div><div class="feed-time">1h ago · WARMUP20</div></div></div>
+              <div class="feed-amount">−48,000 ₫</div>
+            </div>
+            <div class="feed-item">
+              <div class="feed-left"><div class="feed-avatar">MV</div><div><div class="feed-name">Mai V.</div><div class="feed-time">2h ago · WARMUP20</div></div></div>
+              <div class="feed-amount">−48,000 ₫</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<div class="drawer-overlay" id="drawerOverlay" onclick="closeCampaignDetail()"></div>
+<div class="drawer" id="campaignDrawer">
+  <div class="drawer-header">
+    <div>
+      <div class="drawer-title" id="drawerTitle">Campaign</div>
+      <div class="drawer-subtitle" id="drawerSubtitle">Code · Channel</div>
+    </div>
+    <button class="drawer-close" onclick="closeCampaignDetail()">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6L6 18M6 6l12 12"/></svg>
+    </button>
+  </div>
+  <div class="drawer-body">
+    <div class="drawer-kpi-row">
+      <div class="drawer-kpi">
+        <div class="drawer-kpi-label">Redemptions</div>
+        <div class="drawer-kpi-value" id="drawerKpiRedemptions">-</div>
+      </div>
+      <div class="drawer-kpi">
+        <div class="drawer-kpi-label">Revenue</div>
+        <div class="drawer-kpi-value" id="drawerKpiRevenue">-</div>
+      </div>
+      <div class="drawer-kpi">
+        <div class="drawer-kpi-label">Median time to convert</div>
+        <div class="drawer-kpi-value" id="drawerKpiMedian">-</div>
+      </div>
+    </div>
+
+    <div class="section-header" style="margin-bottom:10px;">
+      <div>
+        <h2>Redeemed by</h2>
+      </div>
+    </div>
+    <div class="sort-hint">First click to redemption. Instant = same session, Same day = returned within 24h, Deliberated = 24h+.</div>
+
+    <div class="redemption-table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>Player</th>
+            <th>Redeemed</th>
+            <th>Amount</th>
+            <th>First click → order</th>
+          </tr>
+        </thead>
+        <tbody id="drawerRedemptionRows"></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<script>
+const CAMPAIGN_DETAIL = {
+  warmup20: {
+    title: 'Weekend Warmup 20%',
+    subtitle: 'WARMUP20 · Facebook',
+    redemptions: 187,
+    revenue: '24.1M ₫',
+    medianConvert: '3h 40m',
+    rows: [
+      { name: 'Thao N.', phone: '090 123 4567', redeemedAt: 'Jul 12, 12:04 PM', amount: '48,000 ₫', convert: 'instant', convertLabel: 'Same session (4 min)' },
+      { name: 'Duy L.', phone: '093 456 7890', redeemedAt: 'Jul 12, 11:24 AM', amount: '60,000 ₫', convert: 'same-day', convertLabel: '6h 10m' },
+      { name: 'Hoang P.', phone: '098 765 4321', redeemedAt: 'Jul 12, 10:50 AM', amount: '48,000 ₫', convert: 'deliberated', convertLabel: '2 days' },
+      { name: 'Mai V.', phone: '091 222 3344', redeemedAt: 'Jul 12, 9:12 AM', amount: '48,000 ₫', convert: 'instant', convertLabel: 'Same session (2 min)' },
+      { name: 'Khanh T.', phone: '097 888 1122', redeemedAt: 'Jul 11, 8:45 PM', amount: '48,000 ₫', convert: 'unknown', convertLabel: 'No click on record' },
+      { name: 'Linh D.', phone: '090 555 6677', redeemedAt: 'Jul 11, 6:30 PM', amount: '48,000 ₫', convert: 'deliberated', convertLabel: '4 days' }
+    ]
+  },
+  firstgame: {
+    title: 'New Player First Session',
+    subtitle: 'FIRSTGAME · WhatsApp',
+    redemptions: 89,
+    revenue: '9.8M ₫',
+    medianConvert: '1h 05m',
+    rows: [
+      { name: 'An T.', phone: '096 321 4455', redeemedAt: 'Jul 10, 5:15 PM', amount: '110,000 ₫', convert: 'instant', convertLabel: 'Same session (8 min)' },
+      { name: 'Bao N.', phone: '094 771 2233', redeemedAt: 'Jul 9, 2:40 PM', amount: '110,000 ₫', convert: 'same-day', convertLabel: '3h 20m' },
+      { name: 'Chi L.', phone: '093 456 9988', redeemedAt: 'Jul 8, 7:05 PM', amount: '110,000 ₫', convert: 'deliberated', convertLabel: '3 days' }
+    ]
+  },
+  openpadel: {
+    title: 'Grand Opening Padel',
+    subtitle: 'OPENPADEL · Facebook',
+    redemptions: 36,
+    revenue: '8.7M ₫',
+    medianConvert: '1 day 4h',
+    rows: [
+      { name: 'Trang V.', phone: '090 998 7766', redeemedAt: 'Jun 29, 4:00 PM', amount: '242,000 ₫', convert: 'deliberated', convertLabel: '5 days' },
+      { name: 'Phuc D.', phone: '093 112 3344', redeemedAt: 'Jun 28, 11:20 AM', amount: '242,000 ₫', convert: 'same-day', convertLabel: '9h 15m' },
+      { name: 'Yen H.', phone: '097 665 4433', redeemedAt: 'Jun 27, 3:10 PM', amount: '242,000 ₫', convert: 'unknown', convertLabel: 'No click on record' }
+    ]
+  }
+};
+
+function openCampaignDetail(key) {
+  const data = CAMPAIGN_DETAIL[key];
+  if (!data) return;
+
+  document.getElementById('drawerTitle').textContent = data.title;
+  document.getElementById('drawerSubtitle').textContent = data.subtitle;
+  document.getElementById('drawerKpiRedemptions').textContent = data.redemptions;
+  document.getElementById('drawerKpiRevenue').textContent = data.revenue;
+  document.getElementById('drawerKpiMedian').textContent = data.medianConvert;
+
+  document.getElementById('drawerRedemptionRows').innerHTML = data.rows.map(r => (
+    '<tr>' +
+      '<td><div class="player-cell">' + r.name + '</div><div class="player-phone">' + r.phone + '</div></td>' +
+      '<td>' + r.redeemedAt + '</td>' +
+      '<td class="num">' + r.amount + '</td>' +
+      '<td><span class="convert-badge ' + r.convert + '">' + r.convertLabel + '</span></td>' +
+    '</tr>'
+  )).join('');
+
+  document.getElementById('drawerOverlay').classList.add('open');
+  document.getElementById('campaignDrawer').classList.add('open');
+}
+
+function closeCampaignDetail() {
+  document.getElementById('drawerOverlay').classList.remove('open');
+  document.getElementById('campaignDrawer').classList.remove('open');
+}
+</script>
+
+<script>
+function showTab(name) {
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
+  document.getElementById('panel-' + name).classList.add('active');
+  event.currentTarget.classList.add('active');
+}
+
+const CHANNELS = [
+  {
+    key: 'facebook', label: 'Facebook', color: '#3b82f6', bg: 'rgba(59,130,246,0.14)',
+    icon: '<svg viewBox="0 0 24 24" fill="#3b82f6"><path d="M22 12a10 10 0 10-11.6 9.9v-7H7.9V12h2.5V9.8c0-2.5 1.5-3.9 3.8-3.9 1.1 0 2.2.2 2.2.2v2.5h-1.3c-1.2 0-1.6.8-1.6 1.6V12h2.8l-.4 2.9h-2.4v7A10 10 0 0022 12z"/></svg>'
+  },
+  {
+    key: 'instagram', label: 'Instagram', color: '#a855f7', bg: 'rgba(168,85,247,0.14)',
+    icon: '<svg viewBox="0 0 24 24" fill="none" stroke="#a855f7" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="5"/><circle cx="12" cy="12" r="4"/><circle cx="17.5" cy="6.5" r="1"/></svg>'
+  },
+  {
+    key: 'whatsapp', label: 'WhatsApp', color: '#10b981', bg: 'rgba(16,185,129,0.14)',
+    icon: '<svg viewBox="0 0 24 24" fill="#10b981"><path d="M12 2a10 10 0 00-8.5 15.2L2 22l4.9-1.5A10 10 0 1012 2zm5.6 14.2c-.2.6-1.3 1.2-1.8 1.2-.5.1-1 .1-3-.7-2.6-1.1-4.3-3.7-4.4-3.9-.1-.2-1-1.4-1-2.6s.6-1.8.9-2.1c.2-.2.5-.3.7-.3h.5c.2 0 .4 0 .5.4.2.5.7 1.8.7 1.9.1.1.1.3 0 .4-.6 1.2-1.2 1.1-.6 2 1 1.7 1.9 2.2 3.1 2.8.2.1.4.1.5-.1.2-.2.7-.8.9-1.1.2-.3.4-.2.6-.1l1.9.9c.2.1.4.2.4.3.1.3.1.7-.1 1.1z"/></svg>'
+  },
+  {
+    key: 'zalo', label: 'Zalo', color: '#3b82f6', bg: 'rgba(59,130,246,0.14)',
+    icon: '<svg viewBox="0 0 24 24" fill="none" stroke="#3b82f6" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="4"/><path d="M8 15V9h3M8 12h2.5M13 9v6l3-6v6"/></svg>'
+  },
+  {
+    key: 'direct', label: 'Direct / Other', color: '#a3a3a3', bg: 'rgba(163,163,163,0.14)',
+    icon: '<svg viewBox="0 0 24 24" fill="none" stroke="#a3a3a3" stroke-width="2"><path d="M13.5 6.5L20 13l-6.5 6.5M20 13H4"/></svg>'
+  }
+];
+
+function buildLink(code, channelKey) {
+  return 'courtpass.thecourtflow.com/book?promo=' + code.toUpperCase() + '&utm_source=' + channelKey;
+}
+
+function renderChannelLinks() {
+  const code = document.getElementById('campCode').value.trim() || 'CODE';
+  const list = document.getElementById('channelLinkList');
+  list.innerHTML = CHANNELS.map(ch => {
+    const url = buildLink(code, ch.key);
+    return '<div class="channel-link-row">' +
+      '<div class="channel-link-icon" style="background:' + ch.bg + '">' + ch.icon + '</div>' +
+      '<div class="channel-link-body">' +
+        '<div class="channel-link-name" style="color:' + ch.color + '">' + ch.label + '</div>' +
+        '<div class="channel-link-url">' + url + '</div>' +
+      '</div>' +
+      '<button class="copy-btn" onclick="copyLink(this, \'' + url + '\')">' +
+        '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="12" height="12" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>' +
+        '<span class="copy-label">Copy</span>' +
+      '</button>' +
+    '</div>';
+  }).join('');
+}
+
+function copyLink(btn, url) {
+  navigator.clipboard.writeText('https://' + url).catch(() => {});
+  const label = btn.querySelector('.copy-label');
+  const original = label.textContent;
+  btn.classList.add('copied');
+  label.textContent = 'Copied';
+  setTimeout(() => { btn.classList.remove('copied'); label.textContent = original; }, 1500);
+}
+
+function copyAllLinks(btn) {
+  const code = document.getElementById('campCode').value.trim() || 'CODE';
+  const text = CHANNELS.map(ch => ch.label + ': https://' + buildLink(code, ch.key)).join('\n');
+  navigator.clipboard.writeText(text).catch(() => {});
+  const original = btn.textContent;
+  btn.textContent = 'Copied all links';
+  setTimeout(() => { btn.textContent = original; }, 1500);
+}
+
+// Comes from the venue's organization currency setting (e.g. VND for Vietnam venues, THB for Thailand venues).
+// This mockup is scoped to 002 Pickleball Club (Vietnam), so it's set to VND here, but the real
+// build must read this from the venue/organization record, never hardcode a symbol.
+const VENUE_CURRENCY = { code: 'VND', symbol: '₫', exampleAmount: '50000' };
+
+function onDiscountTypeChange() {
+  const type = document.getElementById('campDiscountType').value;
+  const valueInput = document.getElementById('campDiscountValue');
+  const label = document.getElementById('campDiscountValueLabel');
+  const hint = document.getElementById('campDiscountValueHint');
+
+  if (type === 'free') {
+    valueInput.value = '';
+    valueInput.disabled = true;
+    valueInput.placeholder = 'Not applicable';
+    label.textContent = 'Discount value';
+    hint.textContent = 'Free applies 100% off, no value needed';
+  } else if (type === 'fixed') {
+    valueInput.disabled = false;
+    label.textContent = 'Amount off (' + VENUE_CURRENCY.symbol + ')';
+    hint.textContent = 'Fixed ' + VENUE_CURRENCY.code + ' amount, e.g. ' + VENUE_CURRENCY.exampleAmount;
+  } else {
+    valueInput.disabled = false;
+    label.textContent = 'Discount value';
+    hint.textContent = 'Percent, e.g. 20 for 20% off';
+  }
+  updatePreview();
+}
+
+function discountDisplayString() {
+  const type = document.getElementById('campDiscountType').value;
+  const value = document.getElementById('campDiscountValue').value;
+  if (type === 'free') return 'FREE';
+  if (type === 'fixed') return value + VENUE_CURRENCY.symbol + ' OFF';
+  return value + '% OFF';
+}
+
+function updatePreview() {
+  const body = document.getElementById('campBody').value;
+  const headline = document.getElementById('campHeadline').value;
+  const code = document.getElementById('campCode').value;
+  const discount = discountDisplayString();
+
+  document.getElementById('fb-body-text').textContent = body;
+  document.getElementById('fb-headline-text').textContent = headline;
+  document.getElementById('fb-image-discount').textContent = discount;
+  document.getElementById('fb-image-code').textContent = 'CODE: ' + code.toUpperCase();
+  document.getElementById('fb-source-label').textContent = 'facebook';
+
+  renderChannelLinks();
+}
+
+renderChannelLinks();
+</script>
+</body>
+</html>

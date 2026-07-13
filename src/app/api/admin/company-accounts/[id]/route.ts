@@ -6,7 +6,13 @@ import { issueBill, voidBill, getOpenBillVenueSettings } from "@/lib/open-bill";
 
 export const dynamic = "force-dynamic";
 
-/** GET /api/admin/company-accounts/[id] */
+/** GET /api/admin/company-accounts/[id]
+ *  ?bills=1           — include paginated bills (default false for fast account-only load)
+ *  &status=open|issued|paid|overdue|void|all
+ *  &dateFrom=YYYY-MM-DD
+ *  &dateTo=YYYY-MM-DD
+ *  &page=1  &pageSize=20
+ */
 export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -14,6 +20,7 @@ export async function GET(
   try {
     await requireAdminAccess(request.headers);
     const { id } = await params;
+    const sp = request.nextUrl.searchParams;
 
     const account = await prisma.companyAccount.findUnique({
       where: { id },
@@ -26,17 +33,69 @@ export async function GET(
             player: { select: { id: true, name: true, phone: true, email: true } },
           },
         },
-        bills: {
-          orderBy: { periodStart: "desc" },
-          include: {
-            events: { orderBy: { createdAt: "desc" }, take: 10 },
-          },
-        },
       },
     });
 
     if (!account) return error("Company account not found", 404);
-    return json(account);
+
+    // Only fetch bills when explicitly requested (bills tab load)
+    if (sp.get("bills") !== "1") {
+      return json({ ...account, bills: [], billsMeta: null });
+    }
+
+    const statusFilter = sp.get("status") ?? "all";
+    const dateFrom = sp.get("dateFrom");
+    const dateTo = sp.get("dateTo");
+    const page = Math.max(1, parseInt(sp.get("page") ?? "1", 10));
+    const pageSize = Math.min(100, Math.max(1, parseInt(sp.get("pageSize") ?? "20", 10)));
+
+    const billWhere: Record<string, unknown> = { companyAccountId: id };
+
+    if (statusFilter && statusFilter !== "all") {
+      billWhere.status = statusFilter;
+    }
+    if (dateFrom || dateTo) {
+      const pf: Record<string, unknown> = {};
+      if (dateFrom) pf.gte = new Date(`${dateFrom}T12:00:00+07:00`);
+      if (dateTo) pf.lte = new Date(`${dateTo}T12:00:00+07:00`);
+      billWhere.periodStart = pf;
+    }
+
+    const [total, bills] = await Promise.all([
+      prisma.companyOpenBill.count({ where: billWhere }),
+      prisma.companyOpenBill.findMany({
+        where: billWhere,
+        orderBy: { periodStart: "desc" },
+        skip: (page - 1) * pageSize,
+        take: pageSize,
+        select: {
+          id: true,
+          status: true,
+          periodStart: true,
+          periodEnd: true,
+          subtotal: true,
+          discountAmount: true,
+          vatAmount: true,
+          totalAmount: true,
+          invoiceNumber: true,
+          paymentRef: true,
+          issuedAt: true,
+          paidAt: true,
+          paidMethod: true,
+          dueDate: true,
+          voidReason: true,
+          vatPercent: true,
+          priceVatMode: true,
+          _count: { select: { bookings: true } },
+        },
+      }),
+    ]);
+
+    return json({
+      ...account,
+      bills,
+      billsMeta: { total, page, pageSize, totalPages: Math.ceil(total / pageSize) },
+    });
   } catch (e) {
     const msg = (e as Error).message;
     if (msg.includes("access required") || msg.includes("token")) return error(msg, 401);

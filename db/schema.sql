@@ -1,6 +1,6 @@
 \restrict dbmate
 
--- Dumped from database version 16.14 (Homebrew)
+-- Dumped from database version 17.9 (Homebrew)
 -- Dumped by pg_dump version 18.3
 
 SET statement_timeout = 0;
@@ -16,10 +16,24 @@ SET client_min_messages = warning;
 SET row_security = off;
 
 --
+-- Name: public; Type: SCHEMA; Schema: -; Owner: -
+--
+
+-- *not* creating schema, since initdb creates it
+
+
+--
 -- Name: SCHEMA public; Type: COMMENT; Schema: -; Owner: -
 --
 
 COMMENT ON SCHEMA public IS '';
+
+
+--
+-- Name: shadow_temp; Type: SCHEMA; Schema: -; Owner: -
+--
+
+CREATE SCHEMA shadow_temp;
 
 
 --
@@ -30,7 +44,31 @@ CREATE TYPE public."BookingStatus" AS ENUM (
     'confirmed',
     'cancelled',
     'completed',
-    'no_show'
+    'no_show',
+    'expired_hold'
+);
+
+
+--
+-- Name: ClassPassPaymentStatus; Type: TYPE; Schema: public; Owner: -
+--
+
+CREATE TYPE public."ClassPassPaymentStatus" AS ENUM (
+    'UNPAID',
+    'PAID',
+    'OVERDUE'
+);
+
+
+--
+-- Name: ClassPassStatus; Type: TYPE; Schema: public; Owner: -
+--
+
+CREATE TYPE public."ClassPassStatus" AS ENUM (
+    'active',
+    'paused',
+    'expired',
+    'cancelled'
 );
 
 
@@ -171,6 +209,40 @@ CREATE TYPE public."PlayerAppAuthMethod" AS ENUM (
 
 
 --
+-- Name: PromoAppliesTo; Type: TYPE; Schema: public; Owner: -
+--
+
+CREATE TYPE public."PromoAppliesTo" AS ENUM (
+    'court_booking',
+    'coaching',
+    'open_play',
+    'all'
+);
+
+
+--
+-- Name: PromoBookingType; Type: TYPE; Schema: public; Owner: -
+--
+
+CREATE TYPE public."PromoBookingType" AS ENUM (
+    'court_booking',
+    'coaching',
+    'open_play'
+);
+
+
+--
+-- Name: PromoDiscountType; Type: TYPE; Schema: public; Owner: -
+--
+
+CREATE TYPE public."PromoDiscountType" AS ENUM (
+    'percent',
+    'fixed',
+    'free'
+);
+
+
+--
 -- Name: QueueStatus; Type: TYPE; Schema: public; Owner: -
 --
 
@@ -235,6 +307,207 @@ CREATE TYPE public."SubscriptionStatus" AS ENUM (
     'exhausted',
     'expired',
     'cancelled'
+);
+
+
+--
+-- Name: BookingStatus; Type: TYPE; Schema: shadow_temp; Owner: -
+--
+
+CREATE TYPE shadow_temp."BookingStatus" AS ENUM (
+    'confirmed',
+    'cancelled',
+    'completed',
+    'no_show'
+);
+
+
+--
+-- Name: CoachLessonStatus; Type: TYPE; Schema: shadow_temp; Owner: -
+--
+
+CREATE TYPE shadow_temp."CoachLessonStatus" AS ENUM (
+    'confirmed',
+    'completed',
+    'cancelled',
+    'no_show'
+);
+
+
+--
+-- Name: CourtBlockType; Type: TYPE; Schema: shadow_temp; Owner: -
+--
+
+CREATE TYPE shadow_temp."CourtBlockType" AS ENUM (
+    'private_competition',
+    'private_event',
+    'maintenance',
+    'open_play',
+    'competition'
+);
+
+
+--
+-- Name: CourtStatus; Type: TYPE; Schema: shadow_temp; Owner: -
+--
+
+CREATE TYPE shadow_temp."CourtStatus" AS ENUM (
+    'idle',
+    'warmup',
+    'active',
+    'maintenance'
+);
+
+
+--
+-- Name: GamePreference; Type: TYPE; Schema: shadow_temp; Owner: -
+--
+
+CREATE TYPE shadow_temp."GamePreference" AS ENUM (
+    'no_preference',
+    'same_gender'
+);
+
+
+--
+-- Name: GameType; Type: TYPE; Schema: shadow_temp; Owner: -
+--
+
+CREATE TYPE shadow_temp."GameType" AS ENUM (
+    'men',
+    'women',
+    'mixed'
+);
+
+
+--
+-- Name: Gender; Type: TYPE; Schema: shadow_temp; Owner: -
+--
+
+CREATE TYPE shadow_temp."Gender" AS ENUM (
+    'male',
+    'female',
+    'other'
+);
+
+
+--
+-- Name: GroupStatus; Type: TYPE; Schema: shadow_temp; Owner: -
+--
+
+CREATE TYPE shadow_temp."GroupStatus" AS ENUM (
+    'forming',
+    'active',
+    'disbanded'
+);
+
+
+--
+-- Name: LessonType; Type: TYPE; Schema: shadow_temp; Owner: -
+--
+
+CREATE TYPE shadow_temp."LessonType" AS ENUM (
+    'private',
+    'group'
+);
+
+
+--
+-- Name: MembershipPaymentStatus; Type: TYPE; Schema: shadow_temp; Owner: -
+--
+
+CREATE TYPE shadow_temp."MembershipPaymentStatus" AS ENUM (
+    'UNPAID',
+    'PAID',
+    'OVERDUE'
+);
+
+
+--
+-- Name: MembershipStatus; Type: TYPE; Schema: shadow_temp; Owner: -
+--
+
+CREATE TYPE shadow_temp."MembershipStatus" AS ENUM (
+    'active',
+    'suspended',
+    'expired',
+    'cancelled'
+);
+
+
+--
+-- Name: PaymentStatus; Type: TYPE; Schema: shadow_temp; Owner: -
+--
+
+CREATE TYPE shadow_temp."PaymentStatus" AS ENUM (
+    'UNPAID',
+    'PAID'
+);
+
+
+--
+-- Name: PlayerAppAuthMethod; Type: TYPE; Schema: shadow_temp; Owner: -
+--
+
+CREATE TYPE shadow_temp."PlayerAppAuthMethod" AS ENUM (
+    'face_pwa',
+    'wristband',
+    'phone_otp'
+);
+
+
+--
+-- Name: QueueStatus; Type: TYPE; Schema: shadow_temp; Owner: -
+--
+
+CREATE TYPE shadow_temp."QueueStatus" AS ENUM (
+    'waiting',
+    'assigned',
+    'playing',
+    'on_break',
+    'left'
+);
+
+
+--
+-- Name: SessionStatus; Type: TYPE; Schema: shadow_temp; Owner: -
+--
+
+CREATE TYPE shadow_temp."SessionStatus" AS ENUM (
+    'open',
+    'closed'
+);
+
+
+--
+-- Name: SessionType; Type: TYPE; Schema: shadow_temp; Owner: -
+--
+
+CREATE TYPE shadow_temp."SessionType" AS ENUM (
+    'open_play',
+    'competition'
+);
+
+
+--
+-- Name: SkillLevel; Type: TYPE; Schema: shadow_temp; Owner: -
+--
+
+CREATE TYPE shadow_temp."SkillLevel" AS ENUM (
+    'beginner',
+    'intermediate',
+    'advanced',
+    'pro'
+);
+
+
+--
+-- Name: StaffRole; Type: TYPE; Schema: shadow_temp; Owner: -
+--
+
+CREATE TYPE shadow_temp."StaffRole" AS ENUM (
+    'staff',
+    'superadmin'
 );
 
 
@@ -379,10 +652,10 @@ CREATE TABLE public.bookings (
     co_player_ids text[],
     created_at timestamp(3) without time zone DEFAULT CURRENT_TIMESTAMP NOT NULL,
     cancelled_at timestamp(3) without time zone,
-    hold_expires_at timestamp(3) without time zone,
-    payment_proof_url text,
-    payment_ref text,
     payment_status text,
+    payment_proof_url text,
+    hold_expires_at timestamp(3) without time zone,
+    payment_ref text,
     rejected_at timestamp(3) without time zone,
     rejected_by text,
     rejection_reason text,
@@ -422,6 +695,77 @@ CREATE TABLE public.check_in_records (
     checked_in_at timestamp(3) without time zone DEFAULT CURRENT_TIMESTAMP NOT NULL,
     payment_id text,
     source text NOT NULL
+);
+
+
+--
+-- Name: class_check_ins; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.class_check_ins (
+    id text NOT NULL,
+    class_pass_id text NOT NULL,
+    class_instance_id text NOT NULL,
+    checked_in_at timestamp(3) without time zone DEFAULT CURRENT_TIMESTAMP NOT NULL
+);
+
+
+--
+-- Name: class_instances; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.class_instances (
+    id text NOT NULL,
+    venue_id text NOT NULL,
+    coach_id text NOT NULL,
+    court_id text,
+    pass_type_id text NOT NULL,
+    start_at timestamp(3) without time zone NOT NULL,
+    end_at timestamp(3) without time zone NOT NULL,
+    max_players integer NOT NULL,
+    created_at timestamp(3) without time zone DEFAULT CURRENT_TIMESTAMP NOT NULL,
+    updated_at timestamp(3) without time zone NOT NULL
+);
+
+
+--
+-- Name: class_pass_payments; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.class_pass_payments (
+    id text NOT NULL,
+    class_pass_id text NOT NULL,
+    period_start timestamp(3) without time zone NOT NULL,
+    period_end timestamp(3) without time zone NOT NULL,
+    amount_value integer NOT NULL,
+    status public."ClassPassPaymentStatus" DEFAULT 'UNPAID'::public."ClassPassPaymentStatus" NOT NULL,
+    payment_method text,
+    paid_at timestamp(3) without time zone,
+    proof_url text,
+    note text,
+    void_reason text,
+    created_at timestamp(3) without time zone DEFAULT CURRENT_TIMESTAMP NOT NULL,
+    updated_at timestamp(3) without time zone NOT NULL
+);
+
+
+--
+-- Name: class_passes; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.class_passes (
+    id text NOT NULL,
+    player_id text NOT NULL,
+    venue_id text NOT NULL,
+    pass_type_id text NOT NULL,
+    status public."ClassPassStatus" DEFAULT 'active'::public."ClassPassStatus" NOT NULL,
+    activated_at timestamp(3) without time zone DEFAULT CURRENT_TIMESTAMP NOT NULL,
+    deferred_start_date timestamp(3) without time zone,
+    cycle_start timestamp(3) without time zone NOT NULL,
+    cycle_end timestamp(3) without time zone NOT NULL,
+    sessions_used integer DEFAULT 0 NOT NULL,
+    created_at timestamp(3) without time zone DEFAULT CURRENT_TIMESTAMP NOT NULL,
+    updated_at timestamp(3) without time zone NOT NULL
 );
 
 
@@ -469,19 +813,19 @@ CREATE TABLE public.coach_lessons (
     status public."CoachLessonStatus" DEFAULT 'confirmed'::public."CoachLessonStatus" NOT NULL,
     price_value integer NOT NULL,
     note text,
-    payment_status text DEFAULT 'UNPAID'::text NOT NULL,
-    paid_at timestamp(3) without time zone,
-    payment_method text,
-    proof_url text,
-    payment_note text,
     created_at timestamp(3) without time zone DEFAULT CURRENT_TIMESTAMP NOT NULL,
     cancelled_at timestamp(3) without time zone,
+    paid_at timestamp(3) without time zone,
+    payment_method text,
+    payment_note text,
+    proof_url text,
+    payment_status text DEFAULT 'UNPAID'::text NOT NULL,
+    player_count integer,
     payment_ref text,
     rejected_at timestamp(3) without time zone,
     rejected_by text,
     rejection_reason text,
     google_event_id text,
-    player_count integer,
     invoice_number text,
     invoiced_at timestamp with time zone,
     cancellation_reason text
@@ -805,7 +1149,7 @@ CREATE TABLE public.manual_billing_invoices (
     paid_ref text,
     notes text,
     created_at timestamp(3) without time zone DEFAULT CURRENT_TIMESTAMP NOT NULL,
-    updated_at timestamp(3) without time zone NOT NULL,
+    updated_at timestamp(3) without time zone DEFAULT CURRENT_TIMESTAMP NOT NULL,
     proof_url text,
     proof_submitted_at timestamp(3) without time zone,
     proof_method text,
@@ -826,9 +1170,9 @@ CREATE TABLE public.membership_payments (
     status public."MembershipPaymentStatus" DEFAULT 'UNPAID'::public."MembershipPaymentStatus" NOT NULL,
     paid_at timestamp(3) without time zone,
     payment_method text,
-    proof_url text,
     note text,
-    created_at timestamp(3) without time zone DEFAULT CURRENT_TIMESTAMP NOT NULL
+    created_at timestamp(3) without time zone DEFAULT CURRENT_TIMESTAMP NOT NULL,
+    proof_url text
 );
 
 
@@ -844,9 +1188,9 @@ CREATE TABLE public.membership_tiers (
     price_value integer NOT NULL,
     sessions_included integer,
     show_badge boolean DEFAULT false NOT NULL,
-    perks jsonb DEFAULT '[]'::jsonb NOT NULL,
     is_active boolean DEFAULT true NOT NULL,
-    created_at timestamp(3) without time zone DEFAULT CURRENT_TIMESTAMP NOT NULL
+    created_at timestamp(3) without time zone DEFAULT CURRENT_TIMESTAMP NOT NULL,
+    perks jsonb DEFAULT '[]'::jsonb NOT NULL
 );
 
 
@@ -891,6 +1235,7 @@ CREATE TABLE public.open_play_registrations (
     rejected_at timestamp(3) without time zone,
     rejected_by text,
     rejection_reason text,
+    expired_at timestamp with time zone,
     payment_method text,
     invoice_number text,
     invoiced_at timestamp with time zone,
@@ -955,8 +1300,8 @@ CREATE TABLE public.pending_payments (
     cancel_reason text,
     cancelled_at timestamp(3) without time zone,
     party_count integer DEFAULT 1 NOT NULL,
-    group_paid_by_payment_id text,
     group_paid_by_name text,
+    group_paid_by_payment_id text,
     confirmed_on_device text
 );
 
@@ -973,9 +1318,9 @@ CREATE TABLE public.player_accounts (
     email text,
     name text,
     image text,
-    created_at timestamp(3) without time zone DEFAULT CURRENT_TIMESTAMP NOT NULL,
-    email_verified boolean DEFAULT false NOT NULL,
     password_hash text,
+    email_verified boolean DEFAULT false NOT NULL,
+    created_at timestamp(3) without time zone DEFAULT CURRENT_TIMESTAMP NOT NULL,
     country text
 );
 
@@ -1215,12 +1560,14 @@ CREATE TABLE public.players (
     last_ranked_at timestamp(3) without time zone,
     avatar_photo_path text,
     is_walk_in boolean DEFAULT false NOT NULL,
+    reclub_user_id integer,
     registration_at timestamp(3) without time zone,
     registration_venue_id text,
-    reclub_user_id integer,
+    coach_staff_id text,
     email text,
+    password_hash text,
     player_identity_id text,
-    coach_staff_id text
+    blurred_face_photo_path text
 );
 
 
@@ -1239,6 +1586,94 @@ CREATE TABLE public.pricing_groups (
     pricing_rules jsonb DEFAULT '[]'::jsonb NOT NULL,
     created_at timestamp(3) without time zone DEFAULT CURRENT_TIMESTAMP NOT NULL,
     updated_at timestamp(3) without time zone NOT NULL
+);
+
+
+--
+-- Name: program_pass_type_coaches; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.program_pass_type_coaches (
+    id text DEFAULT (gen_random_uuid())::text NOT NULL,
+    pass_type_id text NOT NULL,
+    coach_id text NOT NULL,
+    created_at timestamp with time zone DEFAULT now() NOT NULL
+);
+
+
+--
+-- Name: program_pass_types; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.program_pass_types (
+    id text NOT NULL,
+    venue_id text NOT NULL,
+    name text NOT NULL,
+    price integer NOT NULL,
+    sessions_included integer DEFAULT 12 NOT NULL,
+    cycle_length_days integer DEFAULT 30 NOT NULL,
+    linked_coach_id text,
+    is_active boolean DEFAULT true NOT NULL,
+    created_at timestamp(3) without time zone DEFAULT CURRENT_TIMESTAMP NOT NULL,
+    updated_at timestamp(3) without time zone NOT NULL
+);
+
+
+--
+-- Name: promo_codes; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.promo_codes (
+    id text DEFAULT (gen_random_uuid())::text NOT NULL,
+    venue_id text NOT NULL,
+    name text NOT NULL,
+    code text NOT NULL,
+    discount_type public."PromoDiscountType" NOT NULL,
+    discount_value integer,
+    applies_to public."PromoAppliesTo" DEFAULT 'all'::public."PromoAppliesTo" NOT NULL,
+    max_redemptions integer,
+    redemption_count integer DEFAULT 0 NOT NULL,
+    max_redemptions_per_player integer DEFAULT 1,
+    starts_at timestamp(6) without time zone NOT NULL,
+    ends_at timestamp(6) without time zone,
+    is_active boolean DEFAULT true NOT NULL,
+    post_text text,
+    headline text,
+    created_at timestamp(6) without time zone DEFAULT now() NOT NULL,
+    updated_at timestamp(6) without time zone DEFAULT now() NOT NULL
+);
+
+
+--
+-- Name: promo_link_clicks; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.promo_link_clicks (
+    id text DEFAULT (gen_random_uuid())::text NOT NULL,
+    promo_code_id text NOT NULL,
+    player_id text,
+    utm_source text,
+    device_session_id text NOT NULL,
+    clicked_at timestamp(6) without time zone DEFAULT now() NOT NULL
+);
+
+
+--
+-- Name: promo_redemptions; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.promo_redemptions (
+    id text DEFAULT (gen_random_uuid())::text NOT NULL,
+    promo_code_id text NOT NULL,
+    player_id text NOT NULL,
+    booking_id text,
+    booking_type public."PromoBookingType" NOT NULL,
+    utm_source text,
+    discount_amount integer NOT NULL,
+    original_price integer NOT NULL,
+    final_price integer NOT NULL,
+    first_click_id text,
+    redeemed_at timestamp(6) without time zone DEFAULT now() NOT NULL
 );
 
 
@@ -1295,9 +1730,9 @@ CREATE TABLE public.sessions (
     closed_at timestamp(3) without time zone,
     status public."SessionStatus" DEFAULT 'open'::public."SessionStatus" NOT NULL,
     game_type_mix jsonb,
-    warmup_mode text DEFAULT 'manual'::text NOT NULL,
     max_players integer,
     staff_id text,
+    warmup_mode text DEFAULT 'manual'::text NOT NULL,
     title text,
     type public."SessionType" DEFAULT 'open_play'::public."SessionType" NOT NULL,
     intro_warmup_complete boolean DEFAULT false NOT NULL,
@@ -1373,12 +1808,12 @@ CREATE TABLE public.staff_members (
     push_notifications_enabled boolean DEFAULT false NOT NULL,
     reclub_group_id integer,
     coach_dupr text,
-    coach_focus_levels text[] DEFAULT ARRAY[]::text[],
     coach_gender text,
-    coach_group_sizes text[] DEFAULT ARRAY[]::text[],
     coach_languages text[] DEFAULT ARRAY[]::text[],
     coach_specialties text[] DEFAULT ARRAY[]::text[],
+    coach_focus_levels text[] DEFAULT ARRAY[]::text[],
     coach_years_experience text,
+    coach_group_sizes text[] DEFAULT ARRAY[]::text[],
     google_refresh_token text,
     google_calendar_id text,
     calendar_sync_enabled boolean DEFAULT false NOT NULL,
@@ -1414,7 +1849,7 @@ CREATE TABLE public.staff_payments (
 CREATE TABLE public.staff_push_tokens (
     id text NOT NULL,
     staff_id text NOT NULL,
-    venue_id text NOT NULL,
+    venue_id text,
     token text NOT NULL,
     platform text DEFAULT 'android'::text NOT NULL,
     device_id text,
@@ -1433,7 +1868,7 @@ CREATE TABLE public.staff_venue_assignments (
     id text NOT NULL,
     staff_id text NOT NULL,
     venue_id text NOT NULL,
-    app_access text[] DEFAULT ARRAY['courtpay'::text] NOT NULL
+    app_access text[] DEFAULT ARRAY['courtflow'::text] NOT NULL
 );
 
 
@@ -1458,11 +1893,11 @@ CREATE TABLE public.sticker_job_queue (
 
 CREATE TABLE public.sticker_payment_logs (
     id text NOT NULL,
+    payos_order_code text NOT NULL,
     payment_code text NOT NULL,
     transfer_amount integer NOT NULL,
     content text DEFAULT ''::text NOT NULL,
-    processed_at timestamp(3) without time zone DEFAULT CURRENT_TIMESTAMP NOT NULL,
-    payos_order_code text NOT NULL
+    processed_at timestamp(3) without time zone DEFAULT CURRENT_TIMESTAMP NOT NULL
 );
 
 
@@ -1584,6 +2019,456 @@ CREATE TABLE public.venues (
 
 
 --
+-- Name: _StaffMemberToVenue; Type: TABLE; Schema: shadow_temp; Owner: -
+--
+
+CREATE TABLE shadow_temp."_StaffMemberToVenue" (
+    "A" text NOT NULL,
+    "B" text NOT NULL
+);
+
+
+--
+-- Name: audit_logs; Type: TABLE; Schema: shadow_temp; Owner: -
+--
+
+CREATE TABLE shadow_temp.audit_logs (
+    id text NOT NULL,
+    venue_id text NOT NULL,
+    staff_id text,
+    action text NOT NULL,
+    target_id text,
+    reason text,
+    metadata jsonb,
+    created_at timestamp(3) without time zone DEFAULT CURRENT_TIMESTAMP NOT NULL
+);
+
+
+--
+-- Name: bookings; Type: TABLE; Schema: shadow_temp; Owner: -
+--
+
+CREATE TABLE shadow_temp.bookings (
+    id text NOT NULL,
+    court_id text NOT NULL,
+    venue_id text NOT NULL,
+    player_id text NOT NULL,
+    date date NOT NULL,
+    start_time timestamp(3) without time zone NOT NULL,
+    end_time timestamp(3) without time zone NOT NULL,
+    status shadow_temp."BookingStatus" DEFAULT 'confirmed'::shadow_temp."BookingStatus" NOT NULL,
+    price_in_cents integer NOT NULL,
+    co_player_ids text[],
+    created_at timestamp(3) without time zone DEFAULT CURRENT_TIMESTAMP NOT NULL,
+    cancelled_at timestamp(3) without time zone
+);
+
+
+--
+-- Name: coach_lessons; Type: TABLE; Schema: shadow_temp; Owner: -
+--
+
+CREATE TABLE shadow_temp.coach_lessons (
+    id text NOT NULL,
+    venue_id text NOT NULL,
+    coach_id text NOT NULL,
+    player_id text NOT NULL,
+    court_id text,
+    package_id text NOT NULL,
+    date date NOT NULL,
+    start_time timestamp(3) without time zone NOT NULL,
+    end_time timestamp(3) without time zone NOT NULL,
+    status shadow_temp."CoachLessonStatus" DEFAULT 'confirmed'::shadow_temp."CoachLessonStatus" NOT NULL,
+    price_in_cents integer NOT NULL,
+    note text,
+    created_at timestamp(3) without time zone DEFAULT CURRENT_TIMESTAMP NOT NULL,
+    cancelled_at timestamp(3) without time zone,
+    paid_at timestamp(3) without time zone,
+    payment_method text,
+    payment_note text,
+    proof_url text,
+    payment_status text DEFAULT 'UNPAID'::text NOT NULL
+);
+
+
+--
+-- Name: coach_packages; Type: TABLE; Schema: shadow_temp; Owner: -
+--
+
+CREATE TABLE shadow_temp.coach_packages (
+    id text NOT NULL,
+    coach_id text NOT NULL,
+    venue_id text NOT NULL,
+    name text NOT NULL,
+    description text,
+    lesson_type shadow_temp."LessonType" NOT NULL,
+    duration_min integer NOT NULL,
+    price_in_cents integer NOT NULL,
+    sessions_included integer DEFAULT 1 NOT NULL,
+    active boolean DEFAULT true NOT NULL,
+    sort_order integer DEFAULT 0 NOT NULL,
+    created_at timestamp(3) without time zone DEFAULT CURRENT_TIMESTAMP NOT NULL
+);
+
+
+--
+-- Name: court_assignments; Type: TABLE; Schema: shadow_temp; Owner: -
+--
+
+CREATE TABLE shadow_temp.court_assignments (
+    id text NOT NULL,
+    court_id text NOT NULL,
+    session_id text NOT NULL,
+    player_ids text[],
+    group_ids text[],
+    game_type shadow_temp."GameType" DEFAULT 'mixed'::shadow_temp."GameType" NOT NULL,
+    is_warmup boolean DEFAULT false NOT NULL,
+    started_at timestamp(3) without time zone DEFAULT CURRENT_TIMESTAMP NOT NULL,
+    ended_at timestamp(3) without time zone,
+    ended_by text
+);
+
+
+--
+-- Name: court_blocks; Type: TABLE; Schema: shadow_temp; Owner: -
+--
+
+CREATE TABLE shadow_temp.court_blocks (
+    id text NOT NULL,
+    venue_id text NOT NULL,
+    type shadow_temp."CourtBlockType" NOT NULL,
+    title text,
+    note text,
+    court_ids text[],
+    date date NOT NULL,
+    start_time timestamp(3) without time zone NOT NULL,
+    end_time timestamp(3) without time zone NOT NULL,
+    created_by text,
+    created_at timestamp(3) without time zone DEFAULT CURRENT_TIMESTAMP NOT NULL
+);
+
+
+--
+-- Name: courts; Type: TABLE; Schema: shadow_temp; Owner: -
+--
+
+CREATE TABLE shadow_temp.courts (
+    id text NOT NULL,
+    venue_id text NOT NULL,
+    label text NOT NULL,
+    status shadow_temp."CourtStatus" DEFAULT 'idle'::shadow_temp."CourtStatus" NOT NULL,
+    active_in_session boolean DEFAULT false NOT NULL,
+    is_bookable boolean DEFAULT false NOT NULL,
+    skip_warmup_after_maintenance boolean DEFAULT false NOT NULL
+);
+
+
+--
+-- Name: face_attempts; Type: TABLE; Schema: shadow_temp; Owner: -
+--
+
+CREATE TABLE shadow_temp.face_attempts (
+    id text NOT NULL,
+    event_id text NOT NULL,
+    matched_player_id text,
+    result_type text NOT NULL,
+    confidence double precision,
+    image_url text,
+    created_new_player boolean DEFAULT false NOT NULL,
+    host_reviewed boolean DEFAULT false NOT NULL,
+    queue_number_assigned integer,
+    kiosk_device_id text,
+    created_at timestamp(3) without time zone DEFAULT CURRENT_TIMESTAMP NOT NULL,
+    phone_number text
+);
+
+
+--
+-- Name: kiosk_devices; Type: TABLE; Schema: shadow_temp; Owner: -
+--
+
+CREATE TABLE shadow_temp.kiosk_devices (
+    id text NOT NULL,
+    name text NOT NULL,
+    location text,
+    active boolean DEFAULT true NOT NULL,
+    created_at timestamp(3) without time zone DEFAULT CURRENT_TIMESTAMP NOT NULL
+);
+
+
+--
+-- Name: membership_payments; Type: TABLE; Schema: shadow_temp; Owner: -
+--
+
+CREATE TABLE shadow_temp.membership_payments (
+    id text NOT NULL,
+    membership_id text NOT NULL,
+    period_start timestamp(3) without time zone NOT NULL,
+    period_end timestamp(3) without time zone NOT NULL,
+    amount_in_cents integer NOT NULL,
+    status shadow_temp."MembershipPaymentStatus" DEFAULT 'UNPAID'::shadow_temp."MembershipPaymentStatus" NOT NULL,
+    paid_at timestamp(3) without time zone,
+    payment_method text,
+    note text,
+    created_at timestamp(3) without time zone DEFAULT CURRENT_TIMESTAMP NOT NULL,
+    proof_url text
+);
+
+
+--
+-- Name: membership_tiers; Type: TABLE; Schema: shadow_temp; Owner: -
+--
+
+CREATE TABLE shadow_temp.membership_tiers (
+    id text NOT NULL,
+    venue_id text NOT NULL,
+    sort_order integer NOT NULL,
+    name text NOT NULL,
+    price_in_cents integer NOT NULL,
+    sessions_included integer,
+    show_badge boolean DEFAULT false NOT NULL,
+    is_active boolean DEFAULT true NOT NULL,
+    created_at timestamp(3) without time zone DEFAULT CURRENT_TIMESTAMP NOT NULL,
+    perks jsonb DEFAULT '[]'::jsonb NOT NULL
+);
+
+
+--
+-- Name: memberships; Type: TABLE; Schema: shadow_temp; Owner: -
+--
+
+CREATE TABLE shadow_temp.memberships (
+    id text NOT NULL,
+    player_id text NOT NULL,
+    venue_id text NOT NULL,
+    tier_id text NOT NULL,
+    status shadow_temp."MembershipStatus" DEFAULT 'active'::shadow_temp."MembershipStatus" NOT NULL,
+    activated_at timestamp(3) without time zone DEFAULT CURRENT_TIMESTAMP NOT NULL,
+    renewal_date timestamp(3) without time zone NOT NULL,
+    sessions_used integer DEFAULT 0 NOT NULL,
+    created_at timestamp(3) without time zone DEFAULT CURRENT_TIMESTAMP NOT NULL,
+    updated_at timestamp(3) without time zone NOT NULL
+);
+
+
+--
+-- Name: otp_codes; Type: TABLE; Schema: shadow_temp; Owner: -
+--
+
+CREATE TABLE shadow_temp.otp_codes (
+    id text NOT NULL,
+    phone text NOT NULL,
+    code text NOT NULL,
+    expires_at timestamp(3) without time zone NOT NULL,
+    verified boolean DEFAULT false NOT NULL,
+    attempts integer DEFAULT 0 NOT NULL,
+    created_at timestamp(3) without time zone DEFAULT CURRENT_TIMESTAMP NOT NULL
+);
+
+
+--
+-- Name: pending_payments; Type: TABLE; Schema: shadow_temp; Owner: -
+--
+
+CREATE TABLE shadow_temp.pending_payments (
+    id text NOT NULL,
+    venue_id text NOT NULL,
+    session_id text NOT NULL,
+    player_id text NOT NULL,
+    amount integer NOT NULL,
+    payment_method text DEFAULT 'vietqr'::text NOT NULL,
+    type text NOT NULL,
+    status text DEFAULT 'pending'::text NOT NULL,
+    created_at timestamp(3) without time zone DEFAULT CURRENT_TIMESTAMP NOT NULL,
+    expires_at timestamp(3) without time zone NOT NULL,
+    confirmed_at timestamp(3) without time zone,
+    confirmed_by text
+);
+
+
+--
+-- Name: player_app_auth_logs; Type: TABLE; Schema: shadow_temp; Owner: -
+--
+
+CREATE TABLE shadow_temp.player_app_auth_logs (
+    id text NOT NULL,
+    player_id text NOT NULL,
+    method shadow_temp."PlayerAppAuthMethod" NOT NULL,
+    session_id text,
+    created_at timestamp(3) without time zone DEFAULT CURRENT_TIMESTAMP NOT NULL
+);
+
+
+--
+-- Name: player_groups; Type: TABLE; Schema: shadow_temp; Owner: -
+--
+
+CREATE TABLE shadow_temp.player_groups (
+    id text NOT NULL,
+    session_id text NOT NULL,
+    code text NOT NULL,
+    status shadow_temp."GroupStatus" DEFAULT 'forming'::shadow_temp."GroupStatus" NOT NULL,
+    created_at timestamp(3) without time zone DEFAULT CURRENT_TIMESTAMP NOT NULL
+);
+
+
+--
+-- Name: player_rankings; Type: TABLE; Schema: shadow_temp; Owner: -
+--
+
+CREATE TABLE shadow_temp.player_rankings (
+    id text NOT NULL,
+    player_id text NOT NULL,
+    court_id text NOT NULL,
+    session_id text NOT NULL,
+    staff_id text NOT NULL,
+    "position" integer NOT NULL,
+    score_delta integer NOT NULL,
+    created_at timestamp(3) without time zone DEFAULT CURRENT_TIMESTAMP NOT NULL
+);
+
+
+--
+-- Name: players; Type: TABLE; Schema: shadow_temp; Owner: -
+--
+
+CREATE TABLE shadow_temp.players (
+    id text NOT NULL,
+    name text NOT NULL,
+    phone text NOT NULL,
+    avatar text DEFAULT '🏓'::text NOT NULL,
+    skill_level shadow_temp."SkillLevel" DEFAULT 'beginner'::shadow_temp."SkillLevel" NOT NULL,
+    gender shadow_temp."Gender" NOT NULL,
+    game_preference shadow_temp."GamePreference" DEFAULT 'no_preference'::shadow_temp."GamePreference" NOT NULL,
+    notifications_enabled boolean DEFAULT false NOT NULL,
+    created_at timestamp(3) without time zone DEFAULT CURRENT_TIMESTAMP NOT NULL,
+    face_subject_id text,
+    face_photo_path text,
+    ranking_score integer DEFAULT 200 NOT NULL,
+    ranking_count integer DEFAULT 0 NOT NULL,
+    last_ranked_at timestamp(3) without time zone,
+    avatar_photo_path text
+);
+
+
+--
+-- Name: push_subscriptions; Type: TABLE; Schema: shadow_temp; Owner: -
+--
+
+CREATE TABLE shadow_temp.push_subscriptions (
+    id text NOT NULL,
+    player_id text NOT NULL,
+    endpoint text NOT NULL,
+    p256dh text NOT NULL,
+    auth text NOT NULL,
+    created_at timestamp(3) without time zone DEFAULT CURRENT_TIMESTAMP NOT NULL
+);
+
+
+--
+-- Name: queue_entries; Type: TABLE; Schema: shadow_temp; Owner: -
+--
+
+CREATE TABLE shadow_temp.queue_entries (
+    id text NOT NULL,
+    session_id text NOT NULL,
+    player_id text NOT NULL,
+    group_id text,
+    joined_at timestamp(3) without time zone DEFAULT CURRENT_TIMESTAMP NOT NULL,
+    status shadow_temp."QueueStatus" DEFAULT 'waiting'::shadow_temp."QueueStatus" NOT NULL,
+    break_until timestamp(3) without time zone,
+    total_play_minutes_today integer DEFAULT 0 NOT NULL,
+    game_preference shadow_temp."GamePreference" DEFAULT 'no_preference'::shadow_temp."GamePreference" NOT NULL,
+    queue_number integer
+);
+
+
+--
+-- Name: sessions; Type: TABLE; Schema: shadow_temp; Owner: -
+--
+
+CREATE TABLE shadow_temp.sessions (
+    id text NOT NULL,
+    venue_id text NOT NULL,
+    date timestamp(3) without time zone DEFAULT CURRENT_TIMESTAMP NOT NULL,
+    opened_at timestamp(3) without time zone DEFAULT CURRENT_TIMESTAMP NOT NULL,
+    closed_at timestamp(3) without time zone,
+    status shadow_temp."SessionStatus" DEFAULT 'open'::shadow_temp."SessionStatus" NOT NULL,
+    game_type_mix jsonb,
+    max_players integer,
+    staff_id text,
+    warmup_mode text DEFAULT 'manual'::text NOT NULL,
+    title text,
+    type shadow_temp."SessionType" DEFAULT 'open_play'::shadow_temp."SessionType" NOT NULL,
+    intro_warmup_complete boolean DEFAULT false NOT NULL,
+    session_fee integer DEFAULT 0 NOT NULL
+);
+
+
+--
+-- Name: staff_members; Type: TABLE; Schema: shadow_temp; Owner: -
+--
+
+CREATE TABLE shadow_temp.staff_members (
+    id text NOT NULL,
+    name text NOT NULL,
+    phone text NOT NULL,
+    email text,
+    role shadow_temp."StaffRole" DEFAULT 'staff'::shadow_temp."StaffRole" NOT NULL,
+    password_hash text NOT NULL,
+    onboarding_completed boolean DEFAULT false NOT NULL,
+    created_at timestamp(3) without time zone DEFAULT CURRENT_TIMESTAMP NOT NULL,
+    coach_bio text,
+    coach_photo text,
+    is_coach boolean DEFAULT false NOT NULL
+);
+
+
+--
+-- Name: staff_payments; Type: TABLE; Schema: shadow_temp; Owner: -
+--
+
+CREATE TABLE shadow_temp.staff_payments (
+    id text NOT NULL,
+    staff_id text NOT NULL,
+    week_start timestamp(3) without time zone NOT NULL,
+    total_hours numeric(6,1) NOT NULL,
+    amount numeric(10,0),
+    payment_method text,
+    status shadow_temp."PaymentStatus" DEFAULT 'UNPAID'::shadow_temp."PaymentStatus" NOT NULL,
+    paid_at timestamp(3) without time zone,
+    paid_date timestamp(3) without time zone,
+    paid_by_id text,
+    note text,
+    created_at timestamp(3) without time zone DEFAULT CURRENT_TIMESTAMP NOT NULL,
+    updated_at timestamp(3) without time zone NOT NULL
+);
+
+
+--
+-- Name: venues; Type: TABLE; Schema: shadow_temp; Owner: -
+--
+
+CREATE TABLE shadow_temp.venues (
+    id text NOT NULL,
+    name text NOT NULL,
+    location text,
+    settings jsonb DEFAULT '{}'::jsonb NOT NULL,
+    active boolean DEFAULT true NOT NULL,
+    expected_max_players integer,
+    play_frequency text,
+    play_types text[] DEFAULT ARRAY[]::text[],
+    pain_points text[] DEFAULT ARRAY[]::text[],
+    created_at timestamp(3) without time zone DEFAULT CURRENT_TIMESTAMP NOT NULL,
+    logo_url text,
+    tv_text text,
+    bank_account text,
+    bank_name text,
+    bank_owner_name text
+);
+
+
+--
 -- Name: invoice_sequences id; Type: DEFAULT; Schema: public; Owner: -
 --
 
@@ -1684,6 +2569,38 @@ ALTER TABLE ONLY public.check_in_players
 
 ALTER TABLE ONLY public.check_in_records
     ADD CONSTRAINT check_in_records_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: class_check_ins class_check_ins_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.class_check_ins
+    ADD CONSTRAINT class_check_ins_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: class_instances class_instances_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.class_instances
+    ADD CONSTRAINT class_instances_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: class_pass_payments class_pass_payments_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.class_pass_payments
+    ADD CONSTRAINT class_pass_payments_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: class_passes class_passes_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.class_passes
+    ADD CONSTRAINT class_passes_pkey PRIMARY KEY (id);
 
 
 --
@@ -2039,6 +2956,14 @@ ALTER TABLE ONLY public.player_rankings
 
 
 --
+-- Name: player_sticker_packs player_sticker_packs_payment_code_key; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.player_sticker_packs
+    ADD CONSTRAINT player_sticker_packs_payment_code_key UNIQUE (payment_code);
+
+
+--
 -- Name: player_sticker_packs player_sticker_packs_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -2084,6 +3009,54 @@ ALTER TABLE ONLY public.players
 
 ALTER TABLE ONLY public.pricing_groups
     ADD CONSTRAINT pricing_groups_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: program_pass_type_coaches program_pass_type_coaches_pass_type_id_coach_id_key; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.program_pass_type_coaches
+    ADD CONSTRAINT program_pass_type_coaches_pass_type_id_coach_id_key UNIQUE (pass_type_id, coach_id);
+
+
+--
+-- Name: program_pass_type_coaches program_pass_type_coaches_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.program_pass_type_coaches
+    ADD CONSTRAINT program_pass_type_coaches_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: program_pass_types program_pass_types_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.program_pass_types
+    ADD CONSTRAINT program_pass_types_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: promo_codes promo_codes_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.promo_codes
+    ADD CONSTRAINT promo_codes_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: promo_link_clicks promo_link_clicks_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.promo_link_clicks
+    ADD CONSTRAINT promo_link_clicks_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: promo_redemptions promo_redemptions_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.promo_redemptions
+    ADD CONSTRAINT promo_redemptions_pkey PRIMARY KEY (id);
 
 
 --
@@ -2231,6 +3204,206 @@ ALTER TABLE ONLY public.venues
 
 
 --
+-- Name: _StaffMemberToVenue _StaffMemberToVenue_AB_pkey; Type: CONSTRAINT; Schema: shadow_temp; Owner: -
+--
+
+ALTER TABLE ONLY shadow_temp."_StaffMemberToVenue"
+    ADD CONSTRAINT "_StaffMemberToVenue_AB_pkey" PRIMARY KEY ("A", "B");
+
+
+--
+-- Name: audit_logs audit_logs_pkey; Type: CONSTRAINT; Schema: shadow_temp; Owner: -
+--
+
+ALTER TABLE ONLY shadow_temp.audit_logs
+    ADD CONSTRAINT audit_logs_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: bookings bookings_pkey; Type: CONSTRAINT; Schema: shadow_temp; Owner: -
+--
+
+ALTER TABLE ONLY shadow_temp.bookings
+    ADD CONSTRAINT bookings_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: coach_lessons coach_lessons_pkey; Type: CONSTRAINT; Schema: shadow_temp; Owner: -
+--
+
+ALTER TABLE ONLY shadow_temp.coach_lessons
+    ADD CONSTRAINT coach_lessons_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: coach_packages coach_packages_pkey; Type: CONSTRAINT; Schema: shadow_temp; Owner: -
+--
+
+ALTER TABLE ONLY shadow_temp.coach_packages
+    ADD CONSTRAINT coach_packages_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: court_assignments court_assignments_pkey; Type: CONSTRAINT; Schema: shadow_temp; Owner: -
+--
+
+ALTER TABLE ONLY shadow_temp.court_assignments
+    ADD CONSTRAINT court_assignments_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: court_blocks court_blocks_pkey; Type: CONSTRAINT; Schema: shadow_temp; Owner: -
+--
+
+ALTER TABLE ONLY shadow_temp.court_blocks
+    ADD CONSTRAINT court_blocks_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: courts courts_pkey; Type: CONSTRAINT; Schema: shadow_temp; Owner: -
+--
+
+ALTER TABLE ONLY shadow_temp.courts
+    ADD CONSTRAINT courts_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: face_attempts face_attempts_pkey; Type: CONSTRAINT; Schema: shadow_temp; Owner: -
+--
+
+ALTER TABLE ONLY shadow_temp.face_attempts
+    ADD CONSTRAINT face_attempts_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: kiosk_devices kiosk_devices_pkey; Type: CONSTRAINT; Schema: shadow_temp; Owner: -
+--
+
+ALTER TABLE ONLY shadow_temp.kiosk_devices
+    ADD CONSTRAINT kiosk_devices_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: membership_payments membership_payments_pkey; Type: CONSTRAINT; Schema: shadow_temp; Owner: -
+--
+
+ALTER TABLE ONLY shadow_temp.membership_payments
+    ADD CONSTRAINT membership_payments_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: membership_tiers membership_tiers_pkey; Type: CONSTRAINT; Schema: shadow_temp; Owner: -
+--
+
+ALTER TABLE ONLY shadow_temp.membership_tiers
+    ADD CONSTRAINT membership_tiers_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: memberships memberships_pkey; Type: CONSTRAINT; Schema: shadow_temp; Owner: -
+--
+
+ALTER TABLE ONLY shadow_temp.memberships
+    ADD CONSTRAINT memberships_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: otp_codes otp_codes_pkey; Type: CONSTRAINT; Schema: shadow_temp; Owner: -
+--
+
+ALTER TABLE ONLY shadow_temp.otp_codes
+    ADD CONSTRAINT otp_codes_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: pending_payments pending_payments_pkey; Type: CONSTRAINT; Schema: shadow_temp; Owner: -
+--
+
+ALTER TABLE ONLY shadow_temp.pending_payments
+    ADD CONSTRAINT pending_payments_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: player_app_auth_logs player_app_auth_logs_pkey; Type: CONSTRAINT; Schema: shadow_temp; Owner: -
+--
+
+ALTER TABLE ONLY shadow_temp.player_app_auth_logs
+    ADD CONSTRAINT player_app_auth_logs_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: player_groups player_groups_pkey; Type: CONSTRAINT; Schema: shadow_temp; Owner: -
+--
+
+ALTER TABLE ONLY shadow_temp.player_groups
+    ADD CONSTRAINT player_groups_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: player_rankings player_rankings_pkey; Type: CONSTRAINT; Schema: shadow_temp; Owner: -
+--
+
+ALTER TABLE ONLY shadow_temp.player_rankings
+    ADD CONSTRAINT player_rankings_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: players players_pkey; Type: CONSTRAINT; Schema: shadow_temp; Owner: -
+--
+
+ALTER TABLE ONLY shadow_temp.players
+    ADD CONSTRAINT players_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: push_subscriptions push_subscriptions_pkey; Type: CONSTRAINT; Schema: shadow_temp; Owner: -
+--
+
+ALTER TABLE ONLY shadow_temp.push_subscriptions
+    ADD CONSTRAINT push_subscriptions_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: queue_entries queue_entries_pkey; Type: CONSTRAINT; Schema: shadow_temp; Owner: -
+--
+
+ALTER TABLE ONLY shadow_temp.queue_entries
+    ADD CONSTRAINT queue_entries_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: sessions sessions_pkey; Type: CONSTRAINT; Schema: shadow_temp; Owner: -
+--
+
+ALTER TABLE ONLY shadow_temp.sessions
+    ADD CONSTRAINT sessions_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: staff_members staff_members_pkey; Type: CONSTRAINT; Schema: shadow_temp; Owner: -
+--
+
+ALTER TABLE ONLY shadow_temp.staff_members
+    ADD CONSTRAINT staff_members_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: staff_payments staff_payments_pkey; Type: CONSTRAINT; Schema: shadow_temp; Owner: -
+--
+
+ALTER TABLE ONLY shadow_temp.staff_payments
+    ADD CONSTRAINT staff_payments_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: venues venues_pkey; Type: CONSTRAINT; Schema: shadow_temp; Owner: -
+--
+
+ALTER TABLE ONLY shadow_temp.venues
+    ADD CONSTRAINT venues_pkey PRIMARY KEY (id);
+
+
+--
 -- Name: billing_invoices_payment_ref_key; Type: INDEX; Schema: public; Owner: -
 --
 
@@ -2287,6 +3460,13 @@ CREATE INDEX booking_groups_venue_date ON public.booking_groups USING btree (ven
 
 
 --
+-- Name: bookings_active_slot_unique; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE UNIQUE INDEX bookings_active_slot_unique ON public.bookings USING btree (court_id, date, start_time) WHERE (status = ANY (ARRAY['confirmed'::public."BookingStatus", 'completed'::public."BookingStatus", 'no_show'::public."BookingStatus"]));
+
+
+--
 -- Name: bookings_booking_group_id; Type: INDEX; Schema: public; Owner: -
 --
 
@@ -2312,13 +3492,6 @@ CREATE UNIQUE INDEX bookings_payment_ref_key ON public.bookings USING btree (pay
 --
 
 CREATE INDEX bookings_player_id_idx ON public.bookings USING btree (player_id);
-
-
---
--- Name: bookings_slot_unique; Type: INDEX; Schema: public; Owner: -
---
-
-CREATE UNIQUE INDEX bookings_slot_unique ON public.bookings USING btree (court_id, date, start_time) WHERE (status <> 'cancelled'::public."BookingStatus");
 
 
 --
@@ -2361,6 +3534,90 @@ CREATE INDEX check_in_records_player_id_idx ON public.check_in_records USING btr
 --
 
 CREATE INDEX check_in_records_venue_id_checked_in_at_idx ON public.check_in_records USING btree (venue_id, checked_in_at);
+
+
+--
+-- Name: class_check_ins_class_instance_id_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX class_check_ins_class_instance_id_idx ON public.class_check_ins USING btree (class_instance_id);
+
+
+--
+-- Name: class_check_ins_class_pass_id_class_instance_id_key; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE UNIQUE INDEX class_check_ins_class_pass_id_class_instance_id_key ON public.class_check_ins USING btree (class_pass_id, class_instance_id);
+
+
+--
+-- Name: class_instances_coach_id_start_at_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX class_instances_coach_id_start_at_idx ON public.class_instances USING btree (coach_id, start_at);
+
+
+--
+-- Name: class_instances_tier_id_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX class_instances_tier_id_idx ON public.class_instances USING btree (pass_type_id);
+
+
+--
+-- Name: class_instances_venue_id_start_at_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX class_instances_venue_id_start_at_idx ON public.class_instances USING btree (venue_id, start_at);
+
+
+--
+-- Name: class_pass_payments_class_pass_id_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX class_pass_payments_class_pass_id_idx ON public.class_pass_payments USING btree (class_pass_id);
+
+
+--
+-- Name: class_pass_payments_status_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX class_pass_payments_status_idx ON public.class_pass_payments USING btree (status);
+
+
+--
+-- Name: class_pass_tiers_linked_coach_id_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX class_pass_tiers_linked_coach_id_idx ON public.program_pass_types USING btree (linked_coach_id);
+
+
+--
+-- Name: class_pass_tiers_venue_id_is_active_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX class_pass_tiers_venue_id_is_active_idx ON public.program_pass_types USING btree (venue_id, is_active);
+
+
+--
+-- Name: class_passes_player_id_venue_id_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX class_passes_player_id_venue_id_idx ON public.class_passes USING btree (player_id, venue_id);
+
+
+--
+-- Name: class_passes_tier_id_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX class_passes_tier_id_idx ON public.class_passes USING btree (pass_type_id);
+
+
+--
+-- Name: class_passes_venue_id_status_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX class_passes_venue_id_status_idx ON public.class_passes USING btree (venue_id, status);
 
 
 --
@@ -2630,6 +3887,13 @@ CREATE UNIQUE INDEX organizations_slug_key ON public.organizations USING btree (
 
 
 --
+-- Name: pending_payments_group_paid_by_payment_id_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX pending_payments_group_paid_by_payment_id_idx ON public.pending_payments USING btree (group_paid_by_payment_id);
+
+
+--
 -- Name: pending_payments_payment_ref_idx; Type: INDEX; Schema: public; Owner: -
 --
 
@@ -2770,13 +4034,6 @@ CREATE INDEX player_rankings_session_id_court_id_idx ON public.player_rankings U
 
 
 --
--- Name: player_sticker_packs_payment_code_key; Type: INDEX; Schema: public; Owner: -
---
-
-CREATE UNIQUE INDEX player_sticker_packs_payment_code_key ON public.player_sticker_packs USING btree (payment_code);
-
-
---
 -- Name: player_sticker_packs_payos_order_code_key; Type: INDEX; Schema: public; Owner: -
 --
 
@@ -2826,6 +4083,13 @@ CREATE INDEX players_coach_staff_id_idx ON public.players USING btree (coach_sta
 
 
 --
+-- Name: players_email_key; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE UNIQUE INDEX players_email_key ON public.players USING btree (email);
+
+
+--
 -- Name: players_phone_key; Type: INDEX; Schema: public; Owner: -
 --
 
@@ -2858,6 +4122,76 @@ CREATE UNIQUE INDEX pricing_groups_one_default_per_venue ON public.pricing_group
 --
 
 CREATE INDEX pricing_groups_venue_id_idx ON public.pricing_groups USING btree (venue_id);
+
+
+--
+-- Name: program_pass_type_coaches_pass_type_id_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX program_pass_type_coaches_pass_type_id_idx ON public.program_pass_type_coaches USING btree (pass_type_id);
+
+
+--
+-- Name: promo_codes_is_active_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX promo_codes_is_active_idx ON public.promo_codes USING btree (is_active);
+
+
+--
+-- Name: promo_codes_venue_code_unique; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE UNIQUE INDEX promo_codes_venue_code_unique ON public.promo_codes USING btree (venue_id, upper(code));
+
+
+--
+-- Name: promo_codes_venue_id_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX promo_codes_venue_id_idx ON public.promo_codes USING btree (venue_id);
+
+
+--
+-- Name: promo_link_clicks_device_session_id_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX promo_link_clicks_device_session_id_idx ON public.promo_link_clicks USING btree (device_session_id);
+
+
+--
+-- Name: promo_link_clicks_player_id_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX promo_link_clicks_player_id_idx ON public.promo_link_clicks USING btree (player_id);
+
+
+--
+-- Name: promo_link_clicks_promo_code_id_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX promo_link_clicks_promo_code_id_idx ON public.promo_link_clicks USING btree (promo_code_id);
+
+
+--
+-- Name: promo_redemptions_booking_id_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX promo_redemptions_booking_id_idx ON public.promo_redemptions USING btree (booking_id);
+
+
+--
+-- Name: promo_redemptions_player_id_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX promo_redemptions_player_id_idx ON public.promo_redemptions USING btree (player_id);
+
+
+--
+-- Name: promo_redemptions_promo_code_id_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX promo_redemptions_promo_code_id_idx ON public.promo_redemptions USING btree (promo_code_id);
 
 
 --
@@ -2966,10 +4300,24 @@ CREATE INDEX staff_push_tokens_venue_id_active_idx ON public.staff_push_tokens U
 
 
 --
+-- Name: staff_venue_assignments_staff_id_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX staff_venue_assignments_staff_id_idx ON public.staff_venue_assignments USING btree (staff_id);
+
+
+--
 -- Name: staff_venue_assignments_staff_id_venue_id_key; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE UNIQUE INDEX staff_venue_assignments_staff_id_venue_id_key ON public.staff_venue_assignments USING btree (staff_id, venue_id);
+
+
+--
+-- Name: staff_venue_assignments_venue_id_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX staff_venue_assignments_venue_id_idx ON public.staff_venue_assignments USING btree (venue_id);
 
 
 --
@@ -3026,6 +4374,230 @@ CREATE INDEX venues_organization_id_idx ON public.venues USING btree (organizati
 --
 
 CREATE UNIQUE INDEX venues_slug_key ON public.venues USING btree (slug);
+
+
+--
+-- Name: _StaffMemberToVenue_B_index; Type: INDEX; Schema: shadow_temp; Owner: -
+--
+
+CREATE INDEX "_StaffMemberToVenue_B_index" ON shadow_temp."_StaffMemberToVenue" USING btree ("B");
+
+
+--
+-- Name: bookings_court_id_date_start_time_key; Type: INDEX; Schema: shadow_temp; Owner: -
+--
+
+CREATE UNIQUE INDEX bookings_court_id_date_start_time_key ON shadow_temp.bookings USING btree (court_id, date, start_time);
+
+
+--
+-- Name: bookings_player_id_idx; Type: INDEX; Schema: shadow_temp; Owner: -
+--
+
+CREATE INDEX bookings_player_id_idx ON shadow_temp.bookings USING btree (player_id);
+
+
+--
+-- Name: bookings_venue_id_date_idx; Type: INDEX; Schema: shadow_temp; Owner: -
+--
+
+CREATE INDEX bookings_venue_id_date_idx ON shadow_temp.bookings USING btree (venue_id, date);
+
+
+--
+-- Name: coach_lessons_coach_id_date_idx; Type: INDEX; Schema: shadow_temp; Owner: -
+--
+
+CREATE INDEX coach_lessons_coach_id_date_idx ON shadow_temp.coach_lessons USING btree (coach_id, date);
+
+
+--
+-- Name: coach_lessons_player_id_idx; Type: INDEX; Schema: shadow_temp; Owner: -
+--
+
+CREATE INDEX coach_lessons_player_id_idx ON shadow_temp.coach_lessons USING btree (player_id);
+
+
+--
+-- Name: coach_lessons_venue_id_date_idx; Type: INDEX; Schema: shadow_temp; Owner: -
+--
+
+CREATE INDEX coach_lessons_venue_id_date_idx ON shadow_temp.coach_lessons USING btree (venue_id, date);
+
+
+--
+-- Name: coach_packages_coach_id_idx; Type: INDEX; Schema: shadow_temp; Owner: -
+--
+
+CREATE INDEX coach_packages_coach_id_idx ON shadow_temp.coach_packages USING btree (coach_id);
+
+
+--
+-- Name: coach_packages_venue_id_idx; Type: INDEX; Schema: shadow_temp; Owner: -
+--
+
+CREATE INDEX coach_packages_venue_id_idx ON shadow_temp.coach_packages USING btree (venue_id);
+
+
+--
+-- Name: court_blocks_venue_id_date_idx; Type: INDEX; Schema: shadow_temp; Owner: -
+--
+
+CREATE INDEX court_blocks_venue_id_date_idx ON shadow_temp.court_blocks USING btree (venue_id, date);
+
+
+--
+-- Name: face_attempts_created_at_idx; Type: INDEX; Schema: shadow_temp; Owner: -
+--
+
+CREATE INDEX face_attempts_created_at_idx ON shadow_temp.face_attempts USING btree (created_at);
+
+
+--
+-- Name: face_attempts_event_id_idx; Type: INDEX; Schema: shadow_temp; Owner: -
+--
+
+CREATE INDEX face_attempts_event_id_idx ON shadow_temp.face_attempts USING btree (event_id);
+
+
+--
+-- Name: membership_payments_membership_id_idx; Type: INDEX; Schema: shadow_temp; Owner: -
+--
+
+CREATE INDEX membership_payments_membership_id_idx ON shadow_temp.membership_payments USING btree (membership_id);
+
+
+--
+-- Name: membership_payments_status_idx; Type: INDEX; Schema: shadow_temp; Owner: -
+--
+
+CREATE INDEX membership_payments_status_idx ON shadow_temp.membership_payments USING btree (status);
+
+
+--
+-- Name: membership_tiers_venue_id_sort_order_key; Type: INDEX; Schema: shadow_temp; Owner: -
+--
+
+CREATE UNIQUE INDEX membership_tiers_venue_id_sort_order_key ON shadow_temp.membership_tiers USING btree (venue_id, sort_order);
+
+
+--
+-- Name: memberships_player_id_venue_id_key; Type: INDEX; Schema: shadow_temp; Owner: -
+--
+
+CREATE UNIQUE INDEX memberships_player_id_venue_id_key ON shadow_temp.memberships USING btree (player_id, venue_id);
+
+
+--
+-- Name: memberships_tier_id_idx; Type: INDEX; Schema: shadow_temp; Owner: -
+--
+
+CREATE INDEX memberships_tier_id_idx ON shadow_temp.memberships USING btree (tier_id);
+
+
+--
+-- Name: memberships_venue_id_idx; Type: INDEX; Schema: shadow_temp; Owner: -
+--
+
+CREATE INDEX memberships_venue_id_idx ON shadow_temp.memberships USING btree (venue_id);
+
+
+--
+-- Name: pending_payments_session_id_idx; Type: INDEX; Schema: shadow_temp; Owner: -
+--
+
+CREATE INDEX pending_payments_session_id_idx ON shadow_temp.pending_payments USING btree (session_id);
+
+
+--
+-- Name: pending_payments_venue_id_status_idx; Type: INDEX; Schema: shadow_temp; Owner: -
+--
+
+CREATE INDEX pending_payments_venue_id_status_idx ON shadow_temp.pending_payments USING btree (venue_id, status);
+
+
+--
+-- Name: player_app_auth_logs_player_id_created_at_idx; Type: INDEX; Schema: shadow_temp; Owner: -
+--
+
+CREATE INDEX player_app_auth_logs_player_id_created_at_idx ON shadow_temp.player_app_auth_logs USING btree (player_id, created_at);
+
+
+--
+-- Name: player_groups_session_id_code_key; Type: INDEX; Schema: shadow_temp; Owner: -
+--
+
+CREATE UNIQUE INDEX player_groups_session_id_code_key ON shadow_temp.player_groups USING btree (session_id, code);
+
+
+--
+-- Name: player_rankings_session_id_court_id_created_at_idx; Type: INDEX; Schema: shadow_temp; Owner: -
+--
+
+CREATE INDEX player_rankings_session_id_court_id_created_at_idx ON shadow_temp.player_rankings USING btree (session_id, court_id, created_at);
+
+
+--
+-- Name: player_rankings_session_id_court_id_idx; Type: INDEX; Schema: shadow_temp; Owner: -
+--
+
+CREATE INDEX player_rankings_session_id_court_id_idx ON shadow_temp.player_rankings USING btree (session_id, court_id);
+
+
+--
+-- Name: players_phone_key; Type: INDEX; Schema: shadow_temp; Owner: -
+--
+
+CREATE UNIQUE INDEX players_phone_key ON shadow_temp.players USING btree (phone);
+
+
+--
+-- Name: push_subscriptions_endpoint_key; Type: INDEX; Schema: shadow_temp; Owner: -
+--
+
+CREATE UNIQUE INDEX push_subscriptions_endpoint_key ON shadow_temp.push_subscriptions USING btree (endpoint);
+
+
+--
+-- Name: queue_entries_session_id_player_id_key; Type: INDEX; Schema: shadow_temp; Owner: -
+--
+
+CREATE UNIQUE INDEX queue_entries_session_id_player_id_key ON shadow_temp.queue_entries USING btree (session_id, player_id);
+
+
+--
+-- Name: staff_members_email_key; Type: INDEX; Schema: shadow_temp; Owner: -
+--
+
+CREATE UNIQUE INDEX staff_members_email_key ON shadow_temp.staff_members USING btree (email);
+
+
+--
+-- Name: staff_members_phone_key; Type: INDEX; Schema: shadow_temp; Owner: -
+--
+
+CREATE UNIQUE INDEX staff_members_phone_key ON shadow_temp.staff_members USING btree (phone);
+
+
+--
+-- Name: staff_payments_staff_id_idx; Type: INDEX; Schema: shadow_temp; Owner: -
+--
+
+CREATE INDEX staff_payments_staff_id_idx ON shadow_temp.staff_payments USING btree (staff_id);
+
+
+--
+-- Name: staff_payments_staff_id_week_start_key; Type: INDEX; Schema: shadow_temp; Owner: -
+--
+
+CREATE UNIQUE INDEX staff_payments_staff_id_week_start_key ON shadow_temp.staff_payments USING btree (staff_id, week_start);
+
+
+--
+-- Name: staff_payments_week_start_idx; Type: INDEX; Schema: shadow_temp; Owner: -
+--
+
+CREATE INDEX staff_payments_week_start_idx ON shadow_temp.staff_payments USING btree (week_start);
 
 
 --
@@ -3146,6 +4718,102 @@ ALTER TABLE ONLY public.check_in_records
 
 ALTER TABLE ONLY public.check_in_records
     ADD CONSTRAINT check_in_records_venue_id_fkey FOREIGN KEY (venue_id) REFERENCES public.venues(id) ON UPDATE CASCADE ON DELETE RESTRICT;
+
+
+--
+-- Name: class_check_ins class_check_ins_class_instance_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.class_check_ins
+    ADD CONSTRAINT class_check_ins_class_instance_id_fkey FOREIGN KEY (class_instance_id) REFERENCES public.class_instances(id) ON UPDATE CASCADE ON DELETE CASCADE;
+
+
+--
+-- Name: class_check_ins class_check_ins_class_pass_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.class_check_ins
+    ADD CONSTRAINT class_check_ins_class_pass_id_fkey FOREIGN KEY (class_pass_id) REFERENCES public.class_passes(id) ON UPDATE CASCADE ON DELETE CASCADE;
+
+
+--
+-- Name: class_instances class_instances_coach_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.class_instances
+    ADD CONSTRAINT class_instances_coach_id_fkey FOREIGN KEY (coach_id) REFERENCES public.staff_members(id) ON UPDATE CASCADE ON DELETE RESTRICT;
+
+
+--
+-- Name: class_instances class_instances_court_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.class_instances
+    ADD CONSTRAINT class_instances_court_id_fkey FOREIGN KEY (court_id) REFERENCES public.courts(id) ON UPDATE CASCADE ON DELETE SET NULL;
+
+
+--
+-- Name: class_instances class_instances_tier_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.class_instances
+    ADD CONSTRAINT class_instances_tier_id_fkey FOREIGN KEY (pass_type_id) REFERENCES public.program_pass_types(id) ON UPDATE CASCADE ON DELETE RESTRICT;
+
+
+--
+-- Name: class_instances class_instances_venue_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.class_instances
+    ADD CONSTRAINT class_instances_venue_id_fkey FOREIGN KEY (venue_id) REFERENCES public.venues(id) ON UPDATE CASCADE ON DELETE RESTRICT;
+
+
+--
+-- Name: class_pass_payments class_pass_payments_class_pass_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.class_pass_payments
+    ADD CONSTRAINT class_pass_payments_class_pass_id_fkey FOREIGN KEY (class_pass_id) REFERENCES public.class_passes(id) ON UPDATE CASCADE ON DELETE CASCADE;
+
+
+--
+-- Name: program_pass_types class_pass_tiers_linked_coach_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.program_pass_types
+    ADD CONSTRAINT class_pass_tiers_linked_coach_id_fkey FOREIGN KEY (linked_coach_id) REFERENCES public.staff_members(id) ON UPDATE CASCADE ON DELETE SET NULL;
+
+
+--
+-- Name: program_pass_types class_pass_tiers_venue_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.program_pass_types
+    ADD CONSTRAINT class_pass_tiers_venue_id_fkey FOREIGN KEY (venue_id) REFERENCES public.venues(id) ON UPDATE CASCADE ON DELETE RESTRICT;
+
+
+--
+-- Name: class_passes class_passes_player_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.class_passes
+    ADD CONSTRAINT class_passes_player_id_fkey FOREIGN KEY (player_id) REFERENCES public.players(id) ON UPDATE CASCADE ON DELETE RESTRICT;
+
+
+--
+-- Name: class_passes class_passes_tier_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.class_passes
+    ADD CONSTRAINT class_passes_tier_id_fkey FOREIGN KEY (pass_type_id) REFERENCES public.program_pass_types(id) ON UPDATE CASCADE ON DELETE RESTRICT;
+
+
+--
+-- Name: class_passes class_passes_venue_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.class_passes
+    ADD CONSTRAINT class_passes_venue_id_fkey FOREIGN KEY (venue_id) REFERENCES public.venues(id) ON UPDATE CASCADE ON DELETE RESTRICT;
 
 
 --
@@ -3321,7 +4989,7 @@ ALTER TABLE ONLY public.courts
 --
 
 ALTER TABLE ONLY public.credit_transactions
-    ADD CONSTRAINT credit_transactions_credit_id_fkey FOREIGN KEY (credit_id) REFERENCES public.player_coach_credits(id) ON UPDATE CASCADE ON DELETE CASCADE;
+    ADD CONSTRAINT credit_transactions_credit_id_fkey FOREIGN KEY (credit_id) REFERENCES public.player_coach_credits(id) ON DELETE CASCADE;
 
 
 --
@@ -3641,7 +5309,7 @@ ALTER TABLE ONLY public.player_subscriptions
 --
 
 ALTER TABLE ONLY public.players
-    ADD CONSTRAINT players_coach_staff_id_fkey FOREIGN KEY (coach_staff_id) REFERENCES public.staff_members(id) ON UPDATE CASCADE ON DELETE SET NULL;
+    ADD CONSTRAINT players_coach_staff_id_fkey FOREIGN KEY (coach_staff_id) REFERENCES public.staff_members(id) ON DELETE SET NULL;
 
 
 --
@@ -3666,6 +5334,70 @@ ALTER TABLE ONLY public.players
 
 ALTER TABLE ONLY public.pricing_groups
     ADD CONSTRAINT pricing_groups_venue_id_fkey FOREIGN KEY (venue_id) REFERENCES public.venues(id) ON DELETE CASCADE;
+
+
+--
+-- Name: program_pass_type_coaches program_pass_type_coaches_coach_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.program_pass_type_coaches
+    ADD CONSTRAINT program_pass_type_coaches_coach_id_fkey FOREIGN KEY (coach_id) REFERENCES public.staff_members(id) ON DELETE CASCADE;
+
+
+--
+-- Name: program_pass_type_coaches program_pass_type_coaches_pass_type_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.program_pass_type_coaches
+    ADD CONSTRAINT program_pass_type_coaches_pass_type_id_fkey FOREIGN KEY (pass_type_id) REFERENCES public.program_pass_types(id) ON DELETE CASCADE;
+
+
+--
+-- Name: promo_codes promo_codes_venue_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.promo_codes
+    ADD CONSTRAINT promo_codes_venue_id_fkey FOREIGN KEY (venue_id) REFERENCES public.venues(id) ON DELETE CASCADE;
+
+
+--
+-- Name: promo_link_clicks promo_link_clicks_player_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.promo_link_clicks
+    ADD CONSTRAINT promo_link_clicks_player_id_fkey FOREIGN KEY (player_id) REFERENCES public.players(id) ON DELETE SET NULL;
+
+
+--
+-- Name: promo_link_clicks promo_link_clicks_promo_code_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.promo_link_clicks
+    ADD CONSTRAINT promo_link_clicks_promo_code_id_fkey FOREIGN KEY (promo_code_id) REFERENCES public.promo_codes(id) ON DELETE CASCADE;
+
+
+--
+-- Name: promo_redemptions promo_redemptions_first_click_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.promo_redemptions
+    ADD CONSTRAINT promo_redemptions_first_click_id_fkey FOREIGN KEY (first_click_id) REFERENCES public.promo_link_clicks(id) ON DELETE SET NULL;
+
+
+--
+-- Name: promo_redemptions promo_redemptions_player_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.promo_redemptions
+    ADD CONSTRAINT promo_redemptions_player_id_fkey FOREIGN KEY (player_id) REFERENCES public.players(id) ON DELETE RESTRICT;
+
+
+--
+-- Name: promo_redemptions promo_redemptions_promo_code_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.promo_redemptions
+    ADD CONSTRAINT promo_redemptions_promo_code_id_fkey FOREIGN KEY (promo_code_id) REFERENCES public.promo_codes(id) ON DELETE RESTRICT;
 
 
 --
@@ -3837,6 +5569,334 @@ ALTER TABLE ONLY public.venues
 
 
 --
+-- Name: _StaffMemberToVenue _StaffMemberToVenue_A_fkey; Type: FK CONSTRAINT; Schema: shadow_temp; Owner: -
+--
+
+ALTER TABLE ONLY shadow_temp."_StaffMemberToVenue"
+    ADD CONSTRAINT "_StaffMemberToVenue_A_fkey" FOREIGN KEY ("A") REFERENCES shadow_temp.staff_members(id) ON UPDATE CASCADE ON DELETE CASCADE;
+
+
+--
+-- Name: _StaffMemberToVenue _StaffMemberToVenue_B_fkey; Type: FK CONSTRAINT; Schema: shadow_temp; Owner: -
+--
+
+ALTER TABLE ONLY shadow_temp."_StaffMemberToVenue"
+    ADD CONSTRAINT "_StaffMemberToVenue_B_fkey" FOREIGN KEY ("B") REFERENCES shadow_temp.venues(id) ON UPDATE CASCADE ON DELETE CASCADE;
+
+
+--
+-- Name: audit_logs audit_logs_staff_id_fkey; Type: FK CONSTRAINT; Schema: shadow_temp; Owner: -
+--
+
+ALTER TABLE ONLY shadow_temp.audit_logs
+    ADD CONSTRAINT audit_logs_staff_id_fkey FOREIGN KEY (staff_id) REFERENCES shadow_temp.staff_members(id) ON UPDATE CASCADE ON DELETE SET NULL;
+
+
+--
+-- Name: audit_logs audit_logs_venue_id_fkey; Type: FK CONSTRAINT; Schema: shadow_temp; Owner: -
+--
+
+ALTER TABLE ONLY shadow_temp.audit_logs
+    ADD CONSTRAINT audit_logs_venue_id_fkey FOREIGN KEY (venue_id) REFERENCES shadow_temp.venues(id) ON UPDATE CASCADE ON DELETE RESTRICT;
+
+
+--
+-- Name: bookings bookings_court_id_fkey; Type: FK CONSTRAINT; Schema: shadow_temp; Owner: -
+--
+
+ALTER TABLE ONLY shadow_temp.bookings
+    ADD CONSTRAINT bookings_court_id_fkey FOREIGN KEY (court_id) REFERENCES shadow_temp.courts(id) ON UPDATE CASCADE ON DELETE RESTRICT;
+
+
+--
+-- Name: bookings bookings_player_id_fkey; Type: FK CONSTRAINT; Schema: shadow_temp; Owner: -
+--
+
+ALTER TABLE ONLY shadow_temp.bookings
+    ADD CONSTRAINT bookings_player_id_fkey FOREIGN KEY (player_id) REFERENCES shadow_temp.players(id) ON UPDATE CASCADE ON DELETE RESTRICT;
+
+
+--
+-- Name: bookings bookings_venue_id_fkey; Type: FK CONSTRAINT; Schema: shadow_temp; Owner: -
+--
+
+ALTER TABLE ONLY shadow_temp.bookings
+    ADD CONSTRAINT bookings_venue_id_fkey FOREIGN KEY (venue_id) REFERENCES shadow_temp.venues(id) ON UPDATE CASCADE ON DELETE RESTRICT;
+
+
+--
+-- Name: coach_lessons coach_lessons_coach_id_fkey; Type: FK CONSTRAINT; Schema: shadow_temp; Owner: -
+--
+
+ALTER TABLE ONLY shadow_temp.coach_lessons
+    ADD CONSTRAINT coach_lessons_coach_id_fkey FOREIGN KEY (coach_id) REFERENCES shadow_temp.staff_members(id) ON UPDATE CASCADE ON DELETE RESTRICT;
+
+
+--
+-- Name: coach_lessons coach_lessons_court_id_fkey; Type: FK CONSTRAINT; Schema: shadow_temp; Owner: -
+--
+
+ALTER TABLE ONLY shadow_temp.coach_lessons
+    ADD CONSTRAINT coach_lessons_court_id_fkey FOREIGN KEY (court_id) REFERENCES shadow_temp.courts(id) ON UPDATE CASCADE ON DELETE SET NULL;
+
+
+--
+-- Name: coach_lessons coach_lessons_package_id_fkey; Type: FK CONSTRAINT; Schema: shadow_temp; Owner: -
+--
+
+ALTER TABLE ONLY shadow_temp.coach_lessons
+    ADD CONSTRAINT coach_lessons_package_id_fkey FOREIGN KEY (package_id) REFERENCES shadow_temp.coach_packages(id) ON UPDATE CASCADE ON DELETE RESTRICT;
+
+
+--
+-- Name: coach_lessons coach_lessons_player_id_fkey; Type: FK CONSTRAINT; Schema: shadow_temp; Owner: -
+--
+
+ALTER TABLE ONLY shadow_temp.coach_lessons
+    ADD CONSTRAINT coach_lessons_player_id_fkey FOREIGN KEY (player_id) REFERENCES shadow_temp.players(id) ON UPDATE CASCADE ON DELETE RESTRICT;
+
+
+--
+-- Name: coach_lessons coach_lessons_venue_id_fkey; Type: FK CONSTRAINT; Schema: shadow_temp; Owner: -
+--
+
+ALTER TABLE ONLY shadow_temp.coach_lessons
+    ADD CONSTRAINT coach_lessons_venue_id_fkey FOREIGN KEY (venue_id) REFERENCES shadow_temp.venues(id) ON UPDATE CASCADE ON DELETE RESTRICT;
+
+
+--
+-- Name: coach_packages coach_packages_coach_id_fkey; Type: FK CONSTRAINT; Schema: shadow_temp; Owner: -
+--
+
+ALTER TABLE ONLY shadow_temp.coach_packages
+    ADD CONSTRAINT coach_packages_coach_id_fkey FOREIGN KEY (coach_id) REFERENCES shadow_temp.staff_members(id) ON UPDATE CASCADE ON DELETE RESTRICT;
+
+
+--
+-- Name: coach_packages coach_packages_venue_id_fkey; Type: FK CONSTRAINT; Schema: shadow_temp; Owner: -
+--
+
+ALTER TABLE ONLY shadow_temp.coach_packages
+    ADD CONSTRAINT coach_packages_venue_id_fkey FOREIGN KEY (venue_id) REFERENCES shadow_temp.venues(id) ON UPDATE CASCADE ON DELETE RESTRICT;
+
+
+--
+-- Name: court_assignments court_assignments_court_id_fkey; Type: FK CONSTRAINT; Schema: shadow_temp; Owner: -
+--
+
+ALTER TABLE ONLY shadow_temp.court_assignments
+    ADD CONSTRAINT court_assignments_court_id_fkey FOREIGN KEY (court_id) REFERENCES shadow_temp.courts(id) ON UPDATE CASCADE ON DELETE RESTRICT;
+
+
+--
+-- Name: court_assignments court_assignments_session_id_fkey; Type: FK CONSTRAINT; Schema: shadow_temp; Owner: -
+--
+
+ALTER TABLE ONLY shadow_temp.court_assignments
+    ADD CONSTRAINT court_assignments_session_id_fkey FOREIGN KEY (session_id) REFERENCES shadow_temp.sessions(id) ON UPDATE CASCADE ON DELETE RESTRICT;
+
+
+--
+-- Name: court_blocks court_blocks_venue_id_fkey; Type: FK CONSTRAINT; Schema: shadow_temp; Owner: -
+--
+
+ALTER TABLE ONLY shadow_temp.court_blocks
+    ADD CONSTRAINT court_blocks_venue_id_fkey FOREIGN KEY (venue_id) REFERENCES shadow_temp.venues(id) ON UPDATE CASCADE ON DELETE RESTRICT;
+
+
+--
+-- Name: courts courts_venue_id_fkey; Type: FK CONSTRAINT; Schema: shadow_temp; Owner: -
+--
+
+ALTER TABLE ONLY shadow_temp.courts
+    ADD CONSTRAINT courts_venue_id_fkey FOREIGN KEY (venue_id) REFERENCES shadow_temp.venues(id) ON UPDATE CASCADE ON DELETE RESTRICT;
+
+
+--
+-- Name: face_attempts face_attempts_matched_player_id_fkey; Type: FK CONSTRAINT; Schema: shadow_temp; Owner: -
+--
+
+ALTER TABLE ONLY shadow_temp.face_attempts
+    ADD CONSTRAINT face_attempts_matched_player_id_fkey FOREIGN KEY (matched_player_id) REFERENCES shadow_temp.players(id) ON UPDATE CASCADE ON DELETE SET NULL;
+
+
+--
+-- Name: membership_payments membership_payments_membership_id_fkey; Type: FK CONSTRAINT; Schema: shadow_temp; Owner: -
+--
+
+ALTER TABLE ONLY shadow_temp.membership_payments
+    ADD CONSTRAINT membership_payments_membership_id_fkey FOREIGN KEY (membership_id) REFERENCES shadow_temp.memberships(id) ON UPDATE CASCADE ON DELETE RESTRICT;
+
+
+--
+-- Name: membership_tiers membership_tiers_venue_id_fkey; Type: FK CONSTRAINT; Schema: shadow_temp; Owner: -
+--
+
+ALTER TABLE ONLY shadow_temp.membership_tiers
+    ADD CONSTRAINT membership_tiers_venue_id_fkey FOREIGN KEY (venue_id) REFERENCES shadow_temp.venues(id) ON UPDATE CASCADE ON DELETE RESTRICT;
+
+
+--
+-- Name: memberships memberships_player_id_fkey; Type: FK CONSTRAINT; Schema: shadow_temp; Owner: -
+--
+
+ALTER TABLE ONLY shadow_temp.memberships
+    ADD CONSTRAINT memberships_player_id_fkey FOREIGN KEY (player_id) REFERENCES shadow_temp.players(id) ON UPDATE CASCADE ON DELETE RESTRICT;
+
+
+--
+-- Name: memberships memberships_tier_id_fkey; Type: FK CONSTRAINT; Schema: shadow_temp; Owner: -
+--
+
+ALTER TABLE ONLY shadow_temp.memberships
+    ADD CONSTRAINT memberships_tier_id_fkey FOREIGN KEY (tier_id) REFERENCES shadow_temp.membership_tiers(id) ON UPDATE CASCADE ON DELETE RESTRICT;
+
+
+--
+-- Name: memberships memberships_venue_id_fkey; Type: FK CONSTRAINT; Schema: shadow_temp; Owner: -
+--
+
+ALTER TABLE ONLY shadow_temp.memberships
+    ADD CONSTRAINT memberships_venue_id_fkey FOREIGN KEY (venue_id) REFERENCES shadow_temp.venues(id) ON UPDATE CASCADE ON DELETE RESTRICT;
+
+
+--
+-- Name: pending_payments pending_payments_player_id_fkey; Type: FK CONSTRAINT; Schema: shadow_temp; Owner: -
+--
+
+ALTER TABLE ONLY shadow_temp.pending_payments
+    ADD CONSTRAINT pending_payments_player_id_fkey FOREIGN KEY (player_id) REFERENCES shadow_temp.players(id) ON UPDATE CASCADE ON DELETE RESTRICT;
+
+
+--
+-- Name: pending_payments pending_payments_session_id_fkey; Type: FK CONSTRAINT; Schema: shadow_temp; Owner: -
+--
+
+ALTER TABLE ONLY shadow_temp.pending_payments
+    ADD CONSTRAINT pending_payments_session_id_fkey FOREIGN KEY (session_id) REFERENCES shadow_temp.sessions(id) ON UPDATE CASCADE ON DELETE RESTRICT;
+
+
+--
+-- Name: pending_payments pending_payments_venue_id_fkey; Type: FK CONSTRAINT; Schema: shadow_temp; Owner: -
+--
+
+ALTER TABLE ONLY shadow_temp.pending_payments
+    ADD CONSTRAINT pending_payments_venue_id_fkey FOREIGN KEY (venue_id) REFERENCES shadow_temp.venues(id) ON UPDATE CASCADE ON DELETE RESTRICT;
+
+
+--
+-- Name: player_app_auth_logs player_app_auth_logs_player_id_fkey; Type: FK CONSTRAINT; Schema: shadow_temp; Owner: -
+--
+
+ALTER TABLE ONLY shadow_temp.player_app_auth_logs
+    ADD CONSTRAINT player_app_auth_logs_player_id_fkey FOREIGN KEY (player_id) REFERENCES shadow_temp.players(id) ON UPDATE CASCADE ON DELETE CASCADE;
+
+
+--
+-- Name: player_groups player_groups_session_id_fkey; Type: FK CONSTRAINT; Schema: shadow_temp; Owner: -
+--
+
+ALTER TABLE ONLY shadow_temp.player_groups
+    ADD CONSTRAINT player_groups_session_id_fkey FOREIGN KEY (session_id) REFERENCES shadow_temp.sessions(id) ON UPDATE CASCADE ON DELETE RESTRICT;
+
+
+--
+-- Name: player_rankings player_rankings_court_id_fkey; Type: FK CONSTRAINT; Schema: shadow_temp; Owner: -
+--
+
+ALTER TABLE ONLY shadow_temp.player_rankings
+    ADD CONSTRAINT player_rankings_court_id_fkey FOREIGN KEY (court_id) REFERENCES shadow_temp.courts(id) ON UPDATE CASCADE ON DELETE CASCADE;
+
+
+--
+-- Name: player_rankings player_rankings_player_id_fkey; Type: FK CONSTRAINT; Schema: shadow_temp; Owner: -
+--
+
+ALTER TABLE ONLY shadow_temp.player_rankings
+    ADD CONSTRAINT player_rankings_player_id_fkey FOREIGN KEY (player_id) REFERENCES shadow_temp.players(id) ON UPDATE CASCADE ON DELETE CASCADE;
+
+
+--
+-- Name: player_rankings player_rankings_session_id_fkey; Type: FK CONSTRAINT; Schema: shadow_temp; Owner: -
+--
+
+ALTER TABLE ONLY shadow_temp.player_rankings
+    ADD CONSTRAINT player_rankings_session_id_fkey FOREIGN KEY (session_id) REFERENCES shadow_temp.sessions(id) ON UPDATE CASCADE ON DELETE CASCADE;
+
+
+--
+-- Name: player_rankings player_rankings_staff_id_fkey; Type: FK CONSTRAINT; Schema: shadow_temp; Owner: -
+--
+
+ALTER TABLE ONLY shadow_temp.player_rankings
+    ADD CONSTRAINT player_rankings_staff_id_fkey FOREIGN KEY (staff_id) REFERENCES shadow_temp.staff_members(id) ON UPDATE CASCADE ON DELETE CASCADE;
+
+
+--
+-- Name: push_subscriptions push_subscriptions_player_id_fkey; Type: FK CONSTRAINT; Schema: shadow_temp; Owner: -
+--
+
+ALTER TABLE ONLY shadow_temp.push_subscriptions
+    ADD CONSTRAINT push_subscriptions_player_id_fkey FOREIGN KEY (player_id) REFERENCES shadow_temp.players(id) ON UPDATE CASCADE ON DELETE CASCADE;
+
+
+--
+-- Name: queue_entries queue_entries_group_id_fkey; Type: FK CONSTRAINT; Schema: shadow_temp; Owner: -
+--
+
+ALTER TABLE ONLY shadow_temp.queue_entries
+    ADD CONSTRAINT queue_entries_group_id_fkey FOREIGN KEY (group_id) REFERENCES shadow_temp.player_groups(id) ON UPDATE CASCADE ON DELETE SET NULL;
+
+
+--
+-- Name: queue_entries queue_entries_player_id_fkey; Type: FK CONSTRAINT; Schema: shadow_temp; Owner: -
+--
+
+ALTER TABLE ONLY shadow_temp.queue_entries
+    ADD CONSTRAINT queue_entries_player_id_fkey FOREIGN KEY (player_id) REFERENCES shadow_temp.players(id) ON UPDATE CASCADE ON DELETE RESTRICT;
+
+
+--
+-- Name: queue_entries queue_entries_session_id_fkey; Type: FK CONSTRAINT; Schema: shadow_temp; Owner: -
+--
+
+ALTER TABLE ONLY shadow_temp.queue_entries
+    ADD CONSTRAINT queue_entries_session_id_fkey FOREIGN KEY (session_id) REFERENCES shadow_temp.sessions(id) ON UPDATE CASCADE ON DELETE RESTRICT;
+
+
+--
+-- Name: sessions sessions_staff_id_fkey; Type: FK CONSTRAINT; Schema: shadow_temp; Owner: -
+--
+
+ALTER TABLE ONLY shadow_temp.sessions
+    ADD CONSTRAINT sessions_staff_id_fkey FOREIGN KEY (staff_id) REFERENCES shadow_temp.staff_members(id) ON UPDATE CASCADE ON DELETE SET NULL;
+
+
+--
+-- Name: sessions sessions_venue_id_fkey; Type: FK CONSTRAINT; Schema: shadow_temp; Owner: -
+--
+
+ALTER TABLE ONLY shadow_temp.sessions
+    ADD CONSTRAINT sessions_venue_id_fkey FOREIGN KEY (venue_id) REFERENCES shadow_temp.venues(id) ON UPDATE CASCADE ON DELETE RESTRICT;
+
+
+--
+-- Name: staff_payments staff_payments_paid_by_id_fkey; Type: FK CONSTRAINT; Schema: shadow_temp; Owner: -
+--
+
+ALTER TABLE ONLY shadow_temp.staff_payments
+    ADD CONSTRAINT staff_payments_paid_by_id_fkey FOREIGN KEY (paid_by_id) REFERENCES shadow_temp.staff_members(id) ON UPDATE CASCADE ON DELETE SET NULL;
+
+
+--
+-- Name: staff_payments staff_payments_staff_id_fkey; Type: FK CONSTRAINT; Schema: shadow_temp; Owner: -
+--
+
+ALTER TABLE ONLY shadow_temp.staff_payments
+    ADD CONSTRAINT staff_payments_staff_id_fkey FOREIGN KEY (staff_id) REFERENCES shadow_temp.staff_members(id) ON UPDATE CASCADE ON DELETE RESTRICT;
+
+
+--
 -- PostgreSQL database dump complete
 --
 
@@ -3866,4 +5926,5 @@ INSERT INTO public.schema_migrations (version) VALUES
     ('20260708235206'),
     ('20260709001329'),
     ('20260709081528'),
-    ('20260709091207');
+    ('20260709091207'),
+    ('20260713000106');
