@@ -32,6 +32,8 @@ export async function GET(request: NextRequest) {
       totalPlayers,
       coachLessons,
       players,
+      openPlayRegistrations,
+      courtPayPayments,
     ] = await Promise.all([
       prisma.court.findMany({
         where: { venueId, isBookable: true },
@@ -51,6 +53,7 @@ export async function GET(request: NextRequest) {
           endTime: true,
           status: true,
           priceValue: true,
+          paymentStatus: true,
         },
       }),
       prisma.membership.findMany({
@@ -134,6 +137,36 @@ export async function GET(request: NextRequest) {
           },
         },
       }),
+      // Open Play registrations in period
+      prisma.openPlayRegistration.findMany({
+        where: {
+          venueId,
+          date: { gte: dateFrom, lte: dateTo },
+          status: { not: "cancelled" },
+        },
+        select: {
+          id: true,
+          date: true,
+          priceValue: true,
+          paymentStatus: true,
+          status: true,
+        },
+      }),
+      // CourtPay confirmed payments in period (session_fee payments)
+      prisma.pendingPayment.findMany({
+        where: {
+          venueId,
+          status: "confirmed",
+          confirmedAt: { gte: dateFrom, lte: dateTo },
+        },
+        select: {
+          id: true,
+          amount: true,
+          confirmedAt: true,
+          type: true,
+          partyCount: true,
+        },
+      }),
     ]);
 
     // --- MONTH PROJECTION DATA ---
@@ -155,7 +188,7 @@ export async function GET(request: NextRequest) {
           date: { gte: currentMonthStart, lte: currentMonthEnd },
           status: { in: ["confirmed", "completed"] },
         },
-        select: { date: true, priceValue: true, startTime: true, endTime: true },
+        select: { date: true, priceValue: true, startTime: true, endTime: true, paymentStatus: true },
       }),
       prisma.booking.findMany({
         where: {
@@ -163,7 +196,7 @@ export async function GET(request: NextRequest) {
           date: { gte: last90Start, lt: currentMonthStart },
           status: { in: ["confirmed", "completed"] },
         },
-        select: { date: true, priceValue: true, startTime: true, endTime: true },
+        select: { date: true, priceValue: true, startTime: true, endTime: true, paymentStatus: true },
       }),
       prisma.session.findMany({
         where: {
@@ -177,7 +210,7 @@ export async function GET(request: NextRequest) {
           venueId,
           date: { gte: prevMonthStart, lte: prevMonthEnd },
         },
-        select: { status: true, priceValue: true, startTime: true, endTime: true },
+        select: { status: true, priceValue: true, startTime: true, endTime: true, paymentStatus: true },
       }),
       prisma.coachLesson.findMany({
         where: {
@@ -189,7 +222,36 @@ export async function GET(request: NextRequest) {
       }),
     ]);
 
-    // Revenue and hours per day for current month
+    // --- OPEN BILL METRICS (parallel, not blocking) ---
+    const [openBillPeriodBills, openBillCollectedBills] = await Promise.all([
+      // Accrued: all non-void bills with a periodStart in the date range
+      prisma.companyOpenBill.findMany({
+        where: {
+          companyAccount: { venueId },
+          status: { in: ["open", "issued", "overdue"] },
+          periodStart: { gte: dateFrom, lte: dateTo },
+        },
+        select: { totalAmount: true, subtotal: true, discountAmount: true, vatAmount: true },
+      }),
+      // Collected: bills paid within the date range
+      prisma.companyOpenBill.findMany({
+        where: {
+          companyAccount: { venueId },
+          status: "paid",
+          paidAt: { gte: dateFrom, lte: dateTo },
+        },
+        select: { totalAmount: true, subtotal: true, discountAmount: true, vatAmount: true },
+      }),
+    ]);
+
+    const openBillAccrued = openBillPeriodBills.reduce((s, b) => s + b.totalAmount, 0);
+    const openBillCollected = openBillCollectedBills.reduce((s, b) => s + b.totalAmount, 0);
+    // Rack-rate total of open-bill bookings in period (for reconciliation display)
+    const openBillRackSubtotal = openBillPeriodBills.reduce((s, b) => s + b.subtotal, 0);
+    const openBillDiscountTotal = openBillPeriodBills.reduce((s, b) => s + b.discountAmount, 0);
+    const openBillVatTotal = openBillPeriodBills.reduce((s, b) => s + b.vatAmount, 0);
+
+    // Revenue and hours per day for current month — exclude open_bill bookings from cash revenue
     const daysInMonth = currentMonthEnd.getUTCDate();
     const todayDate = now.getUTCDate();
     const monthLabel = currentMonthStart.toLocaleString("en-US", { month: "long", timeZone: "UTC" });
@@ -197,15 +259,19 @@ export async function GET(request: NextRequest) {
     const monthRevenueByDay: Record<number, number> = {};
     const monthHoursByDay: Record<number, number> = {};
     for (const b of monthBookings) {
+      // Exclude open-bill bookings from cash revenue — they're tracked via company_open_bills
+      if (b.paymentStatus === "open_bill") continue;
       const day = new Date(b.date).getUTCDate();
       monthRevenueByDay[day] = (monthRevenueByDay[day] || 0) + b.priceValue;
       monthHoursByDay[day] = (monthHoursByDay[day] || 0) +
         (new Date(b.endTime).getTime() - new Date(b.startTime).getTime()) / 3600000;
     }
 
-    // 90-day daily averages for projection
+    // 90-day daily averages for projection — exclude open_bill bookings
     const last90Days = Math.max(1, Math.ceil((currentMonthStart.getTime() - last90Start.getTime()) / 86400000));
-    const totalRevenue90 = last90Bookings.reduce((s, b) => s + b.priceValue, 0);
+    const totalRevenue90 = last90Bookings
+      .filter((b) => b.paymentStatus !== "open_bill")
+      .reduce((s, b) => s + b.priceValue, 0);
     let totalHours90 = 0;
     for (const b of last90Bookings) {
       totalHours90 += (new Date(b.endTime).getTime() - new Date(b.startTime).getTime()) / 3600000;
@@ -250,6 +316,8 @@ export async function GET(request: NextRequest) {
     // --- COURT BOOKING ANALYTICS ---
     const confirmedBookings = bookings.filter((b) => b.status === "confirmed" || b.status === "completed");
     const cancelledBookings = bookings.filter((b) => b.status === "cancelled");
+    // Cash-paying confirmed bookings only — open_bill bookings are tracked via company_open_bills
+    const cashConfirmedBookings = confirmedBookings.filter((b) => b.paymentStatus !== "open_bill");
 
     const totalDays = Math.max(1, Math.ceil((dateTo.getTime() - dateFrom.getTime()) / 86400000));
     const bookableCourtCount = courts.length;
@@ -266,7 +334,7 @@ export async function GET(request: NextRequest) {
 
     const utilizationPct = totalAvailableHours > 0 ? Math.round((totalBookedHours / totalAvailableHours) * 100) : 0;
 
-    const bookingRevenue = confirmedBookings.reduce((s, b) => s + b.priceValue, 0);
+    const bookingRevenue = cashConfirmedBookings.reduce((s, b) => s + b.priceValue, 0);
 
     // Bookings per day
     const bookingsByDate: Record<string, number> = {};
@@ -332,7 +400,7 @@ export async function GET(request: NextRequest) {
 
     // --- REVENUE BY DAY OF WEEK ---
     const revenueByDow: Record<number, number> = { 0: 0, 1: 0, 2: 0, 3: 0, 4: 0, 5: 0, 6: 0 };
-    for (const b of confirmedBookings) {
+    for (const b of cashConfirmedBookings) {
       const dow = new Date(b.date).getUTCDay();
       revenueByDow[dow] += b.priceValue;
     }
@@ -362,7 +430,9 @@ export async function GET(request: NextRequest) {
     // --- MONTH OVER MONTH COMPARISON ---
     const prevConfirmed = prevMonthBookings.filter((b) => b.status === "confirmed" || b.status === "completed");
     const prevCancelled = prevMonthBookings.filter((b) => b.status === "cancelled");
-    const prevRevenue = prevConfirmed.reduce((s, b) => s + b.priceValue, 0);
+    // Exclude open_bill bookings from cash MoM revenue
+    const prevCashConfirmed = prevConfirmed.filter((b) => b.paymentStatus !== "open_bill");
+    const prevRevenue = prevCashConfirmed.reduce((s, b) => s + b.priceValue, 0);
     let prevBookedHours = 0;
     for (const b of prevConfirmed) {
       prevBookedHours += (new Date(b.endTime).getTime() - new Date(b.startTime).getTime()) / 3600000;
@@ -486,6 +556,25 @@ export async function GET(request: NextRequest) {
       registrationsByDate[key] = (registrationsByDate[key] || 0) + 1;
     }
 
+    // --- OPEN PLAY ANALYTICS ---
+    const openPlayRevenue = openPlayRegistrations.reduce((s, r) => s + r.priceValue, 0);
+    const openPlayPaidCount = openPlayRegistrations.filter(
+      (r) => r.paymentStatus === "paid" || r.paymentStatus === "PAID"
+    ).length;
+    const openPlayUnpaidCount = openPlayRegistrations.filter(
+      (r) => r.paymentStatus === "pending" || r.paymentStatus === "unpaid"
+    ).length;
+
+    // --- COURTPAY ANALYTICS ---
+    // Only count session_fee type payments (actual walk-in session payments)
+    const sessionFeePayments = courtPayPayments.filter((p) => p.type === "session_fee");
+    const courtPayRevenue = sessionFeePayments.reduce((s, p) => s + p.amount, 0);
+    const courtPayTransactions = sessionFeePayments.length;
+    const courtPayPlayersServed = sessionFeePayments.reduce((s, p) => s + p.partyCount, 0);
+
+    // --- TOTAL REVENUE SUMMARY ---
+    const totalRevenue = bookingRevenue + openPlayRevenue + courtPayRevenue + lessonRevenue;
+
     return json({
       courtBookings: {
         totalBookings: confirmedBookings.length,
@@ -522,7 +611,7 @@ export async function GET(request: NextRequest) {
           },
           current: {
             bookings: monthBookings.length,
-            revenue: monthBookings.reduce((s, b) => s + b.priceValue, 0),
+            revenue: monthBookings.filter((b) => b.paymentStatus !== "open_bill").reduce((s, b) => s + b.priceValue, 0),
             hours: Math.round(actualMonthHours * 10) / 10,
             utilPct: (() => {
               const curAvail = bookableCourtCount * hoursPerDayPerCourt * todayDate;
@@ -591,6 +680,28 @@ export async function GET(request: NextRequest) {
         totalPlayers,
         bookableCourtCount,
       },
+      openBill: {
+        // Net amount on in-progress / issued / overdue bills in period (after discount + VAT)
+        accrued: openBillAccrued,
+        // Net amount collected (paid bills) in period
+        collected: openBillCollected,
+        // Breakdown for reconciliation
+        rackSubtotal: openBillRackSubtotal,
+        discountTotal: openBillDiscountTotal,
+        vatTotal: openBillVatTotal,
+      },
+      openPlay: {
+        totalRegistrations: openPlayRegistrations.length,
+        revenue: openPlayRevenue,
+        paidCount: openPlayPaidCount,
+        unpaidCount: openPlayUnpaidCount,
+      },
+      courtPay: {
+        totalTransactions: courtPayTransactions,
+        revenue: courtPayRevenue,
+        playersServed: courtPayPlayersServed,
+      },
+      totalRevenue,
     });
   } catch (e) {
     const msg = e instanceof Error ? e.message : "Server error";

@@ -19,6 +19,8 @@ import {
   XCircle,
   Banknote,
   Play,
+  FileText,
+  CheckCircle2,
 } from "lucide-react";
 import { cn } from "@/lib/cn";
 import { PaymentStatusBadge } from "@/components/admin/EditBookingModal";
@@ -193,6 +195,12 @@ interface DashboardData {
     monthCoaching: number;
     monthTotal: number;
   };
+  openBill?: {
+    monthAccrued: number;
+    monthCollected: number;
+    overdueCount: number;
+    overdueAmount: number;
+  };
   bookings: {
     todayCount: number;
     todayRevenue: number;
@@ -341,7 +349,8 @@ export default function AdminOverview() {
   const hasAlerts =
     data.memberships.overdueCount > 0 ||
     data.coaching.unpaidCount > 0 ||
-    data.memberships.expiringThisWeek > 0;
+    data.memberships.expiringThisWeek > 0 ||
+    (data.openBill?.overdueCount ?? 0) > 0;
 
   const recentEntries: RecentEntry[] = [
     ...data.recentBookings.map((b): RecentEntry => ({
@@ -506,6 +515,31 @@ export default function AdminOverview() {
         </div>
       )}
 
+      {/* Open Bill row — only shown when there is open-bill activity this month */}
+      {data.openBill && (data.openBill.monthAccrued > 0 || data.openBill.monthCollected > 0) && (
+        <div className="rounded-xl border border-neutral-800 bg-neutral-900 p-4">
+          <div className="flex items-center gap-2 mb-3">
+            <FileText className="h-4 w-4 text-purple-400" />
+            <span className="text-sm font-medium text-neutral-300">Open Bill — this month</span>
+            <a href="/admin/company-accounts" className="ml-auto text-xs text-neutral-500 hover:text-purple-400 flex items-center gap-1">
+              View accounts <ArrowRight className="h-3 w-3" />
+            </a>
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div className="rounded-lg bg-neutral-800/60 p-3">
+              <p className="text-xs text-neutral-500 mb-1">Accrued (not yet paid)</p>
+              <p className="text-base font-semibold text-amber-400">{fmtPrice(data.openBill.monthAccrued)}</p>
+            </div>
+            <div className="rounded-lg bg-neutral-800/60 p-3">
+              <p className="text-xs text-neutral-500 mb-1 flex items-center gap-1">
+                <CheckCircle2 className="h-3 w-3 text-green-500" /> Collected
+              </p>
+              <p className="text-base font-semibold text-green-400">{fmtPrice(data.openBill.monthCollected)}</p>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Alerts Section */}
       {hasAlerts && (
         <div className="space-y-2">
@@ -537,6 +571,16 @@ export default function AdminOverview() {
               text={t("overview.expiringMemberships", { count: data.memberships.expiringThisWeek })}
               action={t("overview.view")}
               onClick={() => router.push("/admin/memberships")}
+            />
+          )}
+          {(data.openBill?.overdueCount ?? 0) > 0 && (
+            <AlertBanner
+              icon={FileText}
+              color="text-orange-400"
+              bg="bg-orange-500/10 border-orange-500/20"
+              text={`${data.openBill!.overdueCount} overdue open bill${data.openBill!.overdueCount > 1 ? "s" : ""} — ${fmtPrice(data.openBill!.overdueAmount)} outstanding`}
+              action="View"
+              onClick={() => router.push("/admin/company-accounts")}
             />
           )}
         </div>

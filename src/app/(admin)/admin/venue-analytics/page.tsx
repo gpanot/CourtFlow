@@ -9,7 +9,7 @@ import adminI18n from "@/i18n/admin-i18n";
 import {
   Calendar, TrendingUp, Users, DollarSign, Clock, BarChart3,
   Building2, UserCheck, CreditCard, ChevronDown, GraduationCap,
-  UserCircle, Download, Activity, Repeat, XCircle, Layers, ArrowUpDown,
+  UserCircle, Download, Activity, Repeat, XCircle, Layers, ArrowUpDown, FileText,
 } from "lucide-react";
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell, Legend, ReferenceLine,
@@ -100,6 +100,13 @@ interface AnalyticsData {
   overview: {
     totalPlayers: number;
     bookableCourtCount: number;
+  };
+  openBill?: {
+    accrued: number;
+    collected: number;
+    rackSubtotal: number;
+    discountTotal: number;
+    vatTotal: number;
   };
 }
 
@@ -552,7 +559,13 @@ export default function VenueAnalyticsPage() {
             <div className="grid grid-cols-2 gap-3 md:grid-cols-3 lg:grid-cols-6 md:gap-4">
               <StatCard icon={BarChart3} label={t("venueAnalytics.totalBookings")} value={String(data.courtBookings.totalBookings)} sub={data.courtBookings.cancelledBookings > 0 ? `${data.courtBookings.cancelledBookings} ${t("venueAnalytics.cancelled")}` : undefined} color="text-blue-400" />
               <StatCard icon={TrendingUp} label={t("venueAnalytics.utilization")} value={`${data.courtBookings.utilizationPct}%`} sub={`${data.courtBookings.totalBookedHours}h / ${data.courtBookings.totalAvailableHours}h`} color="text-emerald-400" />
-              <StatCard icon={DollarSign} label={t("venueAnalytics.bookingRevenue")} value={fmtPrice(data.courtBookings.bookingRevenue)} color="text-green-400" />
+              <StatCard
+                icon={DollarSign}
+                label={t("venueAnalytics.bookingRevenue")}
+                value={fmtPrice(data.courtBookings.bookingRevenue)}
+                sub={data.openBill && data.openBill.accrued > 0 ? "Cash only (excl. open bills)" : undefined}
+                color="text-green-400"
+              />
               <StatCard icon={Clock} label={t("venueAnalytics.hoursBooked")} value={String(data.courtBookings.totalBookedHours)} color="text-indigo-400" />
               <StatCard icon={TrendingUp} label={`${t("venueAnalytics.projected")} ${data.monthProjection.monthLabel}`} value={fmtPrice(data.monthProjection.projectedRevenue)} sub={`${fmtPrice(data.monthProjection.actualRevenue)} ${t("venueAnalytics.actualSoFar")}`} color="text-purple-400" />
               <StatCard icon={Clock} label={t("venueAnalytics.projectedHours")} value={String(data.monthProjection.projectedHours)} sub={`${data.monthProjection.actualHours}h ${t("venueAnalytics.actualSoFar")}`} color="text-pink-400" />
@@ -747,6 +760,45 @@ export default function VenueAnalyticsPage() {
               )}
             </div>
           </Section>
+
+          {/* ===== OPEN BILL RECONCILIATION ===== */}
+          {data.openBill && (data.openBill.accrued > 0 || data.openBill.collected > 0) && (
+            <Section title="Open Bill Accounts" icon={FileText}>
+              <div className="grid grid-cols-2 gap-3 md:grid-cols-4 md:gap-4">
+                <StatCard
+                  icon={DollarSign}
+                  label="Net accrued (open/issued)"
+                  value={fmtPrice(data.openBill.accrued)}
+                  sub="Post-discount + VAT"
+                  color="text-amber-400"
+                />
+                <StatCard
+                  icon={DollarSign}
+                  label="Net collected (paid)"
+                  value={fmtPrice(data.openBill.collected)}
+                  sub="Bills paid in period"
+                  color="text-green-400"
+                />
+                <StatCard
+                  icon={DollarSign}
+                  label="Rack subtotal"
+                  value={fmtPrice(data.openBill.rackSubtotal)}
+                  sub="Before discounts"
+                  color="text-neutral-400"
+                />
+                <StatCard
+                  icon={DollarSign}
+                  label="Discount applied"
+                  value={fmtPrice(data.openBill.discountTotal)}
+                  sub={data.openBill.vatTotal > 0 ? `VAT: ${fmtPrice(data.openBill.vatTotal)}` : "No VAT"}
+                  color="text-red-400"
+                />
+              </div>
+              <p className="text-xs text-neutral-500 mt-2">
+                Open-bill bookings are excluded from the Booking Revenue figure above. Total cash collected = Booking Revenue + Open Bill Collected.
+              </p>
+            </Section>
+          )}
 
           {/* ===== COACHING ===== */}
           <Section title={t("venueAnalytics.coachingSectionTitle")} icon={GraduationCap} onExport={exportCoaching}>

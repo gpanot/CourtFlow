@@ -73,20 +73,23 @@ export async function GET(request: NextRequest) {
       upcomingLessonsToday,
       todayOpenPlay,
       recentOpenPlay,
+      openBillMonthAccruedRows,
+      openBillMonthCollectedRows,
+      openBillOverdueRows,
     ] = await Promise.all([
-      // Today's bookings (confirmed + completed)
+      // Today's cash bookings (confirmed + completed, excluding open_bill deferred payments)
       prisma.booking.findMany({
-        where: { ...bookingWhere, date: { gte: todayStart, lte: todayEnd }, status: { in: ["confirmed", "completed"] } },
+        where: { ...bookingWhere, date: { gte: todayStart, lte: todayEnd }, status: { in: ["confirmed", "completed"] }, paymentStatus: { not: "open_bill" } },
         select: { priceValue: true },
       }),
-      // This week's bookings
+      // This week's cash bookings
       prisma.booking.findMany({
-        where: { ...bookingWhere, date: { gte: weekStart, lte: weekEnd }, status: { in: ["confirmed", "completed"] } },
+        where: { ...bookingWhere, date: { gte: weekStart, lte: weekEnd }, status: { in: ["confirmed", "completed"] }, paymentStatus: { not: "open_bill" } },
         select: { priceValue: true },
       }),
-      // This month's bookings
+      // This month's cash bookings
       prisma.booking.findMany({
-        where: { ...bookingWhere, date: { gte: monthStart, lte: monthEnd }, status: { in: ["confirmed", "completed"] } },
+        where: { ...bookingWhere, date: { gte: monthStart, lte: monthEnd }, status: { in: ["confirmed", "completed"] }, paymentStatus: { not: "open_bill" } },
         select: { priceValue: true },
       }),
       // Upcoming bookings today (after now)
@@ -260,6 +263,32 @@ export async function GET(request: NextRequest) {
         orderBy: { createdAt: "desc" },
         take: 8,
       }),
+      // Open Bill: net amount on issued/overdue/open bills this month (accrued, not yet collected)
+      prisma.companyOpenBill.findMany({
+        where: {
+          companyAccount: { venueId: { in: venueIds } },
+          status: { in: ["open", "issued", "overdue"] },
+          periodStart: { gte: monthStart, lte: monthEnd },
+        },
+        select: { totalAmount: true, status: true },
+      }),
+      // Open Bill: net amount collected (paid) this month
+      prisma.companyOpenBill.findMany({
+        where: {
+          companyAccount: { venueId: { in: venueIds } },
+          status: "paid",
+          paidAt: { gte: monthStart, lte: monthEnd },
+        },
+        select: { totalAmount: true },
+      }),
+      // Open Bill: overdue bills (past due date, not yet paid)
+      prisma.companyOpenBill.findMany({
+        where: {
+          companyAccount: { venueId: { in: venueIds } },
+          status: "overdue",
+        },
+        select: { totalAmount: true, dueDate: true },
+      }),
     ]);
 
     const todayBookingRevenue = todayBookings.reduce((s, b) => s + b.priceValue, 0);
@@ -268,6 +297,12 @@ export async function GET(request: NextRequest) {
     const membershipRevenue = membershipsPaidThisMonth.reduce((s, p) => s + p.amountValue, 0);
     const coachingRevenue = lessonsPaidThisMonth.reduce((s, l) => s + l.priceValue, 0);
 
+    // Open Bill aggregates (net post-discount+VAT amounts)
+    const openBillMonthAccrued = openBillMonthAccruedRows.reduce((s, b) => s + b.totalAmount, 0);
+    const openBillMonthCollected = openBillMonthCollectedRows.reduce((s, b) => s + b.totalAmount, 0);
+    const openBillOverdueAmount = openBillOverdueRows.reduce((s, b) => s + b.totalAmount, 0);
+    const openBillOverdueCount = openBillOverdueRows.length;
+
     return json({
       revenue: {
         todayBookings: todayBookingRevenue,
@@ -275,7 +310,17 @@ export async function GET(request: NextRequest) {
         monthBookings: monthBookingRevenue,
         monthMemberships: membershipRevenue,
         monthCoaching: coachingRevenue,
+        // Cash total only — open-bill revenue tracked separately below
         monthTotal: monthBookingRevenue + membershipRevenue + coachingRevenue,
+      },
+      openBill: {
+        // Net amount on in-progress/issued/overdue bills for this month (accrued but not yet cash)
+        monthAccrued: openBillMonthAccrued,
+        // Net amount collected (paid) this month from open bills
+        monthCollected: openBillMonthCollected,
+        // Overdue bills across all months
+        overdueCount: openBillOverdueCount,
+        overdueAmount: openBillOverdueAmount,
       },
       bookings: {
         todayCount: todayBookings.length,
