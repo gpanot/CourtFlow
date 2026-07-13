@@ -1,6 +1,39 @@
 import { Prisma } from "@prisma/client";
 import { prisma } from "./db";
 
+// ─── Cycle end calculation ─────────────────────────────────────────────────────
+
+/**
+ * Compute the last moment of a pass cycle given a start date and pass mode.
+ *
+ * - monthly : last millisecond of the same calendar month
+ * - days_30/45/60/90 : cycleStart + N days - 1, at 23:59:59.999 local time
+ *
+ * Uses local-time methods so the boundary aligns with the venue's timezone (see
+ * the timezone-handling workspace rule).
+ */
+export function computeCycleEnd(cycleStart: Date, passMode: string): Date {
+  if (passMode === "monthly") {
+    return new Date(
+      cycleStart.getFullYear(),
+      cycleStart.getMonth() + 1,
+      0,        // day 0 of next month = last day of current month
+      23, 59, 59, 999
+    );
+  }
+  const daysMap: Record<string, number> = {
+    days_30: 30,
+    days_45: 45,
+    days_60: 60,
+    days_90: 90,
+  };
+  const days = daysMap[passMode] ?? 30;
+  const end = new Date(cycleStart);
+  end.setDate(end.getDate() + days - 1);
+  end.setHours(23, 59, 59, 999);
+  return end;
+}
+
 // ─── Typed error codes ────────────────────────────────────────────────────────
 // Callers catch these to display distinct UI messages.
 

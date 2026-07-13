@@ -1300,6 +1300,8 @@ model ProgramPassType {
   isActive         Boolean                @default(true) @map("is_active")
   createdAt        DateTime               @default(now()) @map("created_at")
   updatedAt        DateTime               @updatedAt @map("updated_at")
+  passMode         String                 @default("monthly") @map("pass_mode")
+  isOneTime        Boolean                @default(false)     @map("is_one_time")
   classInstances   ClassInstance[]
   programPasses    ProgramPass[]
   coaches          ProgramPassTypeCoach[]
@@ -1603,26 +1605,26 @@ model CompanyOpenBill {
 
 /// This model contains an expression index which requires additional setup for migrations. Visit https://pris.ly/d/expression-indexes for more info.
 model PromoCode {
-  id                       String             @id @default(cuid())
-  venueId                  String             @map("venue_id")
-  name                     String
-  code                     String
-  discountType             PromoDiscountType  @map("discount_type")
-  discountValue            Int?               @map("discount_value")
-  appliesTo                PromoAppliesTo     @default(all) @map("applies_to")
-  maxRedemptions           Int?               @map("max_redemptions")
-  redemptionCount          Int                @default(0) @map("redemption_count")
-  maxRedemptionsPerPlayer  Int?               @default(1) @map("max_redemptions_per_player")
-  startsAt                 DateTime           @map("starts_at") @db.Timestamp(6)
-  endsAt                   DateTime?          @map("ends_at") @db.Timestamp(6)
-  isActive                 Boolean            @default(true) @map("is_active")
-  postText                 String?            @map("post_text")
-  headline                 String?
-  createdAt                DateTime           @default(now()) @map("created_at") @db.Timestamp(6)
-  updatedAt                DateTime           @default(now()) @map("updated_at") @db.Timestamp(6)
-  venue                    Venue              @relation(fields: [venueId], references: [id], onDelete: Cascade, onUpdate: NoAction)
-  linkClicks               PromoLinkClick[]
-  redemptions              PromoRedemption[]
+  id                      String            @id @default(dbgenerated("(gen_random_uuid())::text"))
+  venueId                 String            @map("venue_id")
+  name                    String
+  code                    String
+  discountType            PromoDiscountType @map("discount_type")
+  discountValue           Int?              @map("discount_value")
+  appliesTo               PromoAppliesTo    @default(all) @map("applies_to")
+  maxRedemptions          Int?              @map("max_redemptions")
+  redemptionCount         Int               @default(0) @map("redemption_count")
+  maxRedemptionsPerPlayer Int?              @default(1) @map("max_redemptions_per_player")
+  startsAt                DateTime          @map("starts_at") @db.Timestamp(6)
+  endsAt                  DateTime?         @map("ends_at") @db.Timestamp(6)
+  isActive                Boolean           @default(true) @map("is_active")
+  postText                String?           @map("post_text")
+  headline                String?
+  createdAt               DateTime          @default(now()) @map("created_at") @db.Timestamp(6)
+  updatedAt               DateTime          @default(now()) @map("updated_at") @db.Timestamp(6)
+  venue                   Venue             @relation(fields: [venueId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  linkClicks              PromoLinkClick[]
+  redemptions             PromoRedemption[]
 
   @@index([isActive])
   @@index([venueId])
@@ -1630,7 +1632,7 @@ model PromoCode {
 }
 
 model PromoLinkClick {
-  id              String            @id @default(cuid())
+  id              String            @id @default(dbgenerated("(gen_random_uuid())::text"))
   promoCodeId     String            @map("promo_code_id")
   playerId        String?           @map("player_id")
   utmSource       String?           @map("utm_source")
@@ -1647,20 +1649,20 @@ model PromoLinkClick {
 }
 
 model PromoRedemption {
-  id             String          @id @default(cuid())
-  promoCodeId    String          @map("promo_code_id")
-  playerId       String          @map("player_id")
-  bookingId      String?         @map("booking_id")
+  id             String           @id @default(dbgenerated("(gen_random_uuid())::text"))
+  promoCodeId    String           @map("promo_code_id")
+  playerId       String           @map("player_id")
+  bookingId      String?          @map("booking_id")
   bookingType    PromoBookingType @map("booking_type")
-  utmSource      String?         @map("utm_source")
-  discountAmount Int             @map("discount_amount")
-  originalPrice  Int             @map("original_price")
-  finalPrice     Int             @map("final_price")
-  firstClickId   String?         @map("first_click_id")
-  redeemedAt     DateTime        @default(now()) @map("redeemed_at") @db.Timestamp(6)
-  firstClick     PromoLinkClick? @relation(fields: [firstClickId], references: [id], onUpdate: NoAction)
-  player         Player          @relation(fields: [playerId], references: [id], onUpdate: NoAction)
-  promoCode      PromoCode       @relation(fields: [promoCodeId], references: [id], onUpdate: NoAction)
+  utmSource      String?          @map("utm_source")
+  discountAmount Int              @map("discount_amount")
+  originalPrice  Int              @map("original_price")
+  finalPrice     Int              @map("final_price")
+  firstClickId   String?          @map("first_click_id")
+  redeemedAt     DateTime         @default(now()) @map("redeemed_at") @db.Timestamp(6)
+  firstClick     PromoLinkClick?  @relation(fields: [firstClickId], references: [id], onUpdate: NoAction)
+  player         Player           @relation(fields: [playerId], references: [id], onUpdate: NoAction)
+  promoCode      PromoCode        @relation(fields: [promoCodeId], references: [id], onUpdate: NoAction)
 
   @@index([bookingId])
   @@index([playerId])

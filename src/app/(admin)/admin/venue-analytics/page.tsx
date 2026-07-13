@@ -9,7 +9,7 @@ import adminI18n from "@/i18n/admin-i18n";
 import {
   Calendar, TrendingUp, Users, DollarSign, Clock, BarChart3,
   Building2, UserCheck, CreditCard, ChevronDown, GraduationCap,
-  UserCircle, Download, Activity, Repeat, XCircle, Layers, ArrowUpDown, FileText,
+  UserCircle, Download, Activity, Repeat, XCircle, Layers, ArrowUpDown, FileText, Ticket,
 } from "lucide-react";
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell, Legend, ReferenceLine,
@@ -118,6 +118,11 @@ interface AnalyticsData {
     totalTransactions: number;
     revenue: number;
     playersServed: number;
+  };
+  programPasses?: {
+    revenue: number;
+    unpaidCount: number;
+    overdueCount: number;
   };
   totalRevenue?: number;
 }
@@ -658,6 +663,16 @@ export default function VenueAnalyticsPage() {
                     color="text-green-400"
                   />
                 </div>
+                <RevenueEquationOp>+</RevenueEquationOp>
+                <div className="min-w-[140px] flex-1">
+                  <StatCard
+                    icon={Ticket}
+                    label="Program Passes"
+                    value={fmtPrice(data.programPasses?.revenue ?? 0)}
+                    sub="Payments collected in period"
+                    color="text-pink-400"
+                  />
+                </div>
               </div>
               </div>
             </Section>
@@ -937,6 +952,35 @@ export default function VenueAnalyticsPage() {
                 <StatCard icon={CreditCard} label="Payments Collected" value={String(data.courtPay.totalTransactions)} color="text-blue-400" />
                 <StatCard icon={DollarSign} label="Revenue" value={fmtPrice(data.courtPay.revenue)} color="text-green-400" />
                 <StatCard icon={Users} label="Players Served" value={String(data.courtPay.playersServed)} sub="incl. group payments" color="text-purple-400" />
+              </div>
+            </Section>
+          )}
+
+          {/* ===== PROGRAM PASSES ===== */}
+          {data.programPasses && (data.programPasses.revenue > 0 || data.programPasses.unpaidCount > 0) && (
+            <Section title="Program Passes" icon={Ticket}>
+              <div className="grid grid-cols-2 gap-3 md:grid-cols-3 md:gap-4">
+                <StatCard
+                  icon={DollarSign}
+                  label="Collected in period"
+                  value={fmtPrice(data.programPasses.revenue)}
+                  sub="Payments with PAID status"
+                  color="text-pink-400"
+                />
+                <StatCard
+                  icon={Clock}
+                  label="Unpaid (active)"
+                  value={String(data.programPasses.unpaidCount)}
+                  sub="Passes not yet paid"
+                  color="text-amber-400"
+                />
+                <StatCard
+                  icon={XCircle}
+                  label="Overdue"
+                  value={String(data.programPasses.overdueCount)}
+                  sub="Past period end, unpaid"
+                  color="text-red-400"
+                />
               </div>
             </Section>
           )}

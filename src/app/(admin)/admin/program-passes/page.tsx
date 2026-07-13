@@ -36,12 +36,29 @@ interface PassTypeCoach {
   coach: Coach;
 }
 
+// Allowed pass mode values
+const PASS_MODE_OPTIONS = [
+  { value: "monthly",  label: "Monthly (calendar month)" },
+  { value: "days_30",  label: "30 days" },
+  { value: "days_45",  label: "45 days" },
+  { value: "days_60",  label: "60 days" },
+  { value: "days_90",  label: "90 days" },
+] as const;
+
+type PassMode = typeof PASS_MODE_OPTIONS[number]["value"];
+
+function passModeLabel(mode: string): string {
+  return PASS_MODE_OPTIONS.find((o) => o.value === mode)?.label ?? mode;
+}
+
 interface PassType {
   id: string;
   venueId: string;
   name: string;
   price: number;
   sessionsIncluded: number;
+  passMode: PassMode;
+  isOneTime: boolean;
   isActive: boolean;
   coaches: PassTypeCoach[];
   _count: { programPasses: number };
@@ -73,6 +90,8 @@ interface ProgramPass {
     name: string;
     price: number;
     sessionsIncluded: number;
+    passMode: PassMode;
+    isOneTime: boolean;
     coaches: PassTypeCoach[];
   };
   latestPayment: ProgramPassPayment | null;
@@ -257,7 +276,10 @@ export default function ProgramPassesPage() {
                   <div>
                     <h4 className="font-semibold">{pt.name}</h4>
                     <p className="text-lg font-bold text-purple-400">
-                      {fmtPrice(pt.price)}<span className="text-xs font-normal text-neutral-500">/mo</span>
+                      {fmtPrice(pt.price)}
+                      <span className="ml-1 text-xs font-normal text-neutral-500">
+                        {pt.passMode === "monthly" ? "/mo" : `/${passModeLabel(pt.passMode)}`}
+                      </span>
                     </p>
                   </div>
                   <div className="flex gap-1">
@@ -271,7 +293,19 @@ export default function ProgramPassesPage() {
                     ><Trash2 className="h-3.5 w-3.5" /></button>
                   </div>
                 </div>
-                <p className="text-xs text-neutral-400">{pt.sessionsIncluded} sessions/mo</p>
+                <div className="flex flex-wrap gap-1">
+                  <span className="rounded-full bg-neutral-800 px-2 py-0.5 text-[11px] text-neutral-400">
+                    {pt.sessionsIncluded} sessions
+                  </span>
+                  <span className="rounded-full bg-purple-900/40 px-2 py-0.5 text-[11px] text-purple-300">
+                    {passModeLabel(pt.passMode)}
+                  </span>
+                  {pt.isOneTime && (
+                    <span className="rounded-full bg-amber-900/40 px-2 py-0.5 text-[11px] text-amber-300">
+                      One-time
+                    </span>
+                  )}
+                </div>
                 {pt.coaches.length > 0 && (
                   <div className="flex flex-wrap gap-1">
                     {pt.coaches.map((c) => (
@@ -543,6 +577,8 @@ function PassTypeFormModal({
   const [name, setName] = useState(passType?.name ?? "");
   const [price, setPrice] = useState(passType?.price ?? 0);
   const [sessions, setSessions] = useState(passType?.sessionsIncluded ?? 12);
+  const [passMode, setPassMode] = useState<PassMode>(passType?.passMode ?? "monthly");
+  const [isOneTime, setIsOneTime] = useState(passType?.isOneTime ?? false);
   const [selectedCoachIds, setSelectedCoachIds] = useState<string[]>(
     passType?.coaches.map((c) => c.coach.id) ?? []
   );
@@ -563,6 +599,8 @@ function PassTypeFormModal({
           name: name.trim(),
           price,
           sessionsIncluded: sessions,
+          passMode,
+          isOneTime,
           coachIds: selectedCoachIds,
         });
       } else {
@@ -571,6 +609,8 @@ function PassTypeFormModal({
           name: name.trim(),
           price,
           sessionsIncluded: sessions,
+          passMode,
+          isOneTime,
           coachIds: selectedCoachIds,
         });
       }
@@ -593,9 +633,23 @@ function PassTypeFormModal({
             <label className="text-xs text-neutral-400 mb-1 block">Name</label>
             <input type="text" value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. Standard Monthly" className={inputCls} autoFocus />
           </div>
+          <div>
+            <label className="text-xs text-neutral-400 mb-1 block">Duration / mode</label>
+            <select
+              value={passMode}
+              onChange={(e) => setPassMode(e.target.value as PassMode)}
+              className={inputCls}
+            >
+              {PASS_MODE_OPTIONS.map((o) => (
+                <option key={o.value} value={o.value}>{o.label}</option>
+              ))}
+            </select>
+          </div>
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="text-xs text-neutral-400 mb-1 block">Price / month (VND)</label>
+              <label className="text-xs text-neutral-400 mb-1 block">
+                Price{passMode === "monthly" ? " / month" : ` / ${passModeLabel(passMode)}`} (VND)
+              </label>
               <AmountInput value={price} onChange={setPrice} placeholder="e.g. 1,200,000" className={inputCls} />
             </div>
             <div>
@@ -609,6 +663,15 @@ function PassTypeFormModal({
               />
             </div>
           </div>
+          <label className="flex items-center gap-2 cursor-pointer select-none">
+            <input
+              type="checkbox"
+              checked={isOneTime}
+              onChange={(e) => setIsOneTime(e.target.checked)}
+              className="h-4 w-4 rounded border-neutral-600 accent-amber-500"
+            />
+            <span className="text-xs text-neutral-400">One-time pass (not recurring)</span>
+          </label>
           {coaches.length > 0 && (
             <div>
               <label className="text-xs text-neutral-400 mb-1 block">Coaches (optional)</label>
@@ -672,6 +735,9 @@ function ActivateModal({
 
   const selectedPassType = passTypes.find((pt) => pt.id === passTypeId);
 
+  const passMode: PassMode = (selectedPassType?.passMode ?? "monthly") as PassMode;
+  const isMonthly = passMode === "monthly";
+
   // Cycle start options: first of the current month through 6 months later (7 options),
   // so staff can pre-sell a future program start (e.g. the August cycle).
   const today = new Date();
@@ -682,11 +748,18 @@ function ActivateModal({
       label: d.toLocaleDateString("en-US", { month: "long", year: "numeric" }),
     };
   });
-  // Default: current month if on/before the 15th, else next month.
-  const [cycleStartStr, setCycleStartStr] = useState(() => {
+  // Default for monthly: current month if on/before the 15th, else next month.
+  const defaultMonthStr = (() => {
     const t = new Date();
     const idx = t.getDate() <= 15 ? 0 : 1;
     return new Date(t.getFullYear(), t.getMonth() + idx, 1).toLocaleDateString("sv-SE");
+  })();
+  const defaultDateStr = today.toLocaleDateString("sv-SE"); // today for days_N
+
+  // Initialise the cycle start picker based on the first pass type's mode.
+  const [cycleStartStr, setCycleStartStr] = useState(() => {
+    const firstMode = passTypes[0]?.passMode ?? "monthly";
+    return firstMode === "monthly" ? defaultMonthStr : defaultDateStr;
   });
 
   useEffect(() => {
@@ -802,20 +875,51 @@ function ActivateModal({
 
             <div>
               <label className="text-xs text-neutral-400 mb-1 block">Pass Type</label>
-              <select value={passTypeId} onChange={(e) => setPassTypeId(e.target.value)} className={inputCls}>
-                {passTypes.map((pt) => (
-                  <option key={pt.id} value={pt.id}>{pt.name} — {new Intl.NumberFormat("vi-VN").format(pt.price)}/mo</option>
-                ))}
+              <select
+                value={passTypeId}
+                onChange={(e) => {
+                  setPassTypeId(e.target.value);
+                  const pt = passTypes.find((p) => p.id === e.target.value);
+                  const newMode = pt?.passMode ?? "monthly";
+                  setCycleStartStr(newMode === "monthly" ? defaultMonthStr : defaultDateStr);
+                }}
+                className={inputCls}
+              >
+                {passTypes.map((pt) => {
+                  const modeLabel = pt.passMode === "monthly" ? "/mo" : `/${passModeLabel(pt.passMode)}`;
+                  return (
+                    <option key={pt.id} value={pt.id}>
+                      {pt.name} — {new Intl.NumberFormat("vi-VN").format(pt.price)}{modeLabel}
+                      {pt.isOneTime ? " · one-time" : ""}
+                    </option>
+                  );
+                })}
               </select>
             </div>
 
             <div>
-              <label className="text-xs text-neutral-400 mb-1 block">Cycle start</label>
-              <select value={cycleStartStr} onChange={(e) => setCycleStartStr(e.target.value)} className={inputCls}>
-                {monthOptions.map((m) => (
-                  <option key={m.value} value={m.value}>{m.label}</option>
-                ))}
-              </select>
+              <label className="text-xs text-neutral-400 mb-1 block">
+                {isMonthly ? "Cycle start month" : "Start date"}
+              </label>
+              {isMonthly ? (
+                <select value={cycleStartStr} onChange={(e) => setCycleStartStr(e.target.value)} className={inputCls}>
+                  {monthOptions.map((m) => (
+                    <option key={m.value} value={m.value}>{m.label}</option>
+                  ))}
+                </select>
+              ) : (
+                <input
+                  type="date"
+                  value={cycleStartStr}
+                  onChange={(e) => setCycleStartStr(e.target.value)}
+                  className={inputCls}
+                />
+              )}
+              {!isMonthly && (
+                <p className="mt-1 text-[11px] text-neutral-500">
+                  Pass will run for {passModeLabel(passMode)} from this date.
+                </p>
+              )}
             </div>
 
             <label className="flex items-center gap-2 cursor-pointer select-none">

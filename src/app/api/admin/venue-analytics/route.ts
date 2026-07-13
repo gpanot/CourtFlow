@@ -227,8 +227,8 @@ export async function GET(request: NextRequest) {
       }),
     ]);
 
-    // --- OPEN BILL METRICS (parallel, not blocking) ---
-    const [openBillPeriodBills, openBillCollectedBills] = await Promise.all([
+    // --- OPEN BILL + PROGRAM PASS METRICS (parallel, not blocking) ---
+    const [openBillPeriodBills, openBillCollectedBills, programPassAgg, programPassUnpaidCount, programPassOverdueCount] = await Promise.all([
       // Accrued: all non-void bills with a periodStart in the date range
       prisma.companyOpenBill.findMany({
         where: {
@@ -246,6 +246,34 @@ export async function GET(request: NextRequest) {
           paidAt: { gte: dateFrom, lte: dateTo },
         },
         select: { totalAmount: true, subtotal: true, discountAmount: true, vatAmount: true },
+      }),
+      // Program pass payments collected in period
+      prisma.programPassPayment.aggregate({
+        where: {
+          programPass: { venueId },
+          status: "PAID",
+          paidAt: { gte: dateFrom, lte: dateTo },
+        },
+        _sum: { amountValue: true },
+      }),
+      // Unpaid (not yet past due)
+      prisma.programPassPayment.count({
+        where: {
+          programPass: { venueId },
+          status: "UNPAID",
+          periodEnd: { gte: now },
+        },
+      }),
+      // Overdue (past due, excluding one-time passes)
+      prisma.programPassPayment.count({
+        where: {
+          programPass: {
+            venueId,
+            passType: { isOneTime: false },
+          },
+          status: "UNPAID",
+          periodEnd: { lt: now },
+        },
       }),
     ]);
 
@@ -575,9 +603,13 @@ export async function GET(request: NextRequest) {
     const courtPayTransactions = sessionFeePayments.length;
     const courtPayPlayersServed = sessionFeePayments.reduce((s, p) => s + p.partyCount, 0);
 
+    // --- PROGRAM PASS REVENUE ---
+    const programPassRevenue = programPassAgg._sum.amountValue ?? 0;
+
     // --- TOTAL REVENUE SUMMARY ---
     const totalRevenue =
-      bookingRevenue + openPlayRevenue + courtPayRevenue + lessonRevenue + openBillCollected;
+      bookingRevenue + openPlayRevenue + courtPayRevenue + lessonRevenue
+      + openBillCollected + programPassRevenue;
 
     return json({
       courtBookings: {
@@ -704,6 +736,11 @@ export async function GET(request: NextRequest) {
         totalTransactions: courtPayTransactions,
         revenue: courtPayRevenue,
         playersServed: courtPayPlayersServed,
+      },
+      programPasses: {
+        revenue: programPassRevenue,
+        unpaidCount: programPassUnpaidCount,
+        overdueCount: programPassOverdueCount,
       },
       totalRevenue,
     });

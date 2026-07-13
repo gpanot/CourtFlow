@@ -2,6 +2,7 @@ import { NextRequest } from "next/server";
 import { prisma } from "@/lib/db";
 import { json, error, parseBody } from "@/lib/api-helpers";
 import { requireSuperAdmin } from "@/lib/auth";
+import { computeCycleEnd } from "@/lib/program-pass";
 
 export const dynamic = "force-dynamic";
 
@@ -15,7 +16,7 @@ export async function POST(request: NextRequest) {
       paymentMethod?: string;
       amountValue?: number;
       note?: string;
-      cycleStart: string; // ISO date string, e.g. "2026-07-01"
+      cycleStart: string; // ISO date string, e.g. "2026-07-01" (for monthly) or "2026-07-13" (for days_N)
       isFree?: boolean;
     }>(request);
 
@@ -32,12 +33,21 @@ export async function POST(request: NextRequest) {
     const player = await prisma.player.findUnique({ where: { id: body.playerId } });
     if (!player) return error("Player not found", 404);
 
-    // Cycle dates: start = first of the specified month, end = last day of that month
-    const cycleStart = new Date(body.cycleStart + "T12:00:00+07:00");
-    cycleStart.setDate(1);
-    cycleStart.setHours(0, 0, 0, 0);
+    // For monthly passes: align to first of the month.
+    // For days_N passes: use the given date as-is (staff picks the exact start day).
+    const passMode = passType.passMode;
 
-    const cycleEnd = new Date(cycleStart.getFullYear(), cycleStart.getMonth() + 1, 0, 23, 59, 59, 999);
+    let cycleStart: Date;
+    if (passMode === "monthly") {
+      cycleStart = new Date(body.cycleStart + "T12:00:00+07:00");
+      cycleStart.setDate(1);
+      cycleStart.setHours(0, 0, 0, 0);
+    } else {
+      cycleStart = new Date(body.cycleStart + "T00:00:00+07:00");
+      cycleStart.setHours(0, 0, 0, 0);
+    }
+
+    const cycleEnd = computeCycleEnd(cycleStart, passMode);
 
     const amountValue = body.isFree ? 0 : (body.amountValue ?? passType.price);
 

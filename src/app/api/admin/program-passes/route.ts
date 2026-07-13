@@ -28,6 +28,8 @@ export async function GET(request: NextRequest) {
             name: true,
             price: true,
             sessionsIncluded: true,
+            passMode: true,
+            isOneTime: true,
             coaches: {
               include: { coach: { select: { id: true, name: true } } },
             },
@@ -80,9 +82,14 @@ export async function GET(request: NextRequest) {
           periodEnd: { gte: now },
         },
       }),
+      // Overdue: UNPAID past their period end, but exclude one-time passes
+      // (a one-time pass that has expired is not an actionable overdue item).
       prisma.programPassPayment.count({
         where: {
-          programPass: { venueId },
+          programPass: {
+            venueId,
+            passType: { isOneTime: false },
+          },
           status: "UNPAID",
           periodEnd: { lt: now },
         },

@@ -1615,7 +1615,9 @@ CREATE TABLE public.program_pass_types (
     linked_coach_id text,
     is_active boolean DEFAULT true NOT NULL,
     created_at timestamp(3) without time zone DEFAULT CURRENT_TIMESTAMP NOT NULL,
-    updated_at timestamp(3) without time zone NOT NULL
+    updated_at timestamp(3) without time zone NOT NULL,
+    pass_mode text DEFAULT 'monthly'::text NOT NULL,
+    is_one_time boolean DEFAULT false NOT NULL
 );
 
 
@@ -5927,4 +5929,5 @@ INSERT INTO public.schema_migrations (version) VALUES
     ('20260709001329'),
     ('20260709081528'),
     ('20260709091207'),
-    ('20260713000106');
+    ('20260713000106'),
+    ('20260713032737');

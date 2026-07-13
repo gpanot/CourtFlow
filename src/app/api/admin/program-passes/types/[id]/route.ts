@@ -16,11 +16,18 @@ export async function PATCH(
       name?: string;
       price?: number;
       sessionsIncluded?: number;
+      passMode?: string;
+      isOneTime?: boolean;
       coachIds?: string[];
     }>(request);
 
     const existing = await prisma.programPassType.findUnique({ where: { id } });
     if (!existing) return notFound("Pass type not found");
+
+    const validModes = ["monthly", "days_30", "days_45", "days_60", "days_90"];
+    if (body.passMode !== undefined && !validModes.includes(body.passMode)) {
+      return error(`passMode must be one of: ${validModes.join(", ")}`);
+    }
 
     await prisma.programPassType.update({
       where: { id },
@@ -28,6 +35,8 @@ export async function PATCH(
         ...(body.name !== undefined && { name: body.name.trim() }),
         ...(body.price !== undefined && { price: body.price }),
         ...(body.sessionsIncluded !== undefined && { sessionsIncluded: body.sessionsIncluded }),
+        ...(body.passMode !== undefined && { passMode: body.passMode }),
+        ...(body.isOneTime !== undefined && { isOneTime: body.isOneTime }),
       },
     });
 
