@@ -597,8 +597,8 @@ export async function GET(request: NextRequest) {
     ).length;
 
     // --- COURTPAY ANALYTICS ---
-    // Only count session_fee type payments (actual walk-in session payments)
-    const sessionFeePayments = courtPayPayments.filter((p) => p.type === "session_fee");
+    // CourtPay walk-in payments use type = "checkin"
+    const sessionFeePayments = courtPayPayments.filter((p) => p.type === "checkin");
     const courtPayRevenue = sessionFeePayments.reduce((s, p) => s + p.amount, 0);
     const courtPayTransactions = sessionFeePayments.length;
     const courtPayPlayersServed = sessionFeePayments.reduce((s, p) => s + p.partyCount, 0);
