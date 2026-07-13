@@ -6,7 +6,7 @@
  * booking handlers call these exported functions only.
  */
 
-import { prisma } from "@/lib/db";
+import { prisma } from "../../../lib/db";
 import type { Prisma, PromoBookingType } from "@prisma/client";
 import type {
   ValidatePromoResult,
