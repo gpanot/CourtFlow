@@ -30,7 +30,13 @@
     "marketingCampaigns": "Chiến dịch Marketing",
     "organizations": "Tổ chức",
     "programPasses": "Thẻ Chương Trình",
-    "companyAccounts": "Tài Khoản Open Bill"
+    "companyAccounts": "Tài Khoản Open Bill",
+    "sectionHome": "Trang chủ",
+    "sectionOperations": "Vận hành",
+    "sectionGrowth": "Tăng trưởng",
+    "sectionFinance": "Tài chính",
+    "sectionAnalytics": "Phân tích",
+    "sectionAdmin": "Quản trị"
   },
   "layout": {
     "adminPanel": "Bảng quản trị",

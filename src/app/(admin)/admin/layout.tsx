@@ -33,21 +33,46 @@ interface NavSection {
 
 const navSections: NavSection[] = [
   {
-    label: "nav.courtpassBooking",
+    label: "nav.sectionHome",
     items: [
       { href: "/admin", label: "nav.overview", icon: LayoutDashboard, requiresAccess: "courtpass_staff" },
-      { href: "/admin/venues", label: "nav.venues", icon: MapPin },
-      { href: "/admin/organizations", label: "nav.organizations", icon: Building2, superadminOnly: true },
+    ],
+  },
+  {
+    label: "nav.sectionOperations",
+    items: [
       { href: "/admin/bookings", label: "nav.bookings", icon: CalendarDays, requiresAccess: "courtpass_staff" },
       { href: "/admin/coaching", label: "nav.coaching", icon: GraduationCap, requiresAccess: "courtpass_staff" },
-      { href: "/admin/memberships", label: "nav.memberships", icon: Crown, requiresAccess: "courtpass_staff" },
       { href: "/admin/program-passes", label: "nav.programPasses", icon: Ticket, superadminOnly: true },
-      { href: "/admin/company-accounts", label: "nav.companyAccounts", icon: Briefcase, superadminOnly: true },
-      { href: "/admin/courtpass-players", label: "nav.courtpassPlayers", icon: UserCircle, requiresAccess: "courtpass_staff" },
+    ],
+  },
+  {
+    label: "nav.sectionGrowth",
+    items: [
       { href: "/admin/marketing-campaigns", label: "nav.marketingCampaigns", icon: Megaphone, requiresAccess: "courtpass_staff" },
-      { href: "/admin/staff", label: "nav.staff", icon: Users },
-      { href: "/admin/venue-analytics", label: "nav.venueAnalytics", icon: PieChart },
+      { href: "/admin/courtpass-players", label: "nav.courtpassPlayers", icon: UserCircle, requiresAccess: "courtpass_staff" },
+      { href: "/admin/memberships", label: "nav.memberships", icon: Crown, requiresAccess: "courtpass_staff" },
+    ],
+  },
+  {
+    label: "nav.sectionFinance",
+    items: [
+      { href: "/admin/company-accounts", label: "nav.companyAccounts", icon: Briefcase, superadminOnly: true },
       { href: "/admin/my-billing", label: "nav.myBilling", icon: Wallet, superadminOnly: false },
+    ],
+  },
+  {
+    label: "nav.sectionAnalytics",
+    items: [
+      { href: "/admin/venue-analytics", label: "nav.venueAnalytics", icon: PieChart },
+    ],
+  },
+  {
+    label: "nav.sectionAdmin",
+    items: [
+      { href: "/admin/venues", label: "nav.venues", icon: MapPin },
+      { href: "/admin/organizations", label: "nav.organizations", icon: Building2, superadminOnly: true },
+      { href: "/admin/staff", label: "nav.staff", icon: Users },
       { href: "/admin/settings", label: "nav.settings", icon: Settings },
     ],
   },

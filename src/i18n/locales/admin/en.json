@@ -30,7 +30,13 @@
     "marketingCampaigns": "Marketing Campaigns",
     "organizations": "Organizations",
     "programPasses": "Program Passes",
-    "companyAccounts": "Open Bill Accounts"
+    "companyAccounts": "Open Bill Accounts",
+    "sectionHome": "Home",
+    "sectionOperations": "Operations",
+    "sectionGrowth": "Growth",
+    "sectionFinance": "Finance",
+    "sectionAnalytics": "Analytics",
+    "sectionAdmin": "Admin"
   },
   "layout": {
     "adminPanel": "Admin Panel",
