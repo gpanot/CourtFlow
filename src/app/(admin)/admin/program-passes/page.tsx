@@ -150,6 +150,7 @@ export default function ProgramPassesPage() {
   const [showActivate, setShowActivate] = useState(false);
   const [showCheckIn, setShowCheckIn] = useState(false);
   const [showPause, setShowPause] = useState(false);
+  const [showDelete, setShowDelete] = useState(false);
   const [selectedPass, setSelectedPass] = useState<ProgramPass | null>(null);
 
   const fmtPrice = (v: number) => new Intl.NumberFormat("vi-VN").format(v);
@@ -440,6 +441,13 @@ export default function ProgramPassesPage() {
                               ><Pause className="h-3.5 w-3.5" /></button>
                             </>
                           )}
+                          {p.status === "active" && (
+                            <button
+                              onClick={() => { setSelectedPass(p); setShowDelete(true); }}
+                              className="rounded p-1.5 text-neutral-500 hover:bg-red-900/30 hover:text-red-400"
+                              title="Delete pass"
+                            ><Trash2 className="h-3.5 w-3.5" /></button>
+                          )}
                           {p.status === "paused" && (
                             <>
                               <button
@@ -507,6 +515,14 @@ export default function ProgramPassesPage() {
           pass={selectedPass}
           onClose={() => { setShowPause(false); setSelectedPass(null); }}
           onPaused={async () => { setShowPause(false); setSelectedPass(null); await fetchPasses(); }}
+        />
+      )}
+
+      {showDelete && selectedPass && (
+        <DeletePassModal
+          pass={selectedPass}
+          onClose={() => { setShowDelete(false); setSelectedPass(null); }}
+          onDeleted={async () => { setShowDelete(false); setSelectedPass(null); await fetchPasses(); }}
         />
       )}
     </div>
@@ -1065,6 +1081,108 @@ function CheckInModal({
             Cancel
           </button>
         </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── Delete Pass Modal (double-confirmation) ──────────────────────────────────
+
+function DeletePassModal({
+  pass,
+  onClose,
+  onDeleted,
+}: {
+  pass: ProgramPass;
+  onClose: () => void;
+  onDeleted: () => void;
+}) {
+  const [step, setStep] = useState<1 | 2>(1);
+  const [deleting, setDeleting] = useState(false);
+
+  const confirmDelete = async () => {
+    setDeleting(true);
+    try {
+      await api.delete(`/api/admin/program-passes/${pass.id}`);
+      onDeleted();
+    } catch (e) { alert((e as Error).message); }
+    finally { setDeleting(false); }
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60" onClick={onClose}>
+      <div
+        className="w-full max-w-sm mx-4 rounded-2xl border border-red-900/60 bg-neutral-900 p-6 space-y-4"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <div className="flex h-8 w-8 items-center justify-center rounded-full bg-red-900/40">
+              <Trash2 className="h-4 w-4 text-red-400" />
+            </div>
+            <h3 className="font-bold text-white">Delete Pass</h3>
+          </div>
+          <button onClick={onClose} className="rounded-lg p-1.5 text-neutral-400 hover:bg-neutral-800">
+            <X className="h-4 w-4" />
+          </button>
+        </div>
+
+        {step === 1 && (
+          <>
+            <div className="rounded-lg bg-red-950/30 border border-red-900/40 p-3 space-y-1">
+              <p className="text-sm text-white font-medium">{pass.player.name}</p>
+              <p className="text-xs text-neutral-400">{pass.passType.name}</p>
+              <p className="text-xs text-neutral-500">
+                {pass.sessionsUsed}/{pass.passType.sessionsIncluded} sessions used · cycle ends{" "}
+                {new Date(pass.cycleEnd).toLocaleDateString("en-US", { month: "short", day: "numeric" })}
+              </p>
+            </div>
+            <p className="text-sm text-neutral-300">
+              This will permanently delete this program pass and all its associated check-ins and payment records. This action cannot be undone.
+            </p>
+            <div className="flex gap-3">
+              <button
+                onClick={() => setStep(2)}
+                className="flex-1 rounded-xl bg-red-700 py-3 font-semibold text-white hover:bg-red-600"
+              >
+                Delete Pass
+              </button>
+              <button
+                onClick={onClose}
+                className="flex-1 rounded-xl bg-neutral-800 py-3 font-medium text-neutral-300 hover:bg-neutral-700"
+              >
+                Cancel
+              </button>
+            </div>
+          </>
+        )}
+
+        {step === 2 && (
+          <>
+            <div className="rounded-lg bg-red-950/40 border border-red-800/60 p-4 text-center space-y-1">
+              <AlertTriangle className="mx-auto h-6 w-6 text-red-400" />
+              <p className="text-sm font-semibold text-red-300">Are you absolutely sure?</p>
+              <p className="text-xs text-neutral-400">
+                Deleting <span className="font-medium text-white">{pass.player.name}&apos;s</span> pass cannot be reversed.
+              </p>
+            </div>
+            <div className="flex gap-3">
+              <button
+                onClick={confirmDelete}
+                disabled={deleting}
+                className="flex-1 rounded-xl bg-red-600 py-3 font-semibold text-white hover:bg-red-500 disabled:opacity-40"
+              >
+                {deleting ? "Deleting…" : "Yes, delete permanently"}
+              </button>
+              <button
+                onClick={() => setStep(1)}
+                className="rounded-xl bg-neutral-800 px-4 py-3 text-sm font-medium text-neutral-300 hover:bg-neutral-700"
+              >
+                Back
+              </button>
+            </div>
+          </>
+        )}
       </div>
     </div>
   );

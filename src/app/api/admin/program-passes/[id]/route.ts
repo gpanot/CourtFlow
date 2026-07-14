@@ -47,3 +47,23 @@ export async function PATCH(
     return error((e as Error).message, 500);
   }
 }
+
+export async function DELETE(
+  request: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  try {
+    requireSuperAdmin(request.headers);
+    const { id } = await params;
+
+    const existing = await prisma.programPass.findUnique({ where: { id } });
+    if (!existing) return notFound("Program pass not found");
+
+    // Related ClassCheckIn and ProgramPassPayment rows cascade-delete via FK
+    await prisma.programPass.delete({ where: { id } });
+
+    return json({ success: true });
+  } catch (e) {
+    return error((e as Error).message, 500);
+  }
+}
