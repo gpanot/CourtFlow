@@ -17,6 +17,7 @@ export async function POST(request: NextRequest) {
       amountValue?: number;
       note?: string;
       cycleStart: string; // ISO date string, e.g. "2026-07-01" (for monthly) or "2026-07-13" (for days_N)
+      cycleEnd?: string;  // Optional override for custom-mode passes
       isFree?: boolean;
     }>(request);
 
@@ -35,6 +36,7 @@ export async function POST(request: NextRequest) {
 
     // For monthly passes: align to first of the month.
     // For days_N passes: use the given date as-is (staff picks the exact start day).
+    // For custom passes: use the explicit cycleEnd provided by the caller.
     const passMode = passType.passMode;
 
     let cycleStart: Date;
@@ -47,7 +49,14 @@ export async function POST(request: NextRequest) {
       cycleStart.setHours(0, 0, 0, 0);
     }
 
-    const cycleEnd = computeCycleEnd(cycleStart, passMode);
+    let cycleEnd: Date;
+    if (passMode === "custom") {
+      if (!body.cycleEnd) return error("cycleEnd is required for custom-mode passes");
+      cycleEnd = new Date(body.cycleEnd + "T23:59:59+07:00");
+      if (cycleEnd <= cycleStart) return error("cycleEnd must be after cycleStart");
+    } else {
+      cycleEnd = computeCycleEnd(cycleStart, passMode);
+    }
 
     const amountValue = body.isFree ? 0 : (body.amountValue ?? passType.price);
 

@@ -43,6 +43,7 @@ const PASS_MODE_OPTIONS = [
   { value: "days_45",  label: "45 days" },
   { value: "days_60",  label: "60 days" },
   { value: "days_90",  label: "90 days" },
+  { value: "custom",   label: "Custom dates" },
 ] as const;
 
 type PassMode = typeof PASS_MODE_OPTIONS[number]["value"];
@@ -279,7 +280,7 @@ export default function ProgramPassesPage() {
                     <p className="text-lg font-bold text-purple-400">
                       {fmtPrice(pt.price)}
                       <span className="ml-1 text-xs font-normal text-neutral-500">
-                        {pt.passMode === "monthly" ? "/mo" : `/${passModeLabel(pt.passMode)}`}
+                        {pt.passMode === "monthly" ? "/mo" : pt.passMode === "custom" ? "" : `/${passModeLabel(pt.passMode)}`}
                       </span>
                     </p>
                   </div>
@@ -661,10 +662,15 @@ function PassTypeFormModal({
               ))}
             </select>
           </div>
+          {passMode === "custom" && (
+            <p className="rounded-lg bg-purple-950/30 border border-purple-800/40 px-3 py-2 text-[11px] text-purple-300">
+              Custom-date passes: staff will pick the exact start and end dates at activation time.
+            </p>
+          )}
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className="text-xs text-neutral-400 mb-1 block">
-                Price{passMode === "monthly" ? " / month" : ` / ${passModeLabel(passMode)}`} (VND)
+                Price{passMode === "monthly" ? " / month" : passMode === "custom" ? "" : ` / ${passModeLabel(passMode)}`} (VND)
               </label>
               <AmountInput value={price} onChange={setPrice} placeholder="e.g. 1,200,000" className={inputCls} />
             </div>
@@ -753,6 +759,7 @@ function ActivateModal({
 
   const passMode: PassMode = (selectedPassType?.passMode ?? "monthly") as PassMode;
   const isMonthly = passMode === "monthly";
+  const isCustom = passMode === "custom";
 
   // Cycle start options: first of the current month through 6 months later (7 options),
   // so staff can pre-sell a future program start (e.g. the August cycle).
@@ -777,6 +784,7 @@ function ActivateModal({
     const firstMode = passTypes[0]?.passMode ?? "monthly";
     return firstMode === "monthly" ? defaultMonthStr : defaultDateStr;
   });
+  const [cycleEndStr, setCycleEndStr] = useState(defaultDateStr);
 
   useEffect(() => {
     if (playerSearch.length < 2) { setPlayerResults([]); return; }
@@ -793,6 +801,10 @@ function ActivateModal({
 
   const activate = async () => {
     if (!selectedPlayer || !passTypeId) return;
+    if (isCustom && cycleEndStr <= cycleStartStr) {
+      alert("End date must be after the start date.");
+      return;
+    }
     setSaving(true);
     try {
       await api.post("/api/admin/program-passes/activate", {
@@ -803,6 +815,7 @@ function ActivateModal({
         amountValue: selectedPassType?.price ?? 0,
         note: isFree ? freeNote : undefined,
         cycleStart: cycleStartStr,
+        cycleEnd: isCustom ? cycleEndStr : undefined,
         isFree,
       });
       onActivated();
@@ -898,11 +911,12 @@ function ActivateModal({
                   const pt = passTypes.find((p) => p.id === e.target.value);
                   const newMode = pt?.passMode ?? "monthly";
                   setCycleStartStr(newMode === "monthly" ? defaultMonthStr : defaultDateStr);
+                  setCycleEndStr(defaultDateStr);
                 }}
                 className={inputCls}
               >
                 {passTypes.map((pt) => {
-                  const modeLabel = pt.passMode === "monthly" ? "/mo" : `/${passModeLabel(pt.passMode)}`;
+                  const modeLabel = pt.passMode === "monthly" ? "/mo" : pt.passMode === "custom" ? " · custom dates" : `/${passModeLabel(pt.passMode)}`;
                   return (
                     <option key={pt.id} value={pt.id}>
                       {pt.name} — {new Intl.NumberFormat("vi-VN").format(pt.price)}{modeLabel}
@@ -913,30 +927,54 @@ function ActivateModal({
               </select>
             </div>
 
-            <div>
-              <label className="text-xs text-neutral-400 mb-1 block">
-                {isMonthly ? "Cycle start month" : "Start date"}
-              </label>
-              {isMonthly ? (
-                <select value={cycleStartStr} onChange={(e) => setCycleStartStr(e.target.value)} className={inputCls}>
-                  {monthOptions.map((m) => (
-                    <option key={m.value} value={m.value}>{m.label}</option>
-                  ))}
-                </select>
-              ) : (
-                <input
-                  type="date"
-                  value={cycleStartStr}
-                  onChange={(e) => setCycleStartStr(e.target.value)}
-                  className={inputCls}
-                />
-              )}
-              {!isMonthly && (
-                <p className="mt-1 text-[11px] text-neutral-500">
-                  Pass will run for {passModeLabel(passMode)} from this date.
-                </p>
-              )}
-            </div>
+            {isCustom ? (
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-xs text-neutral-400 mb-1 block">Start</label>
+                  <input
+                    type="date"
+                    value={cycleStartStr}
+                    onChange={(e) => setCycleStartStr(e.target.value)}
+                    className={inputCls}
+                  />
+                </div>
+                <div>
+                  <label className="text-xs text-neutral-400 mb-1 block">End by</label>
+                  <input
+                    type="date"
+                    value={cycleEndStr}
+                    min={cycleStartStr}
+                    onChange={(e) => setCycleEndStr(e.target.value)}
+                    className={inputCls}
+                  />
+                </div>
+              </div>
+            ) : (
+              <div>
+                <label className="text-xs text-neutral-400 mb-1 block">
+                  {isMonthly ? "Cycle start month" : "Start date"}
+                </label>
+                {isMonthly ? (
+                  <select value={cycleStartStr} onChange={(e) => setCycleStartStr(e.target.value)} className={inputCls}>
+                    {monthOptions.map((m) => (
+                      <option key={m.value} value={m.value}>{m.label}</option>
+                    ))}
+                  </select>
+                ) : (
+                  <input
+                    type="date"
+                    value={cycleStartStr}
+                    onChange={(e) => setCycleStartStr(e.target.value)}
+                    className={inputCls}
+                  />
+                )}
+                {!isMonthly && (
+                  <p className="mt-1 text-[11px] text-neutral-500">
+                    Pass will run for {passModeLabel(passMode)} from this date.
+                  </p>
+                )}
+              </div>
+            )}
 
             <label className="flex items-center gap-2 cursor-pointer select-none">
               <input type="checkbox" checked={isFree} onChange={(e) => setIsFree(e.target.checked)} className="h-4 w-4 rounded border-neutral-600 accent-purple-500" />
@@ -967,7 +1005,7 @@ function ActivateModal({
               </button>
               <button
                 onClick={activate}
-                disabled={saving || !passTypeId}
+                disabled={saving || !passTypeId || (isCustom && (!cycleStartStr || !cycleEndStr))}
                 className="flex-1 rounded-xl bg-green-600 py-3 font-semibold text-white hover:bg-green-500 disabled:opacity-40"
               >
                 {saving ? "Activating…" : "Activate"}

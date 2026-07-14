@@ -7,12 +7,24 @@ export const PROMO_SS_CODE = "cf_promo_code";
 export const PROMO_SS_UTM = "cf_utm_source";
 export const PROMO_SS_DEVICE_ID = "cf_device_session_id";
 
+/** Generates a v4-style UUID, falling back to Math.random when crypto is unavailable (HTTP dev). */
+function generateUUID(): string {
+  if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
+    return crypto.randomUUID();
+  }
+  // Fallback for non-secure contexts (local HTTP dev)
+  return "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, (c) => {
+    const r = (Math.random() * 16) | 0;
+    return (c === "x" ? r : (r & 0x3) | 0x8).toString(16);
+  });
+}
+
 /** Returns or lazily creates a stable device session ID for this browser session. */
 export function getOrCreateDeviceSessionId(): string {
   if (typeof window === "undefined") return "";
   let id = sessionStorage.getItem(PROMO_SS_DEVICE_ID);
   if (!id) {
-    id = crypto.randomUUID();
+    id = generateUUID();
     sessionStorage.setItem(PROMO_SS_DEVICE_ID, id);
   }
   return id;
