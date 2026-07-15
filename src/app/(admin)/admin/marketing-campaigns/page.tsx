@@ -7,7 +7,7 @@ import { useTranslation } from "react-i18next";
 import adminI18n from "@/i18n/admin-i18n";
 import {
   Megaphone, X, Copy, Check, TrendingUp, Users, BarChart3,
-  ExternalLink, ToggleLeft, ToggleRight, ArrowRight, CopyPlus,
+  ExternalLink, ToggleLeft, ToggleRight, ArrowRight, CopyPlus, ChevronDown,
 } from "lucide-react";
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer,
@@ -141,6 +141,8 @@ function CampaignDetailDrawer({
   const [detail, setDetail] = useState<CampaignDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const [toggling, setToggling] = useState(false);
+  const [linksOpen, setLinksOpen] = useState(true);
+  const [copiedChannel, setCopiedChannel] = useState<string | null>(null);
 
   useEffect(() => {
     setLoading(true);
@@ -247,21 +249,78 @@ function CampaignDetailDrawer({
             ))}
           </div>
 
-          {/* Campaign link */}
-          <div>
-            <p className="text-[11px] font-semibold uppercase tracking-widest text-neutral-500 mb-2">Campaign link</p>
-            <div className="flex items-center gap-2 rounded-xl border border-neutral-800 bg-neutral-900 px-3 py-2.5">
-              <span className="flex-1 font-mono text-xs text-neutral-400 truncate">{link}</span>
-              <CopyBtn text={link} />
-              <a
-                href={link}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="text-neutral-500 hover:text-white transition-colors"
-              >
-                <ExternalLink className="w-3.5 h-3.5" />
-              </a>
-            </div>
+          {/* Campaign links — collapsible */}
+          <div className="rounded-xl border border-neutral-800 bg-neutral-900 overflow-hidden">
+            {/* Section header / toggle */}
+            <button
+              type="button"
+              onClick={() => setLinksOpen((o) => !o)}
+              className="w-full flex items-center justify-between px-4 py-3 hover:bg-neutral-800/50 transition-colors"
+            >
+              <span className="text-[11px] font-semibold uppercase tracking-widest text-neutral-500">
+                Ready-to-use links by channel
+              </span>
+              <ChevronDown
+                className={cn(
+                  "w-4 h-4 text-neutral-500 transition-transform duration-200",
+                  linksOpen ? "rotate-180" : "rotate-0"
+                )}
+              />
+            </button>
+
+            {linksOpen && (
+              <div className="px-3 pb-3 space-y-2 border-t border-neutral-800">
+                {CHANNELS.map((ch) => {
+                  const url = `${baseUrl}/book?promo=${encodeURIComponent(campaign.code)}&utm_source=${ch.key}`;
+                  return (
+                    <div
+                      key={ch.key}
+                      className="flex items-center gap-2.5 rounded-xl border border-neutral-800 bg-neutral-800/60 px-3 py-2.5 mt-2"
+                    >
+                      <div
+                        className="w-6 h-6 rounded-lg flex-shrink-0 flex items-center justify-center text-[10px] font-bold"
+                        style={{ background: ch.bg, color: ch.color }}
+                      >
+                        {ch.icon}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-[11.5px] font-bold" style={{ color: ch.color }}>{ch.label}</p>
+                        <p className="text-[10.5px] font-mono text-neutral-500 truncate" title={url}>
+                          …?promo=<span className="text-neutral-400">{campaign.code}</span>
+                          &amp;utm_source=<span style={{ color: ch.color }}>{ch.key}</span>
+                        </p>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          navigator.clipboard.writeText(url).then(() => {
+                            setCopiedChannel(ch.key);
+                            setTimeout(() => setCopiedChannel(null), 1500);
+                          });
+                        }}
+                        className={cn(
+                          "inline-flex items-center gap-1 rounded-md border px-2 py-1 text-[11px] font-semibold flex-shrink-0 transition-colors",
+                          copiedChannel === ch.key
+                            ? "border-emerald-500 text-emerald-400"
+                            : "border-neutral-700 bg-neutral-900 text-neutral-400 hover:border-neutral-500 hover:text-neutral-200"
+                        )}
+                      >
+                        {copiedChannel === ch.key ? <Check className="w-2.5 h-2.5" /> : <Copy className="w-2.5 h-2.5" />}
+                        {copiedChannel === ch.key ? "Copied" : "Copy"}
+                      </button>
+                      <a
+                        href={url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-neutral-600 hover:text-white transition-colors flex-shrink-0"
+                      >
+                        <ExternalLink className="w-3.5 h-3.5" />
+                      </a>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
           </div>
 
           {/* Details grid */}
