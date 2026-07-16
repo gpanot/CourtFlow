@@ -1,8 +1,10 @@
 "use client";
 
 import { useEffect, useState, useCallback } from "react";
+import { useTranslation } from "react-i18next";
 import { api } from "@/lib/api-client";
 import { cn } from "@/lib/cn";
+import { adminI18n } from "@/i18n/admin-i18n";
 import { AdminVenuePicker, useAdminVenuePicker } from "@/components/admin/AdminVenuePicker";
 import {
   Plus,
@@ -181,6 +183,7 @@ interface ProgramRunRecord {
   recurrenceEndDate: string | null;
   maxCapacity: number;
   courtId: string | null;
+  courtIds: string[];
   note: string | null;
   passType: { id: string; name: string };
   court: { id: string; label: string } | null;
@@ -191,6 +194,7 @@ interface ProgramRunRecord {
 // ─── Main page ───────────────────────────────────────────────────────────────
 
 export default function ProgramPassesPage() {
+  const { t } = useTranslation("translation", { i18n: adminI18n });
   const {
     venueId: selectedVenueId,
     setVenueId: setSelectedVenueId,
@@ -234,7 +238,7 @@ export default function ProgramPassesPage() {
   const fetchPassTypes = useCallback(async () => {
     if (!selectedVenueId) return;
     try {
-      const data = await api.get<PassType[]>(`/api/admin/program-passes/types?venueId=${selectedVenueId}`);
+      const data = await api.get<PassType[]>(`/api/admin/program-passes/types?venueId=${selectedVenueId}&includeUnpublished=1`);
       setPassTypes(data);
     } catch (e) { console.error(e); }
   }, [selectedVenueId]);
@@ -327,7 +331,7 @@ export default function ProgramPassesPage() {
     <div className="space-y-6">
       {/* Header */}
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <h2 className="text-xl font-bold md:text-2xl">Program Passes</h2>
+        <h2 className="text-xl font-bold md:text-2xl">{t("programPasses.title")}</h2>
         <AdminVenuePicker
           venueId={selectedVenueId}
           venues={venueOptions}
@@ -339,9 +343,9 @@ export default function ProgramPassesPage() {
       {/* Tabs */}
       <div className="flex gap-1 border-b border-neutral-800">
         {([
-          { key: "passes" as const, label: "Program Passes" },
-          { key: "passTypes" as const, label: "Pass Types" },
-          { key: "programRuns" as const, label: "Program Runs" },
+          { key: "passes" as const, label: t("programPasses.tabPasses") },
+          { key: "passTypes" as const, label: t("programPasses.tabPassTypes") },
+          { key: "programRuns" as const, label: t("programPasses.tabRuns") },
         ]).map((tab) => (
           <button
             key={tab.key}
@@ -363,13 +367,13 @@ export default function ProgramPassesPage() {
         <section className="space-y-4">
           <div className="flex items-center justify-between">
             <h3 className="text-sm font-medium uppercase tracking-wider text-neutral-400">
-              Pass Types ({passTypes.length})
+              {t("programPasses.tabPassTypes")} ({passTypes.length})
             </h3>
             <button
               onClick={() => { setEditingPassType(null); setShowPassTypeForm(true); }}
               className="flex items-center gap-1.5 rounded-lg bg-purple-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-purple-500"
             >
-              <Plus className="h-3.5 w-3.5" /> Add Pass Type
+              <Plus className="h-3.5 w-3.5" /> {t("programPasses.addPassType")}
             </button>
           </div>
 
@@ -384,7 +388,7 @@ export default function ProgramPassesPage() {
             ))}
             {passTypes.length === 0 && (
               <p className="col-span-full py-8 text-center text-sm text-neutral-500">
-                No pass types yet. Add one to get started.
+                {t("programPasses.noPassTypes")}
               </p>
             )}
           </div>
@@ -400,17 +404,17 @@ export default function ProgramPassesPage() {
               <div className="rounded-xl border border-neutral-800 bg-neutral-900 p-3">
                 <DollarSign className="h-4 w-4 text-green-400 mb-1" />
                 <p className="text-lg font-bold text-green-400">{fmtPrice(kpi.collected)}</p>
-                <p className="text-[11px] text-neutral-500">Collected this month</p>
+                <p className="text-[11px] text-neutral-500">{t("programPasses.collectedThisMonth")}</p>
               </div>
               <div className="rounded-xl border border-neutral-800 bg-neutral-900 p-3">
                 <Clock className="h-4 w-4 text-amber-400 mb-1" />
                 <p className="text-lg font-bold text-amber-400">{kpi.unpaidCount}</p>
-                <p className="text-[11px] text-neutral-500">Unpaid</p>
+                <p className="text-[11px] text-neutral-500">{t("programPasses.unpaid")}</p>
               </div>
               <div className="rounded-xl border border-neutral-800 bg-neutral-900 p-3">
                 <AlertTriangle className="h-4 w-4 text-red-400 mb-1" />
                 <p className="text-lg font-bold text-red-400">{kpi.overdueCount}</p>
-                <p className="text-[11px] text-neutral-500">Overdue</p>
+                <p className="text-[11px] text-neutral-500">{t("programPasses.overdue")}</p>
               </div>
             </div>
           )}
@@ -422,8 +426,8 @@ export default function ProgramPassesPage() {
               onChange={(e) => setFilterPassType(e.target.value)}
               className="rounded-lg border border-neutral-700 bg-neutral-800 px-2 py-1.5 text-xs text-white focus:border-purple-500 focus:outline-none"
             >
-              <option value="all">All Pass Types</option>
-              {passTypes.map((pt) => (
+              <option value="all">{t("programPasses.allPassTypes")}</option>
+              {passTypes.filter((pt) => pt.isActive).map((pt) => (
                 <option key={pt.id} value={pt.id}>{pt.name}</option>
               ))}
             </select>
@@ -432,18 +436,18 @@ export default function ProgramPassesPage() {
               onChange={(e) => setFilterStatus(e.target.value)}
               className="rounded-lg border border-neutral-700 bg-neutral-800 px-2 py-1.5 text-xs text-white focus:border-purple-500 focus:outline-none"
             >
-              <option value="all">All Status</option>
-              <option value="active">Active</option>
-              <option value="paused">Paused</option>
-              <option value="expired">Expired</option>
-              <option value="cancelled">Cancelled</option>
+              <option value="all">{t("programPasses.allStatuses")}</option>
+              <option value="active">{t("programPasses.statusActive")}</option>
+              <option value="paused">{t("programPasses.statusPaused")}</option>
+              <option value="expired">{t("programPasses.statusExpired")}</option>
+              <option value="cancelled">{t("programPasses.statusCancelled")}</option>
             </select>
             <div className="ml-auto">
               <button
                 onClick={() => setShowActivate(true)}
                 className="flex items-center gap-1.5 rounded-lg bg-green-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-green-500"
               >
-                <UserPlus className="h-3.5 w-3.5" /> Activate
+                <UserPlus className="h-3.5 w-3.5" /> {t("programPasses.activateBtn")}
               </button>
             </div>
           </div>
@@ -533,7 +537,7 @@ export default function ProgramPassesPage() {
                 {passes.length === 0 && (
                   <tr>
                     <td colSpan={6} className="px-4 py-12 text-center text-neutral-500">
-                      No program passes found.
+                      {t("programPasses.noPassesFound")}
                     </td>
                   </tr>
                 )}
@@ -548,13 +552,13 @@ export default function ProgramPassesPage() {
         <section className="space-y-4">
           <div className="flex items-center justify-between">
             <h3 className="text-sm font-medium uppercase tracking-wider text-neutral-400">
-              Program Runs ({programRuns.length})
+              {t("programPasses.tabRuns")} ({programRuns.length})
             </h3>
             <button
               onClick={() => setShowCreateRun(true)}
               className="flex items-center gap-1.5 rounded-lg bg-purple-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-purple-500"
             >
-              <Plus className="h-3.5 w-3.5" /> Create Run
+              <Plus className="h-3.5 w-3.5" /> {t("programPasses.createRun")}
             </button>
           </div>
 
@@ -598,7 +602,7 @@ export default function ProgramPassesPage() {
                         <div className="flex items-center gap-2 flex-wrap">
                           <h4 className="font-semibold truncate">{run.name}</h4>
                           <span className={cn("rounded-full px-2 py-0.5 text-[11px]", statusColors[run.status] ?? "bg-neutral-800 text-neutral-400")}>
-                            {run.status.replace("_", " ")}
+                            {run.status === "upcoming" ? t("programPasses.statusUpcoming") : run.status === "in_progress" ? t("programPasses.statusInProgress") : run.status === "completed" ? t("programPasses.statusCompleted") : t("programPasses.statusCancelled")}
                           </span>
                           <span className="rounded-full bg-neutral-800 px-2 py-0.5 text-[11px] text-neutral-400">
                             {run.passType.name}
@@ -608,11 +612,15 @@ export default function ProgramPassesPage() {
                           <span className="text-xs text-neutral-500">
                             {run._count.programPasses} / {run.maxCapacity} enrolled
                           </span>
-                          {run.court && (
-                            <span className="text-xs text-neutral-500">{run.court.label}</span>
+                          {run.courtIds.length > 0 && (
+                            <span className="text-xs text-neutral-500">
+                              {run.courtIds
+                                .map((id) => courts.find((c) => c.id === id)?.label ?? id)
+                                .join(", ")}
+                            </span>
                           )}
                           <span className="text-xs text-neutral-500">
-                            {run.recurrenceDurationMin} min · {run.recurrenceCount ? `${run.recurrenceCount} sessions` : "until " + run.recurrenceEndDate?.split("T")[0]}
+                            {run.recurrenceDurationMin} min · {run.recurrenceCount ? `${run.recurrenceCount} ${t("programPasses.sessions")}` : "until " + run.recurrenceEndDate?.split("T")[0]}
                           </span>
                         </div>
                       </div>
@@ -672,7 +680,7 @@ export default function ProgramPassesPage() {
                               <p className="text-[11px] text-neutral-500">
                                 {new Date(inst.startAt).toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" })}–
                                 {new Date(inst.endAt).toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" })}
-                                {" · "}{inst._count.checkIns} checked in
+                                {" · "}{inst._count.checkIns} {t("programPasses.checkedIn")}
                               </p>
                               {inst.topic && (
                                 <p className="text-[11px] text-sky-400/80 italic truncate">{inst.topic}</p>
@@ -713,7 +721,7 @@ export default function ProgramPassesPage() {
             })}
             {programRuns.length === 0 && (
               <p className="py-8 text-center text-sm text-neutral-500">
-                No program runs yet. Create one to schedule a cohort.
+                {t("programPasses.noRunsFound")}
               </p>
             )}
           </div>
@@ -727,15 +735,16 @@ export default function ProgramPassesPage() {
           passType={editingPassType}
           venueId={selectedVenueId}
           coaches={coaches}
+          courts={courts}
           onClose={() => setShowPassTypeForm(false)}
-          onSaved={async () => { setShowPassTypeForm(false); await fetchPassTypes(); }}
+          onSaved={async () => { setShowPassTypeForm(false); await fetchPassTypes(); await fetchRuns(); }}
         />
       )}
 
       {showActivate && (
         <ActivateModal
           venueId={selectedVenueId}
-          passTypes={passTypes}
+          passTypes={passTypes.filter((pt) => pt.isActive)}
           onClose={() => setShowActivate(false)}
           onActivated={async () => { setShowActivate(false); await fetchPasses(); }}
         />
@@ -769,7 +778,7 @@ export default function ProgramPassesPage() {
       {showCreateRun && (
         <CreateRunModal
           venueId={selectedVenueId}
-          passTypes={passTypes}
+          passTypes={passTypes.filter((pt) => pt.isActive)}
           coaches={coaches}
           courts={courts}
           onClose={() => setShowCreateRun(false)}
@@ -781,6 +790,7 @@ export default function ProgramPassesPage() {
         <EditRunModal
           run={editingRun}
           coaches={coaches}
+          courts={courts}
           onClose={() => setEditingRun(null)}
           onSaved={async () => { setEditingRun(null); await fetchRuns(); }}
         />
@@ -814,6 +824,7 @@ function PassTypeCard({
   onEdit: () => void;
   onDelete: () => void;
 }) {
+  const { t } = useTranslation("translation", { i18n: adminI18n });
   const [descExpanded, setDescExpanded] = useState(false);
   const DESCRIPTION_THRESHOLD = 160;
   const isLong = (pt.description?.length ?? 0) > DESCRIPTION_THRESHOLD;
@@ -866,8 +877,13 @@ function PassTypeCard({
 
         {/* Badges */}
         <div className="flex flex-wrap gap-1.5">
+          {!pt.isActive && (
+            <span className="rounded-full bg-neutral-700/60 border border-neutral-600/40 px-2.5 py-0.5 text-[11px] text-neutral-400 font-medium">
+              {t("programPasses.draft")}
+            </span>
+          )}
           <span className="rounded-full bg-neutral-800 px-2.5 py-0.5 text-[11px] text-neutral-400">
-            {pt.sessionsIncluded} sessions
+            {pt.sessionsIncluded} {t("programPasses.sessions")}
           </span>
           <span className="rounded-full bg-purple-900/40 px-2.5 py-0.5 text-[11px] text-purple-300">
             {passModeLabel(pt.passMode)}
@@ -940,15 +956,21 @@ function PassTypeCard({
 }
 
 function PassStatusBadge({ status }: { status: string }) {
+  const { t } = useTranslation("translation", { i18n: adminI18n });
+  const label = status === "active" ? t("programPasses.statusActive")
+    : status === "paused" ? t("programPasses.statusPaused")
+    : status === "expired" ? t("programPasses.statusExpired")
+    : status === "cancelled" ? t("programPasses.statusCancelled")
+    : status;
   return (
     <span className={cn(
-      "inline-block rounded-full px-2 py-0.5 text-xs font-medium capitalize",
+      "inline-block rounded-full px-2 py-0.5 text-xs font-medium",
       status === "active" && "bg-green-600/20 text-green-400",
       status === "paused" && "bg-amber-600/20 text-amber-400",
       status === "expired" && "bg-neutral-600/20 text-neutral-400",
       status === "cancelled" && "bg-neutral-600/20 text-neutral-400",
     )}>
-      {status}
+      {label}
     </span>
   );
 }
@@ -964,6 +986,7 @@ function LevelField({
   onChange: (v: string) => void;
   inputCls: string;
 }) {
+  const { t } = useTranslation("translation", { i18n: adminI18n });
   const isCustom = value !== "" && !PRESET_LEVELS.includes(value);
   // show the text input when: currently editing a custom value, OR user just picked "custom"
   const [customMode, setCustomMode] = useState(isCustom);
@@ -972,7 +995,7 @@ function LevelField({
 
   return (
     <div>
-      <label className="text-xs text-neutral-400 mb-1 block">Level</label>
+      <label className="text-xs text-neutral-400 mb-1 block">{t("programPasses.level")}</label>
       <select
         value={selectValue}
         onChange={(e) => {
@@ -988,18 +1011,18 @@ function LevelField({
         className={inputCls}
       >
         <option value="">— Not specified —</option>
-        <option value="beginner">Beginner</option>
-        <option value="intermediate">Intermediate</option>
-        <option value="advanced">Advanced</option>
-        <option value="pro">Pro</option>
-        <option value="__custom__">Custom…</option>
+        <option value="beginner">{t("programPasses.levelBeginner")}</option>
+        <option value="intermediate">{t("programPasses.levelIntermediate")}</option>
+        <option value="advanced">{t("programPasses.levelAdvanced")}</option>
+        <option value="pro">{t("programPasses.levelPro")}</option>
+        <option value="__custom__">{t("programPasses.levelCustom")}</option>
       </select>
       {customMode && (
         <input
           type="text"
           value={value}
           onChange={(e) => onChange(e.target.value)}
-          placeholder="e.g. Elite, Junior, Open…"
+          placeholder={t("programPasses.levelCustomPlaceholder")}
           className={`${inputCls} mt-2`}
           autoFocus
         />
@@ -1044,38 +1067,59 @@ function PassTypeFormModal({
   passType,
   venueId,
   coaches,
+  courts,
   onClose,
   onSaved,
 }: {
   passType: PassType | null;
   venueId: string;
   coaches: Coach[];
+  courts: Court[];
   onClose: () => void;
   onSaved: () => void;
 }) {
+  const { t } = useTranslation("translation", { i18n: adminI18n });
+  const isEdit = passType !== null;
+
+  // ── Program fields ──
   const [name, setName] = useState(passType?.name ?? "");
   const [price, setPrice] = useState(passType?.price ?? 0);
   const [sessions, setSessions] = useState(passType?.sessionsIncluded ?? 12);
   const [passMode, setPassMode] = useState<PassMode>(passType?.passMode ?? "monthly");
   const [isOneTime, setIsOneTime] = useState(passType?.isOneTime ?? false);
+  const [isPublished, setIsPublished] = useState(passType?.isActive ?? true);
+
+  // ── Description fields ──
   const [description, setDescription] = useState(passType?.description ?? "");
   const [level, setLevel] = useState<string>(passType?.level ?? "");
   const [ageRange, setAgeRange] = useState(passType?.ageRange ?? "");
   const [skillTagsRaw, setSkillTagsRaw] = useState((passType?.skillTags ?? []).join(", "));
   const [prerequisites, setPrerequisites] = useState(passType?.prerequisites ?? "");
-  const [imageUrl, setImageUrl] = useState(passType?.imageUrl ?? "");
   const [imageFile, setImageFile] = useState<File | null>(null);
   const [imagePreview, setImagePreview] = useState<string>(passType?.imageUrl ?? "");
+
+  // ── Coaches ──
   const [selectedCoachIds, setSelectedCoachIds] = useState<string[]>(
     passType?.coaches.map((c) => c.coach.id) ?? []
   );
+
+  // ── First Run fields (create-only) ──
+  const [runName, setRunName] = useState("");
+  const [runStartDate, setRunStartDate] = useState(new Date().toLocaleDateString("sv-SE"));
+  const [runStartHour, setRunStartHour] = useState(8);
+  const [runDurationMin, setRunDurationMin] = useState(60);
+  const [runCount, setRunCount] = useState(sessions); // mirrors sessions field
+  const [runMaxCapacity, setRunMaxCapacity] = useState(15);
+  const [runCourtIds, setRunCourtIds] = useState<string[]>([]);
+  const [skipFirstRun, setSkipFirstRun] = useState(false);
+
+  // keep runCount in sync with sessions when on program tab
+  useEffect(() => { if (!isEdit) setRunCount(sessions); }, [sessions, isEdit]);
+
   const [saving, setSaving] = useState(false);
 
-  const toggleCoach = (id: string) => {
-    setSelectedCoachIds((prev) =>
-      prev.includes(id) ? prev.filter((c) => c !== id) : [...prev, id]
-    );
-  };
+  const toggleCoach = (id: string) =>
+    setSelectedCoachIds((prev) => prev.includes(id) ? prev.filter((c) => c !== id) : [...prev, id]);
 
   const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -1084,53 +1128,84 @@ function PassTypeFormModal({
     setImagePreview(URL.createObjectURL(file));
   };
 
+  // Steps: create = 4 tabs, edit = 3 tabs
+  type TabId = "program" | "description" | "coaches" | "first-run";
+  const ALL_TABS: { id: TabId; label: string }[] = [
+    { id: "program", label: t("programPasses.tabProgram") },
+    { id: "description", label: t("programPasses.tabDescription") },
+    { id: "coaches", label: t("programPasses.tabCoaches") },
+    ...(!isEdit ? [{ id: "first-run" as const, label: t("programPasses.tabFirstRun") }] : []),
+  ];
+  const [modalTab, setModalTab] = useState<TabId>("program");
+  const tabIndex = ALL_TABS.findIndex((t) => t.id === modalTab);
+  const canGoNext = tabIndex < ALL_TABS.length - 1;
+  const canGoBack = tabIndex > 0;
+
+  const curriculumPayload = () => ({
+    level: level || null,
+    skillTags: skillTagsRaw.split(",").map((t) => t.trim()).filter(Boolean),
+    prerequisites: prerequisites.trim() || null,
+    ageRange: ageRange.trim() || null,
+  });
+
+  // preview dates for First Run tab
+  const previewDates = (() => {
+    if (!runStartDate || runCount < 1) return [];
+    const dates: string[] = [];
+    let cur = new Date(`${runStartDate}T00:00:00`);
+    for (let i = 0; i < runCount; i++) {
+      dates.push(cur.toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric", year: "numeric" }));
+      cur = new Date(cur);
+      cur.setDate(cur.getDate() + 7);
+    }
+    return dates;
+  })();
+
   const save = async () => {
-    if (!name.trim()) return;
+    if (!name.trim()) { setModalTab("program"); return; }
     setSaving(true);
     try {
       let savedId: string;
-      const curriculumPayload = {
-        level: level || null,
-        skillTags: skillTagsRaw.split(",").map((t) => t.trim()).filter(Boolean),
-        prerequisites: prerequisites.trim() || null,
-        ageRange: ageRange.trim() || null,
-      };
-      if (passType) {
+      if (isEdit) {
         await api.patch(`/api/admin/program-passes/types/${passType.id}`, {
-          name: name.trim(),
-          price,
-          sessionsIncluded: sessions,
-          passMode,
-          isOneTime,
+          name: name.trim(), price, sessionsIncluded: sessions, passMode,
+          isOneTime, isActive: isPublished,
           description: description.trim() || null,
           coachIds: selectedCoachIds,
-          ...curriculumPayload,
+          ...curriculumPayload(),
         });
         savedId = passType.id;
       } else {
         const res = await api.post<{ id: string }>("/api/admin/program-passes/types", {
-          venueId,
-          name: name.trim(),
-          price,
-          sessionsIncluded: sessions,
-          passMode,
-          isOneTime,
+          venueId, name: name.trim(), price, sessionsIncluded: sessions, passMode,
+          isOneTime, isActive: isPublished,
           description: description.trim() || null,
           coachIds: selectedCoachIds,
-          ...curriculumPayload,
+          ...curriculumPayload(),
         });
         savedId = res.id;
       }
 
-      // Upload image if a new file was selected
       if (imageFile && savedId) {
         const fd = new FormData();
         fd.append("image", imageFile);
-        const { imageUrl: newUrl } = await api.upload<{ imageUrl: string }>(
-          `/api/admin/program-passes/types/${savedId}/image`,
-          fd
-        );
-        setImageUrl(newUrl);
+        await api.upload<{ imageUrl: string }>(`/api/admin/program-passes/types/${savedId}/image`, fd);
+      }
+
+      // Create first run if on create mode, run tab filled, not skipped
+      if (!isEdit && !skipFirstRun && runName.trim()) {
+        await api.post("/api/admin/program-runs", {
+          venueId,
+          passTypeId: savedId,
+          name: runName.trim(),
+          startDate: runStartDate,
+          recurrenceStartHour: runStartHour,
+          recurrenceDurationMin: runDurationMin,
+          recurrenceCount: runCount,
+          courtIds: runCourtIds,
+          maxCapacity: runMaxCapacity,
+          coachIds: selectedCoachIds,
+        });
       }
 
       onSaved();
@@ -1138,40 +1213,53 @@ function PassTypeFormModal({
     finally { setSaving(false); }
   };
 
-  const [modalTab, setModalTab] = useState<"program" | "description" | "coaches">("program");
   const inputCls = "w-full rounded-lg border border-neutral-700 bg-neutral-800 px-3 py-2 text-sm text-white placeholder:text-neutral-500 focus:border-purple-500 focus:outline-none";
+  const isLastStep = tabIndex === ALL_TABS.length - 1;
+  const saveLabel = saving ? t("programPasses.saving")
+    : isEdit ? t("programPasses.save")
+    : isLastStep ? (skipFirstRun || !runName.trim() ? t("programPasses.createProgram") : t("programPasses.createProgramAndRun"))
+    : t("programPasses.next");
 
-  const MODAL_TABS = [
-    { id: "program" as const, label: "Program" },
-    { id: "description" as const, label: "Description" },
-    { id: "coaches" as const, label: "Coaches" },
-  ];
+  const confirmClose = () => {
+    if (window.confirm(t("programPasses.closeConfirm"))) {
+      onClose();
+    }
+  };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4" onClick={onClose}>
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4" onClick={confirmClose}>
       <div
         className="w-full max-w-lg h-[82vh] max-h-[820px] min-h-[620px] rounded-2xl border border-neutral-700 bg-neutral-900 flex flex-col overflow-hidden"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
         <div className="flex items-center justify-between px-6 pt-5 pb-3 shrink-0">
-          <h3 className="text-lg font-bold">{passType ? "Edit Pass Type" : "New Pass Type"}</h3>
-          <button onClick={onClose} className="rounded-lg p-1.5 text-neutral-400 hover:bg-neutral-800">
+          <div>
+            <h3 className="text-lg font-bold">{isEdit ? t("programPasses.editProgram") : t("programPasses.newProgram")}</h3>
+            {!isEdit && (
+              <p className="text-[11px] text-neutral-500 mt-0.5">
+                {t("programPasses.stepOf", { step: tabIndex + 1, total: ALL_TABS.length })}
+              </p>
+            )}
+          </div>
+          <button onClick={confirmClose} className="rounded-lg p-1.5 text-neutral-400 hover:bg-neutral-800">
             <X className="h-4 w-4" />
           </button>
         </div>
 
-        {/* Tabs */}
-        <div className="flex border-b border-neutral-800 px-6 shrink-0">
-          {MODAL_TABS.map((tab) => (
+        {/* Tab bar — freely navigable */}
+        <div className="flex border-b border-neutral-800 px-6 shrink-0 overflow-x-auto">
+          {ALL_TABS.map((tab, i) => (
             <button
               key={tab.id}
               onClick={() => setModalTab(tab.id)}
               className={cn(
-                "pb-2.5 mr-5 text-sm font-medium border-b-2 transition-colors",
+                "pb-2.5 mr-5 text-sm font-medium border-b-2 transition-colors whitespace-nowrap shrink-0",
                 modalTab === tab.id
                   ? "border-purple-500 text-white"
-                  : "border-transparent text-neutral-500 hover:text-neutral-300"
+                  : i <= tabIndex
+                  ? "border-transparent text-neutral-400 hover:text-neutral-200"
+                  : "border-transparent text-neutral-600 hover:text-neutral-400"
               )}
             >
               {tab.label}
@@ -1181,27 +1269,24 @@ function PassTypeFormModal({
 
         {/* Scrollable body */}
         <div className="flex-1 overflow-y-auto px-6 py-5">
+
           {/* ── PROGRAM TAB ── */}
           {modalTab === "program" && (
             <div className="space-y-4">
               <div>
-                <label className="text-xs text-neutral-400 mb-1 block">Name</label>
+                <label className="text-xs text-neutral-400 mb-1 block">{t("programPasses.programName")}</label>
                 <input
                   type="text"
                   value={name}
                   onChange={(e) => setName(e.target.value)}
-                  placeholder="e.g. Pickleball Level 1"
+                  placeholder={t("programPasses.programNamePlaceholder")}
                   className={inputCls}
                   autoFocus
                 />
               </div>
               <div>
-                <label className="text-xs text-neutral-400 mb-1 block">Duration / mode</label>
-                <select
-                  value={passMode}
-                  onChange={(e) => setPassMode(e.target.value as PassMode)}
-                  className={inputCls}
-                >
+                <label className="text-xs text-neutral-400 mb-1 block">{t("programPasses.durationMode")}</label>
+                <select value={passMode} onChange={(e) => setPassMode(e.target.value as PassMode)} className={inputCls}>
                   {PASS_MODE_OPTIONS.map((o) => (
                     <option key={o.value} value={o.value}>{o.label}</option>
                   ))}
@@ -1215,16 +1300,14 @@ function PassTypeFormModal({
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="text-xs text-neutral-400 mb-1 block">
-                    Price{passMode === "monthly" ? " / month" : passMode === "custom" ? "" : ` / ${passModeLabel(passMode)}`} (VND)
+                    {passMode === "monthly" ? t("programPasses.pricePerMonth") : passMode === "custom" ? t("programPasses.priceCustom") : t("programPasses.price", { mode: passModeLabel(passMode) })}
                   </label>
                   <AmountInput value={price} onChange={setPrice} placeholder="e.g. 1,200,000" className={inputCls} />
                 </div>
                 <div>
-                  <label className="text-xs text-neutral-400 mb-1 block">Sessions included</label>
+                  <label className="text-xs text-neutral-400 mb-1 block">{t("programPasses.sessionsIncluded")}</label>
                   <input
-                    type="number"
-                    min={1}
-                    value={sessions}
+                    type="number" min={1} value={sessions}
                     onChange={(e) => setSessions(Math.max(1, parseInt(e.target.value) || 1))}
                     className={inputCls}
                   />
@@ -1232,120 +1315,104 @@ function PassTypeFormModal({
               </div>
               <label className="flex items-center gap-2.5 cursor-pointer select-none">
                 <input
-                  type="checkbox"
-                  checked={isOneTime}
+                  type="checkbox" checked={isOneTime}
                   onChange={(e) => setIsOneTime(e.target.checked)}
                   className="h-4 w-4 rounded border-neutral-600 accent-amber-500"
                 />
-                <span className="text-sm text-neutral-400">One-time pass (not recurring)</span>
+                <span className="text-sm text-neutral-400">{t("programPasses.oneTimePass")}</span>
               </label>
+
+              {/* Published toggle — always visible */}
+              <div className="flex items-center justify-between rounded-xl border border-neutral-800 bg-neutral-800/40 px-4 py-3">
+                <div>
+                  <p className="text-sm font-medium text-neutral-200">
+                    {isPublished ? t("programPasses.published") : t("programPasses.draft")}
+                  </p>
+                  <p className="text-[11px] text-neutral-500 mt-0.5">
+                    {isPublished ? t("programPasses.publishedDesc") : t("programPasses.draftDesc")}
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setIsPublished((v) => !v)}
+                  className={cn(
+                    "w-11 h-6 rounded-full transition-colors relative shrink-0",
+                    isPublished ? "bg-purple-600" : "bg-neutral-700"
+                  )}
+                >
+                  <span className={cn(
+                    "absolute top-1 left-1 w-4 h-4 rounded-full bg-white transition-transform shadow",
+                    isPublished && "translate-x-5"
+                  )} />
+                </button>
+              </div>
             </div>
           )}
 
           {/* ── DESCRIPTION TAB ── */}
           {modalTab === "description" && (
             <div className="space-y-4">
-              {/* Image */}
               <div>
-                <label className="text-xs text-neutral-400 mb-2 block">Program image</label>
+                <label className="text-xs text-neutral-400 mb-2 block">{t("programPasses.programImage")}</label>
                 {imagePreview ? (
                   <div className="relative mb-3 rounded-xl overflow-hidden border border-neutral-700">
-                    <img
-                      src={imagePreview}
-                      alt="Program"
-                      className="w-full h-44 object-cover"
-                    />
+                    <img src={imagePreview} alt="Program" className="w-full h-44 object-cover" />
                     <div className="absolute inset-0 bg-gradient-to-t from-black/40 to-transparent" />
                   </div>
                 ) : (
                   <div className="mb-3 h-32 rounded-xl border border-dashed border-neutral-700 bg-neutral-800/60 flex flex-col items-center justify-center gap-2 text-neutral-600">
                     <ImageIcon className="h-8 w-8" />
-                    <span className="text-xs">No image yet</span>
+                    <span className="text-xs">{t("programPasses.noImageYet")}</span>
                   </div>
                 )}
                 <label className="cursor-pointer inline-flex items-center gap-2 rounded-lg border border-neutral-700 bg-neutral-800 px-3 py-2 text-xs text-neutral-300 hover:bg-neutral-700 transition-colors">
                   <Upload className="h-3.5 w-3.5" />
-                  {imagePreview ? "Change image" : "Upload image"}
-                  <input
-                    type="file"
-                    accept="image/png,image/jpeg,image/webp"
-                    className="hidden"
-                    onChange={handleImageChange}
-                  />
+                  {imagePreview ? t("programPasses.changeImage") : t("programPasses.uploadImage")}
+                  <input type="file" accept="image/png,image/jpeg,image/webp" className="hidden" onChange={handleImageChange} />
                 </label>
               </div>
-
-              {/* Description */}
               <div>
-                <label className="text-xs text-neutral-400 mb-1 block">Description</label>
+                <label className="text-xs text-neutral-400 mb-1 block">{t("programPasses.description")}</label>
                 <p className="text-[11px] text-neutral-600 mb-2">
-                  Use blank lines between sections to separate content (e.g. What to Expect, What you will learn, etc.)
+                  {t("programPasses.descriptionHint")}
                 </p>
                 <textarea
-                  value={description}
-                  onChange={(e) => setDescription(e.target.value)}
-                  placeholder={"What to Expect\nDescribe the program overview…\n\nWhat you will learn\nList the key skills and topics…\n\nPrerequisites\nWho is this for?"}
+                  value={description} onChange={(e) => setDescription(e.target.value)}
+                  placeholder={"What to Expect\nDescribe the program overview…\n\nWhat you will learn\nList the key skills and topics…"}
                   rows={8}
                   className="w-full rounded-lg border border-neutral-700 bg-neutral-800 px-3 py-2.5 text-sm text-white placeholder:text-neutral-600 focus:border-purple-500 focus:outline-none resize-none leading-relaxed"
                 />
-                <p className="text-[11px] text-neutral-600 mt-1 text-right">
-                  {description.length} chars
-                </p>
+                <p className="text-[11px] text-neutral-600 mt-1 text-right">{description.length} chars</p>
               </div>
-
-              {/* Level */}
               <LevelField value={level} onChange={setLevel} inputCls={inputCls} />
-
-              {/* Age range */}
               <div>
-                <label className="text-xs text-neutral-400 mb-1 block">Age range</label>
-                <input
-                  type="text"
-                  value={ageRange}
-                  onChange={(e) => setAgeRange(e.target.value)}
-                  placeholder='e.g. "5-12", "Adults 18+", "All ages"'
-                  className={inputCls}
-                />
+                <label className="text-xs text-neutral-400 mb-1 block">{t("programPasses.ageRange")}</label>
+                <input type="text" value={ageRange} onChange={(e) => setAgeRange(e.target.value)} placeholder={t("programPasses.ageRangePlaceholder")} className={inputCls} />
               </div>
-
-              {/* Skill tags */}
               <div>
-                <label className="text-xs text-neutral-400 mb-1 block">Skill tags</label>
-                <input
-                  type="text"
-                  value={skillTagsRaw}
-                  onChange={(e) => setSkillTagsRaw(e.target.value)}
-                  placeholder="e.g. Footwork, Serve, Backhand (comma-separated)"
-                  className={inputCls}
-                />
+                <label className="text-xs text-neutral-400 mb-1 block">{t("programPasses.skillTags")}</label>
+                <input type="text" value={skillTagsRaw} onChange={(e) => setSkillTagsRaw(e.target.value)} placeholder={t("programPasses.skillTagsPlaceholder")} className={inputCls} />
                 {skillTagsRaw.trim() && (
                   <div className="flex flex-wrap gap-1.5 mt-2">
                     {skillTagsRaw.split(",").map((t) => t.trim()).filter(Boolean).map((tag, i) => (
                       <span key={i} className="inline-flex items-center gap-1 rounded-full bg-blue-900/40 border border-blue-700/40 px-2.5 py-0.5 text-[11px] text-blue-300">
                         {tag}
-                        <button
-                          type="button"
-                          onClick={() => {
-                            const tags = skillTagsRaw.split(",").map((t) => t.trim()).filter(Boolean);
-                            tags.splice(i, 1);
-                            setSkillTagsRaw(tags.join(", "));
-                          }}
-                          className="ml-0.5 text-blue-400 hover:text-white leading-none"
-                        >×</button>
+                        <button type="button" onClick={() => {
+                          const tags = skillTagsRaw.split(",").map((t) => t.trim()).filter(Boolean);
+                          tags.splice(i, 1);
+                          setSkillTagsRaw(tags.join(", "));
+                        }} className="ml-0.5 text-blue-400 hover:text-white leading-none">×</button>
                       </span>
                     ))}
                   </div>
                 )}
-                <p className="text-[11px] text-neutral-600 mt-1">Separate tags with commas. Click × to remove.</p>
+                <p className="text-[11px] text-neutral-600 mt-1">{t("programPasses.skillTagsHint")}</p>
               </div>
-
-              {/* Prerequisites */}
               <div>
-                <label className="text-xs text-neutral-400 mb-1 block">Prerequisites</label>
+                <label className="text-xs text-neutral-400 mb-1 block">{t("programPasses.prerequisites")}</label>
                 <textarea
-                  value={prerequisites}
-                  onChange={(e) => setPrerequisites(e.target.value)}
-                  placeholder="Who is this program for? Any prior experience required?"
+                  value={prerequisites} onChange={(e) => setPrerequisites(e.target.value)}
+                  placeholder={t("programPasses.prerequisitesPlaceholder")}
                   rows={3}
                   className="w-full rounded-lg border border-neutral-700 bg-neutral-800 px-3 py-2.5 text-sm text-white placeholder:text-neutral-600 focus:border-purple-500 focus:outline-none resize-none leading-relaxed"
                 />
@@ -1356,58 +1423,172 @@ function PassTypeFormModal({
           {/* ── COACHES TAB ── */}
           {modalTab === "coaches" && (
             <div className="space-y-3">
-              <p className="text-xs text-neutral-500">Select the coaches assigned to this program. These are the default coaches shown on the pass type card.</p>
+              <p className="text-xs text-neutral-500">
+                {!isEdit ? t("programPasses.defaultCoachesFirstRun") : t("programPasses.defaultCoaches")}
+              </p>
               {coaches.length === 0 ? (
                 <p className="rounded-lg border border-neutral-800 bg-neutral-800/40 px-4 py-6 text-center text-sm text-neutral-500">
-                  No coaches found for this venue.
+                  {t("programPasses.noCoachesFound")}
                 </p>
               ) : (
                 <div className="space-y-1">
                   {coaches.map((c) => (
-                    <label
-                      key={c.id}
-                      className={cn(
-                        "flex items-center gap-3 cursor-pointer select-none px-3 py-2.5 rounded-lg border transition-colors",
-                        selectedCoachIds.includes(c.id)
-                          ? "border-purple-500/40 bg-purple-600/10"
-                          : "border-neutral-800 bg-neutral-800/40 hover:bg-neutral-800"
-                      )}
-                    >
+                    <label key={c.id} className={cn(
+                      "flex items-center gap-3 cursor-pointer select-none px-3 py-2.5 rounded-lg border transition-colors",
+                      selectedCoachIds.includes(c.id)
+                        ? "border-purple-500/40 bg-purple-600/10"
+                        : "border-neutral-800 bg-neutral-800/40 hover:bg-neutral-800"
+                    )}>
                       <input
-                        type="checkbox"
-                        checked={selectedCoachIds.includes(c.id)}
+                        type="checkbox" checked={selectedCoachIds.includes(c.id)}
                         onChange={() => toggleCoach(c.id)}
                         className="h-4 w-4 rounded border-neutral-600 bg-neutral-800 accent-purple-500"
                       />
                       <span className="text-sm text-neutral-200">{c.name}</span>
-                      {selectedCoachIds.includes(c.id) && (
-                        <Check className="h-3.5 w-3.5 text-purple-400 ml-auto" />
-                      )}
+                      {selectedCoachIds.includes(c.id) && <Check className="h-3.5 w-3.5 text-purple-400 ml-auto" />}
                     </label>
                   ))}
                 </div>
               )}
               {selectedCoachIds.length > 0 && (
                 <p className="text-[11px] text-neutral-500 pt-1">
-                  {selectedCoachIds.length} coach{selectedCoachIds.length !== 1 ? "es" : ""} selected
+                  {t("programPasses.coachesSelected", { count: selectedCoachIds.length })}
                 </p>
+              )}
+            </div>
+          )}
+
+          {/* ── FIRST RUN TAB (create only) ── */}
+          {modalTab === "first-run" && (
+            <div className="space-y-4">
+              <div className="rounded-xl border border-neutral-800 bg-neutral-800/30 px-4 py-3">
+                <p className="text-xs text-neutral-400 leading-relaxed">
+                  {t("programPasses.firstRunIntro", { name: name || "this program" })}
+                </p>
+              </div>
+
+              {/* Skip toggle */}
+              <label className="flex items-center gap-2.5 cursor-pointer select-none">
+                <input
+                  type="checkbox" checked={skipFirstRun}
+                  onChange={(e) => setSkipFirstRun(e.target.checked)}
+                  className="h-4 w-4 rounded border-neutral-600 accent-neutral-500"
+                />
+                <span className="text-sm text-neutral-400">{t("programPasses.firstRunSkip")}</span>
+              </label>
+
+              {!skipFirstRun && (
+                <>
+                  <div>
+                    <label className="text-xs text-neutral-400 mb-1 block">{t("programPasses.runName")}</label>
+                    <input
+                      type="text" value={runName} onChange={(e) => setRunName(e.target.value)}
+                      placeholder={t("programPasses.runNamePlaceholder", { name: name || "Program" })}
+                      className={inputCls} autoFocus
+                    />
+                  </div>
+                  <div>
+                    <label className="text-xs text-neutral-400 mb-1 block">{t("programPasses.firstSessionDate")}</label>
+                    <input type="date" value={runStartDate} onChange={(e) => setRunStartDate(e.target.value)} className={inputCls} />
+                    <p className="text-[11px] text-neutral-500 mt-0.5">{t("programPasses.sessionRepeatHint")}</p>
+                  </div>
+                  <div className="grid grid-cols-3 gap-3">
+                    <div>
+                      <label className="text-xs text-neutral-400 mb-1 block">{t("programPasses.startHour")}</label>
+                      <select value={runStartHour} onChange={(e) => setRunStartHour(Number(e.target.value))} className={inputCls}>
+                        {Array.from({ length: 16 }, (_, i) => i + 6).map((h) => (
+                          <option key={h} value={h}>{String(h).padStart(2, "0")}:00</option>
+                        ))}
+                      </select>
+                    </div>
+                    <div>
+                      <label className="text-xs text-neutral-400 mb-1 block">{t("programPasses.durationMin")}</label>
+                      <input type="number" min={15} step={15} value={runDurationMin} onChange={(e) => setRunDurationMin(Number(e.target.value))} className={inputCls} />
+                    </div>
+                    <div>
+                      <label className="text-xs text-neutral-400 mb-1 block">{t("programPasses.numberOfSessions")}</label>
+                      <input type="number" min={1} max={52} value={runCount} onChange={(e) => setRunCount(Number(e.target.value))} className={inputCls} />
+                    </div>
+                  </div>
+                  <div>
+                    <label className="text-xs text-neutral-400 mb-1 block">{t("programPasses.maxCapacity")}</label>
+                    <input type="number" min={1} value={runMaxCapacity} onChange={(e) => setRunMaxCapacity(Number(e.target.value))} className={inputCls} />
+                  </div>
+                  {courts.length > 0 && (
+                    <div>
+                      <label className="text-xs text-neutral-400 mb-1 block">
+                        {t("programPasses.courts")} <span className="text-neutral-600 font-normal">({t("programPasses.courtsHint")})</span>
+                      </label>
+                      <div className="space-y-1">
+                        {courts.map((c) => (
+                          <label key={c.id} className={cn(
+                            "flex items-center gap-3 cursor-pointer select-none px-3 py-2 rounded-lg border transition-colors",
+                            runCourtIds.includes(c.id)
+                              ? "border-purple-500/40 bg-purple-600/10"
+                              : "border-neutral-800 bg-neutral-800/40 hover:bg-neutral-800"
+                          )}>
+                            <input
+                              type="checkbox"
+                              checked={runCourtIds.includes(c.id)}
+                              onChange={() => setRunCourtIds((prev) =>
+                                prev.includes(c.id) ? prev.filter((id) => id !== c.id) : [...prev, c.id]
+                              )}
+                              className="h-4 w-4 rounded border-neutral-600 bg-neutral-800 accent-purple-500"
+                            />
+                            <span className="text-sm text-neutral-200">{c.label}</span>
+                            {runCourtIds.includes(c.id) && <Check className="h-3.5 w-3.5 text-purple-400 ml-auto" />}
+                          </label>
+                        ))}
+                      </div>
+                      {runCourtIds.length === 0 && (
+                        <p className="text-[11px] text-neutral-600 mt-1">{t("programPasses.noCourtSelected")}</p>
+                      )}
+                    </div>
+                  )}
+                  {previewDates.length > 0 && (
+                    <div>
+                      <label className="text-xs text-neutral-400 mb-1 block">{t("programPasses.sessionPreview", { count: previewDates.length })}</label>
+                      <div className="rounded-lg border border-neutral-800 bg-neutral-950 p-2 max-h-36 overflow-y-auto space-y-0.5">
+                        {previewDates.map((d, i) => (
+                          <p key={i} className="text-[11px] text-neutral-400">{i + 1}. {d}</p>
+                        ))}
+                      </div>
+                      <p className="text-[11px] text-neutral-600 mt-1">
+                        {t("programPasses.sessionPreviewNote")}
+                      </p>
+                    </div>
+                  )}
+                </>
               )}
             </div>
           )}
         </div>
 
         {/* Footer */}
-        <div className="flex gap-3 px-6 py-4 border-t border-neutral-800 shrink-0">
-          <button
-            onClick={save}
-            disabled={saving || !name.trim()}
-            className="flex-1 rounded-xl bg-purple-600 py-3 font-semibold text-white hover:bg-purple-500 disabled:opacity-40"
-          >
-            {saving ? "Saving…" : "Save"}
-          </button>
-          <button onClick={onClose} className="flex-1 rounded-xl bg-neutral-800 py-3 font-medium text-neutral-300 hover:bg-neutral-700">
-            Cancel
-          </button>
+        <div className="px-6 py-4 border-t border-neutral-800 shrink-0 space-y-3">
+          <div className="flex gap-3">
+            {canGoBack && !isEdit && (
+              <button
+                onClick={() => setModalTab(ALL_TABS[tabIndex - 1].id)}
+                className="rounded-xl bg-neutral-800 px-5 py-3 font-medium text-neutral-300 hover:bg-neutral-700 shrink-0"
+              >
+                {t("programPasses.back")}
+              </button>
+            )}
+            <button
+              onClick={() => {
+                if (!isEdit && canGoNext) {
+                  setModalTab(ALL_TABS[tabIndex + 1].id);
+                } else {
+                  save();
+                }
+              }}
+              disabled={saving || !name.trim()}
+              className="flex-1 rounded-xl bg-purple-600 py-3 font-semibold text-white hover:bg-purple-500 disabled:opacity-40"
+            >
+              {saveLabel}
+            </button>
+          </div>
         </div>
       </div>
     </div>
@@ -1427,6 +1608,7 @@ function ActivateModal({
   onClose: () => void;
   onActivated: () => void;
 }) {
+  const { t } = useTranslation("translation", { i18n: adminI18n });
   const [step, setStep] = useState<1 | 2>(1);
   const [playerSearch, setPlayerSearch] = useState("");
   const [playerResults, setPlayerResults] = useState<PlayerResult[]>([]);
@@ -1513,15 +1695,15 @@ function ActivateModal({
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60" onClick={onClose}>
       <div className="w-full max-w-md mx-4 rounded-2xl border border-neutral-700 bg-neutral-900 p-6 space-y-4" onClick={(e) => e.stopPropagation()}>
         <div className="flex items-center justify-between">
-          <h3 className="text-lg font-bold">Activate Program Pass</h3>
+          <h3 className="text-lg font-bold">{t("programPasses.activateTitle")}</h3>
           <button onClick={onClose} className="rounded-lg p-1.5 text-neutral-400 hover:bg-neutral-800"><X className="h-4 w-4" /></button>
         </div>
 
         {/* Step indicator */}
         <div className="flex gap-2 text-xs text-neutral-500">
-          <span className={cn("font-medium", step === 1 && "text-purple-400")}>1. Player</span>
+          <span className={cn("font-medium", step === 1 && "text-purple-400")}>1. {t("programPasses.activateSelectPlayer")}</span>
           <span>→</span>
-          <span className={cn("font-medium", step === 2 && "text-purple-400")}>2. Pass details</span>
+          <span className={cn("font-medium", step === 2 && "text-purple-400")}>2. {t("programPasses.activateSelectPass")}</span>
         </div>
 
         {step === 1 && (
@@ -1530,7 +1712,7 @@ function ActivateModal({
               <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-neutral-500" />
               <input
                 type="text"
-                placeholder="Search by name or phone…"
+                placeholder={t("programPasses.activateSearchPlayer")}
                 value={playerSearch}
                 onChange={(e) => { setPlayerSearch(e.target.value); setSelectedPlayer(null); }}
                 className="w-full rounded-lg border border-neutral-700 bg-neutral-800 pl-9 pr-3 py-2 text-sm text-white placeholder:text-neutral-500 focus:border-purple-500 focus:outline-none"
@@ -1614,7 +1796,7 @@ function ActivateModal({
             {isCustom ? (
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="text-xs text-neutral-400 mb-1 block">Start</label>
+                  <label className="text-xs text-neutral-400 mb-1 block">{t("programPasses.activateCustomStart")}</label>
                   <input
                     type="date"
                     value={cycleStartStr}
@@ -1623,7 +1805,7 @@ function ActivateModal({
                   />
                 </div>
                 <div>
-                  <label className="text-xs text-neutral-400 mb-1 block">End by</label>
+                  <label className="text-xs text-neutral-400 mb-1 block">{t("programPasses.activateCustomEnd")}</label>
                   <input
                     type="date"
                     value={cycleEndStr}
@@ -1636,7 +1818,7 @@ function ActivateModal({
             ) : (
               <div>
                 <label className="text-xs text-neutral-400 mb-1 block">
-                  {isMonthly ? "Cycle start month" : "Start date"}
+                  {isMonthly ? t("programPasses.activateStartDate") : t("programPasses.activateCustomStart")}
                 </label>
                 {isMonthly ? (
                   <select value={cycleStartStr} onChange={(e) => setCycleStartStr(e.target.value)} className={inputCls}>
@@ -1660,14 +1842,14 @@ function ActivateModal({
               </div>
             )}
 
-            <label className="flex items-center gap-2 cursor-pointer select-none">
+              <label className="flex items-center gap-2 cursor-pointer select-none">
               <input type="checkbox" checked={isFree} onChange={(e) => setIsFree(e.target.checked)} className="h-4 w-4 rounded border-neutral-600 accent-purple-500" />
-              <span className="text-xs text-neutral-400">Free / complimentary pass</span>
+              <span className="text-xs text-neutral-400">{t("programPasses.activateFree")}</span>
             </label>
 
             {!isFree && (
               <div>
-                <label className="text-xs text-neutral-400 mb-1 block">Payment method</label>
+                <label className="text-xs text-neutral-400 mb-1 block">{t("programPasses.activatePaymentMethod")}</label>
                 <select value={paymentMethod} onChange={(e) => setPaymentMethod(e.target.value)} className={inputCls}>
                   <option value="cash">Cash</option>
                   <option value="bank_transfer">Bank Transfer</option>
@@ -1678,21 +1860,21 @@ function ActivateModal({
 
             {isFree && (
               <div>
-                <label className="text-xs text-neutral-400 mb-1 block">Reason (optional)</label>
+                <label className="text-xs text-neutral-400 mb-1 block">{t("programPasses.activateFreeNote")}</label>
                 <input type="text" value={freeNote} onChange={(e) => setFreeNote(e.target.value)} placeholder="e.g. Promotional, Staff benefit…" className={inputCls} />
               </div>
             )}
 
             <div className="flex gap-3 pt-1">
               <button onClick={() => setStep(1)} className="rounded-xl bg-neutral-800 px-4 py-3 text-sm font-medium text-neutral-300 hover:bg-neutral-700">
-                ← Back
+                {t("programPasses.back")}
               </button>
               <button
                 onClick={activate}
                 disabled={saving || !passTypeId || (isCustom && (!cycleStartStr || !cycleEndStr))}
                 className="flex-1 rounded-xl bg-green-600 py-3 font-semibold text-white hover:bg-green-500 disabled:opacity-40"
               >
-                {saving ? "Activating…" : "Activate"}
+                {saving ? t("programPasses.activating") : t("programPasses.activateCreate")}
               </button>
             </div>
           </div>
@@ -1715,6 +1897,7 @@ function CheckInModal({
   onClose: () => void;
   onCheckedIn: () => void;
 }) {
+  const { t } = useTranslation("translation", { i18n: adminI18n });
   const [instances, setInstances] = useState<ClassInstance[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedInstanceId, setSelectedInstanceId] = useState("");
@@ -1754,7 +1937,7 @@ function CheckInModal({
       <div className="w-full max-w-sm mx-4 rounded-2xl border border-neutral-700 bg-neutral-900 p-6 space-y-4" onClick={(e) => e.stopPropagation()}>
         <div className="flex items-center justify-between">
           <div>
-            <h3 className="font-bold">Check In</h3>
+            <h3 className="font-bold">{t("programPasses.checkInTitle")}</h3>
             <p className="text-xs text-neutral-500">{pass.player.name} — {pass.passType.name}</p>
           </div>
           <button onClick={onClose} className="rounded-lg p-1.5 text-neutral-400 hover:bg-neutral-800"><X className="h-4 w-4" /></button>
@@ -1784,7 +1967,7 @@ function CheckInModal({
                   {fmtTime(inst.startAt)} – {fmtTime(inst.endAt)} · {inst.coach.name}
                 </p>
                 <p className="text-xs text-neutral-500">
-                  {inst._count.checkIns}/{inst.maxPlayers} checked in
+                  {inst._count.checkIns}/{inst.maxPlayers} {t("programPasses.checkedIn")}
                 </p>
               </button>
             ))}
@@ -1797,10 +1980,10 @@ function CheckInModal({
             disabled={saving || !selectedInstanceId}
             className="flex-1 rounded-xl bg-green-600 py-3 font-semibold text-white hover:bg-green-500 disabled:opacity-40"
           >
-            {saving ? "Checking in…" : "Confirm Check-In"}
+            {saving ? t("programPasses.checkingIn") : t("programPasses.checkIn")}
           </button>
           <button onClick={onClose} className="rounded-xl bg-neutral-800 px-4 py-3 text-sm font-medium text-neutral-300 hover:bg-neutral-700">
-            Cancel
+            {t("programPasses.back")}
           </button>
         </div>
       </div>
@@ -1819,6 +2002,7 @@ function DeletePassModal({
   onClose: () => void;
   onDeleted: () => void;
 }) {
+  const { t } = useTranslation("translation", { i18n: adminI18n });
   const [step, setStep] = useState<1 | 2>(1);
   const [deleting, setDeleting] = useState(false);
 
@@ -1842,7 +2026,7 @@ function DeletePassModal({
             <div className="flex h-8 w-8 items-center justify-center rounded-full bg-red-900/40">
               <Trash2 className="h-4 w-4 text-red-400" />
             </div>
-            <h3 className="font-bold text-white">Delete Pass</h3>
+            <h3 className="font-bold text-white">{t("programPasses.deleteTitle")}</h3>
           </div>
           <button onClick={onClose} className="rounded-lg p-1.5 text-neutral-400 hover:bg-neutral-800">
             <X className="h-4 w-4" />
@@ -1867,13 +2051,13 @@ function DeletePassModal({
                 onClick={() => setStep(2)}
                 className="flex-1 rounded-xl bg-red-700 py-3 font-semibold text-white hover:bg-red-600"
               >
-                Delete Pass
+                {t("programPasses.deleteTitle")}
               </button>
               <button
                 onClick={onClose}
                 className="flex-1 rounded-xl bg-neutral-800 py-3 font-medium text-neutral-300 hover:bg-neutral-700"
               >
-                Cancel
+                {t("programPasses.back")}
               </button>
             </div>
           </>
@@ -1894,13 +2078,13 @@ function DeletePassModal({
                 disabled={deleting}
                 className="flex-1 rounded-xl bg-red-600 py-3 font-semibold text-white hover:bg-red-500 disabled:opacity-40"
               >
-                {deleting ? "Deleting…" : "Yes, delete permanently"}
+                {deleting ? t("programPasses.deleting") : t("programPasses.deleteConfirm")}
               </button>
               <button
                 onClick={() => setStep(1)}
                 className="rounded-xl bg-neutral-800 px-4 py-3 text-sm font-medium text-neutral-300 hover:bg-neutral-700"
               >
-                Back
+                {t("programPasses.back")}
               </button>
             </div>
           </>
@@ -1921,6 +2105,7 @@ function PauseModal({
   onClose: () => void;
   onPaused: () => void;
 }) {
+  const { t } = useTranslation("translation", { i18n: adminI18n });
   // Default deferred resume: first of next month
   const now = new Date();
   const defaultResume = new Date(now.getFullYear(), now.getMonth() + 1, 1);
@@ -1946,7 +2131,7 @@ function PauseModal({
       <div className="w-full max-w-sm mx-4 rounded-2xl border border-neutral-700 bg-neutral-900 p-6 space-y-4" onClick={(e) => e.stopPropagation()}>
         <div className="flex items-center justify-between">
           <div>
-            <h3 className="font-bold">Pause Pass</h3>
+            <h3 className="font-bold">{t("programPasses.pauseTitle")}</h3>
             <p className="text-xs text-neutral-500">{pass.player.name}</p>
           </div>
           <button onClick={onClose} className="rounded-lg p-1.5 text-neutral-400 hover:bg-neutral-800"><X className="h-4 w-4" /></button>
@@ -1969,10 +2154,10 @@ function PauseModal({
             disabled={saving || !deferredDate}
             className="flex-1 rounded-xl bg-amber-600 py-3 font-semibold text-white hover:bg-amber-500 disabled:opacity-40"
           >
-            {saving ? "Pausing…" : "Pause Pass"}
+            {saving ? t("programPasses.pausing") : t("programPasses.pause")}
           </button>
           <button onClick={onClose} className="rounded-xl bg-neutral-800 px-4 py-3 text-sm font-medium text-neutral-300 hover:bg-neutral-700">
-            Cancel
+            {t("programPasses.back")}
           </button>
         </div>
       </div>
@@ -1997,6 +2182,7 @@ function CreateRunModal({
   onClose: () => void;
   onSaved: () => void;
 }) {
+  const { t } = useTranslation("translation", { i18n: adminI18n });
   const [passTypeId, setPassTypeId] = useState(passTypes[0]?.id ?? "");
   const [name, setName] = useState("");
   const [startDate, setStartDate] = useState(new Date().toLocaleDateString("sv-SE"));
@@ -2006,7 +2192,7 @@ function CreateRunModal({
   const [recurrenceCount, setRecurrenceCount] = useState(8);
   const [recurrenceEndDate, setRecurrenceEndDate] = useState("");
   const [maxCapacity, setMaxCapacity] = useState(15);
-  const [courtId, setCourtId] = useState<string>(courts[0]?.id ?? "");
+  const [selectedCourtIds, setSelectedCourtIds] = useState<string[]>([]);
   const [selectedCoachIds, setSelectedCoachIds] = useState<string[]>([]);
   const [saving, setSaving] = useState(false);
 
@@ -2040,7 +2226,7 @@ function CreateRunModal({
         recurrenceStartHour: startHour,
         recurrenceDurationMin: durationMin,
         ...(occurrenceMode === "count" ? { recurrenceCount } : { recurrenceEndDate }),
-        courtId: courtId || undefined,
+        courtIds: selectedCourtIds,
         maxCapacity,
         coachIds: selectedCoachIds,
       });
@@ -2055,12 +2241,12 @@ function CreateRunModal({
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4" onClick={onClose}>
       <div className="w-full max-w-lg rounded-2xl border border-neutral-700 bg-neutral-900 max-h-[90vh] flex flex-col" onClick={(e) => e.stopPropagation()}>
         <div className="flex items-center justify-between p-5 border-b border-neutral-800">
-          <h3 className="text-lg font-bold">Create Program Run</h3>
+          <h3 className="text-lg font-bold">{t("programPasses.createRun")}</h3>
           <button onClick={onClose} className="rounded-lg p-1.5 text-neutral-400 hover:bg-neutral-800"><X className="h-4 w-4" /></button>
         </div>
         <div className="flex-1 overflow-y-auto p-5 space-y-4">
           <div>
-            <label className="text-xs text-neutral-400 mb-1 block">Pass Type</label>
+            <label className="text-xs text-neutral-400 mb-1 block">{t("programPasses.runPassType")}</label>
             <select value={passTypeId} onChange={(e) => setPassTypeId(e.target.value)} className={inputCls}>
               {passTypes.map((pt) => (
                 <option key={pt.id} value={pt.id}>{pt.name}</option>
@@ -2068,17 +2254,17 @@ function CreateRunModal({
             </select>
           </div>
           <div>
-            <label className="text-xs text-neutral-400 mb-1 block">Run name</label>
+            <label className="text-xs text-neutral-400 mb-1 block">{t("programPasses.runName")}</label>
             <input type="text" value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. Beginner Bootcamp — Q3 2026" className={inputCls} autoFocus />
           </div>
           <div>
-            <label className="text-xs text-neutral-400 mb-1 block">First session date</label>
+            <label className="text-xs text-neutral-400 mb-1 block">{t("programPasses.firstSessionDate")}</label>
             <input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} className={inputCls} />
-            <p className="text-[11px] text-neutral-500 mt-0.5">Sessions repeat weekly on the same day of the week.</p>
+            <p className="text-[11px] text-neutral-500 mt-0.5">{t("programPasses.sessionRepeatHint")}</p>
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="text-xs text-neutral-400 mb-1 block">Start hour (local)</label>
+              <label className="text-xs text-neutral-400 mb-1 block">{t("programPasses.startHour")}</label>
               <select value={startHour} onChange={(e) => setStartHour(Number(e.target.value))} className={inputCls}>
                 {Array.from({ length: 16 }, (_, i) => i + 6).map((h) => (
                   <option key={h} value={h}>{String(h).padStart(2, "0")}:00</option>
@@ -2086,12 +2272,12 @@ function CreateRunModal({
               </select>
             </div>
             <div>
-              <label className="text-xs text-neutral-400 mb-1 block">Duration (min)</label>
+              <label className="text-xs text-neutral-400 mb-1 block">{t("programPasses.durationMin")}</label>
               <input type="number" min={15} step={15} value={durationMin} onChange={(e) => setDurationMin(Number(e.target.value))} className={inputCls} />
             </div>
           </div>
           <div>
-            <label className="text-xs text-neutral-400 mb-1 block">Schedule length</label>
+            <label className="text-xs text-neutral-400 mb-1 block">{t("programPasses.numberOfSessions")}</label>
             <div className="flex gap-2 mb-2">
               <button onClick={() => setOccurrenceMode("count")} className={cn("rounded-lg px-3 py-1.5 text-xs font-medium", occurrenceMode === "count" ? "bg-purple-600 text-white" : "bg-neutral-800 text-neutral-400")}>By # sessions</button>
               <button onClick={() => setOccurrenceMode("endDate")} className={cn("rounded-lg px-3 py-1.5 text-xs font-medium", occurrenceMode === "endDate" ? "bg-purple-600 text-white" : "bg-neutral-800 text-neutral-400")}>By end date</button>
@@ -2103,24 +2289,43 @@ function CreateRunModal({
             )}
           </div>
           <div>
-            <label className="text-xs text-neutral-400 mb-1 block">Max capacity</label>
+            <label className="text-xs text-neutral-400 mb-1 block">Max capacity (number of players)</label>
             <input type="number" min={1} value={maxCapacity} onChange={(e) => setMaxCapacity(Number(e.target.value))} className={inputCls} />
           </div>
           {courts.length > 0 && (
             <div>
-              <label className="text-xs text-neutral-400 mb-1 block">Court</label>
-              <select value={courtId} onChange={(e) => setCourtId(e.target.value)} className={inputCls}>
-                <option value="">No specific court</option>
+              <label className="text-xs text-neutral-400 mb-1 block">
+                {t("programPasses.courts")} <span className="text-neutral-600 font-normal">({t("programPasses.courtsHint")})</span>
+              </label>
+              <div className="space-y-1">
                 {courts.map((c) => (
-                  <option key={c.id} value={c.id}>{c.label}</option>
+                  <label key={c.id} className={cn(
+                    "flex items-center gap-3 cursor-pointer select-none px-3 py-2 rounded-lg border transition-colors",
+                    selectedCourtIds.includes(c.id)
+                      ? "border-purple-500/40 bg-purple-600/10"
+                      : "border-neutral-800 bg-neutral-800/40 hover:bg-neutral-800"
+                  )}>
+                    <input
+                      type="checkbox"
+                      checked={selectedCourtIds.includes(c.id)}
+                      onChange={() => setSelectedCourtIds((prev) =>
+                        prev.includes(c.id) ? prev.filter((id) => id !== c.id) : [...prev, c.id]
+                      )}
+                      className="h-4 w-4 rounded border-neutral-600 bg-neutral-800 accent-purple-500"
+                    />
+                    <span className="text-sm text-neutral-200">{c.label}</span>
+                    {selectedCourtIds.includes(c.id) && <Check className="h-3.5 w-3.5 text-purple-400 ml-auto" />}
+                  </label>
                 ))}
-              </select>
-              <p className="text-[11px] text-neutral-500 mt-0.5">Required to block the court on the booking grid.</p>
+              </div>
+              {selectedCourtIds.length === 0 && (
+                <p className="text-[11px] text-neutral-600 mt-1">{t("programPasses.noCourtSelected")}</p>
+              )}
             </div>
           )}
           {coaches.length > 0 && (
             <div>
-              <label className="text-xs text-neutral-400 mb-1 block">Coaches</label>
+              <label className="text-xs text-neutral-400 mb-1 block">{t("programPasses.runCoaches")}</label>
               <div className="rounded-lg border border-neutral-700 bg-neutral-800 p-2 space-y-1 max-h-32 overflow-y-auto">
                 {coaches.map((c) => (
                   <label key={c.id} className="flex items-center gap-2 cursor-pointer select-none px-1 py-0.5 rounded hover:bg-neutral-700">
@@ -2133,7 +2338,7 @@ function CreateRunModal({
           )}
           {previewDates.length > 0 && (
             <div>
-              <label className="text-xs text-neutral-400 mb-1 block">Session preview ({previewDates.length} sessions)</label>
+              <label className="text-xs text-neutral-400 mb-1 block">{t("programPasses.sessionPreview", { count: previewDates.length })}</label>
               <div className="rounded-lg border border-neutral-800 bg-neutral-950 p-2 max-h-32 overflow-y-auto space-y-0.5">
                 {previewDates.map((d, i) => (
                   <p key={i} className="text-[11px] text-neutral-400">{i + 1}. {d}</p>
@@ -2144,9 +2349,9 @@ function CreateRunModal({
         </div>
         <div className="flex gap-3 p-5 border-t border-neutral-800">
           <button onClick={save} disabled={saving || !name.trim() || !passTypeId} className="flex-1 rounded-xl bg-purple-600 py-3 font-semibold text-white hover:bg-purple-500 disabled:opacity-40">
-            {saving ? "Creating…" : "Create Run"}
+            {saving ? t("programPasses.saving") : t("programPasses.createRun")}
           </button>
-          <button onClick={onClose} className="flex-1 rounded-xl bg-neutral-800 py-3 font-medium text-neutral-300 hover:bg-neutral-700">Cancel</button>
+          <button onClick={onClose} className="flex-1 rounded-xl bg-neutral-800 py-3 font-medium text-neutral-300 hover:bg-neutral-700">{t("programPasses.back")}</button>
         </div>
       </div>
     </div>
@@ -2158,24 +2363,31 @@ function CreateRunModal({
 function EditRunModal({
   run,
   coaches,
+  courts,
   onClose,
   onSaved,
 }: {
   run: ProgramRunRecord;
   coaches: Coach[];
+  courts: Court[];
   onClose: () => void;
   onSaved: () => void;
 }) {
+  const { t } = useTranslation("translation", { i18n: adminI18n });
   const [name, setName] = useState(run.name);
   const [status, setStatus] = useState(run.status);
   const [maxCapacity, setMaxCapacity] = useState(run.maxCapacity);
   const [note, setNote] = useState(run.note ?? "");
   const [selectedCoachIds, setSelectedCoachIds] = useState<string[]>(run.coaches.map((rc) => rc.coachId));
+  const [selectedCourtIds, setSelectedCourtIds] = useState<string[]>(run.courtIds ?? []);
   const [saving, setSaving] = useState(false);
   const [err, setErr] = useState("");
 
   const toggleCoach = (id: string) =>
     setSelectedCoachIds((prev) => prev.includes(id) ? prev.filter((c) => c !== id) : [...prev, id]);
+
+  const toggleCourt = (id: string) =>
+    setSelectedCourtIds((prev) => prev.includes(id) ? prev.filter((c) => c !== id) : [...prev, id]);
 
   const save = async () => {
     setErr("");
@@ -2185,6 +2397,7 @@ function EditRunModal({
         name: name.trim(),
         status,
         maxCapacity,
+        courtIds: selectedCourtIds,
         note: note.trim() || null,
         coachIds: selectedCoachIds,
       });
@@ -2199,7 +2412,7 @@ function EditRunModal({
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60" onClick={onClose}>
       <div className="w-full max-w-sm mx-4 rounded-2xl border border-neutral-700 bg-neutral-900 p-6 space-y-4" onClick={(e) => e.stopPropagation()}>
         <div className="flex items-center justify-between">
-          <h3 className="text-lg font-bold">Edit Run</h3>
+          <h3 className="text-lg font-bold">{t("programPasses.editRun")}</h3>
           <button onClick={onClose} className="rounded-lg p-1.5 text-neutral-400 hover:bg-neutral-800"><X className="h-4 w-4" /></button>
         </div>
         <div className="space-y-3">
@@ -2209,25 +2422,51 @@ function EditRunModal({
             <input type="text" value={name} onChange={(e) => setName(e.target.value)} className={inputCls} />
           </div>
           <div>
-            <label className="text-xs text-neutral-400 mb-1 block">Status</label>
+            <label className="text-xs text-neutral-400 mb-1 block">{t("programPasses.runStatus")}</label>
             <select value={status} onChange={(e) => setStatus(e.target.value)} className={inputCls}>
-              <option value="upcoming">Upcoming</option>
-              <option value="in_progress">In Progress</option>
-              <option value="completed">Completed</option>
-              <option value="cancelled">Cancelled</option>
+              <option value="upcoming">{t("programPasses.statusUpcoming")}</option>
+              <option value="in_progress">{t("programPasses.statusInProgress")}</option>
+              <option value="completed">{t("programPasses.statusCompleted")}</option>
+              <option value="cancelled">{t("programPasses.statusCancelled")}</option>
             </select>
           </div>
           <div>
-            <label className="text-xs text-neutral-400 mb-1 block">Max capacity</label>
+            <label className="text-xs text-neutral-400 mb-1 block">{t("programPasses.maxCapacity")}</label>
             <input type="number" min={1} value={maxCapacity} onChange={(e) => setMaxCapacity(Number(e.target.value))} className={inputCls} />
           </div>
+          {courts.length > 0 && (
+            <div>
+              <label className="text-xs text-neutral-400 mb-1 block">
+                {t("programPasses.courts")} <span className="text-neutral-600 font-normal">({t("programPasses.courtsHint")})</span>
+              </label>
+              <div className="space-y-1">
+                {courts.map((c) => (
+                  <label key={c.id} className={cn(
+                    "flex items-center gap-2 cursor-pointer select-none px-3 py-2 rounded-lg border transition-colors",
+                    selectedCourtIds.includes(c.id)
+                      ? "border-purple-500/40 bg-purple-600/10"
+                      : "border-neutral-800 bg-neutral-800/40 hover:bg-neutral-800"
+                  )}>
+                    <input
+                      type="checkbox"
+                      checked={selectedCourtIds.includes(c.id)}
+                      onChange={() => toggleCourt(c.id)}
+                      className="h-3.5 w-3.5 rounded border-neutral-600 bg-neutral-800 accent-purple-500"
+                    />
+                    <span className="text-sm text-neutral-200">{c.label}</span>
+                    {selectedCourtIds.includes(c.id) && <Check className="h-3.5 w-3.5 text-purple-400 ml-auto" />}
+                  </label>
+                ))}
+              </div>
+            </div>
+          )}
           <div>
-            <label className="text-xs text-neutral-400 mb-1 block">Note (optional)</label>
+            <label className="text-xs text-neutral-400 mb-1 block">{t("programPasses.runNote")}</label>
             <textarea value={note} onChange={(e) => setNote(e.target.value)} rows={2} className="w-full rounded-lg border border-neutral-700 bg-neutral-800 px-3 py-2 text-sm text-white focus:border-purple-500 focus:outline-none resize-none" />
           </div>
           {coaches.length > 0 && (
             <div>
-              <label className="text-xs text-neutral-400 mb-1 block">Coaches</label>
+              <label className="text-xs text-neutral-400 mb-1 block">{t("programPasses.runCoaches")}</label>
               <div className="rounded-lg border border-neutral-700 bg-neutral-800 p-2 space-y-1 max-h-32 overflow-y-auto">
                 {coaches.map((c) => (
                   <label key={c.id} className="flex items-center gap-2 cursor-pointer select-none px-1 py-0.5 rounded hover:bg-neutral-700">
@@ -2241,9 +2480,9 @@ function EditRunModal({
         </div>
         <div className="flex gap-3 pt-1">
           <button onClick={save} disabled={saving || !name.trim()} className="flex-1 rounded-xl bg-purple-600 py-3 font-semibold text-white hover:bg-purple-500 disabled:opacity-40">
-            {saving ? "Saving…" : "Save"}
+            {saving ? t("programPasses.saving") : t("programPasses.save")}
           </button>
-          <button onClick={onClose} className="flex-1 rounded-xl bg-neutral-800 py-3 font-medium text-neutral-300 hover:bg-neutral-700">Cancel</button>
+          <button onClick={onClose} className="flex-1 rounded-xl bg-neutral-800 py-3 font-medium text-neutral-300 hover:bg-neutral-700">{t("programPasses.back")}</button>
         </div>
       </div>
     </div>
@@ -2265,6 +2504,7 @@ function EditInstanceModal({
   onClose: () => void;
   onSaved: () => void;
 }) {
+  const { t } = useTranslation("translation", { i18n: adminI18n });
   const originalDate = instance.courtBlock?.date
     ? new Date(instance.courtBlock.date).toLocaleDateString("sv-SE")
     : new Date(instance.startAt).toLocaleDateString("sv-SE");
@@ -2334,18 +2574,18 @@ function EditInstanceModal({
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60" onClick={onClose}>
       <div className="w-full max-w-sm mx-4 rounded-2xl border border-neutral-700 bg-neutral-900 p-6 space-y-5" onClick={(e) => e.stopPropagation()}>
         <div className="flex items-center justify-between">
-          <h3 className="text-base font-bold">Edit Session</h3>
+          <h3 className="text-base font-bold">{t("programPasses.editInstance")}</h3>
           <button onClick={onClose} className="rounded-lg p-1.5 text-neutral-400 hover:bg-neutral-800"><X className="h-4 w-4" /></button>
         </div>
 
         {/* ── Topic ── */}
         <div>
-          <p className="text-[11px] font-semibold uppercase tracking-wider text-neutral-500 mb-2">Session topic</p>
+          <p className="text-[11px] font-semibold uppercase tracking-wider text-neutral-500 mb-2">{t("programPasses.instanceTopic")}</p>
           <input
             type="text"
             value={topic}
             onChange={(e) => setTopic(e.target.value)}
-            placeholder='e.g. "Grips and footwork"'
+            placeholder={t("programPasses.instanceTopicPlaceholder")}
             className={inputCls}
           />
         </div>
@@ -2371,7 +2611,7 @@ function EditInstanceModal({
 
         {/* ── Coaches ── */}
         <div className="space-y-2">
-          <p className="text-[11px] font-semibold uppercase tracking-wider text-neutral-500">Coaches</p>
+          <p className="text-[11px] font-semibold uppercase tracking-wider text-neutral-500">{t("programPasses.instanceCoaches")}</p>
           {allCoaches.length === 0 ? (
             <p className="text-xs text-neutral-500">No coaches available.</p>
           ) : (
@@ -2413,7 +2653,7 @@ function EditInstanceModal({
                 )} />
               </div>
               <span className="text-xs text-neutral-400">
-                Apply to all future sessions in this run
+                {t("programPasses.applyToFuture")}
               </span>
             </label>
           )}
@@ -2425,10 +2665,10 @@ function EditInstanceModal({
             disabled={saving}
             className="flex-1 rounded-xl bg-purple-600 py-3 font-semibold text-white hover:bg-purple-500 disabled:opacity-40"
           >
-            {saving ? "Saving…" : "Save"}
+            {saving ? t("programPasses.saving") : t("programPasses.save")}
           </button>
           <button onClick={onClose} className="flex-1 rounded-xl bg-neutral-800 py-3 font-medium text-neutral-300 hover:bg-neutral-700">
-            Cancel
+            {t("programPasses.back")}
           </button>
         </div>
       </div>
