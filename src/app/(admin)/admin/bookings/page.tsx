@@ -60,7 +60,7 @@ import { type CourtSlot } from "@/components/admin/BookingCourtGrid";
 import {
   BookingSelectionBar,
 } from "@/components/admin/BookingSelectionBar";
-import { CourtBlockModal, type CourtBlockFormState } from "@/components/admin/CourtBlockModal";
+import { CourtBlockModal, type CourtBlockFormState, type ProgramRunOption } from "@/components/admin/CourtBlockModal";
 import { useBookingSlotSelection } from "@/hooks/useBookingSlotSelection";
 import { PricingScheduleGrid, rulesToGrid as pgRulesToGrid, gridToRules as pgGridToRules } from "@/components/admin/PricingScheduleGrid";
 import { getPricingGroupColor } from "@/lib/pricing-group-colors";
@@ -128,6 +128,7 @@ interface SlotBlockInfo {
   blockId: string;
   type: string;
   title: string | null;
+  programRun?: { id: string; name: string; passType: { name: string } } | null;
 }
 
 interface SlotScheduleInfo {
@@ -172,6 +173,8 @@ interface CourtBlockRecord {
   startTime: string;
   endTime: string;
   createdAt: string;
+  programRunId: string | null;
+  programRun: { id: string; name: string; passType: { name: string } } | null;
 }
 
 interface OpenPlayRegRecord {
@@ -343,6 +346,7 @@ export default function BookingsPage() {
   const [showBlockModal, setShowBlockModal] = useState(false);
   const [blockModalInitial, setBlockModalInitial] = useState<Partial<CourtBlockFormState>>();
   const [editBlockId, setEditBlockId] = useState<string | undefined>();
+  const [programRunOptions, setProgramRunOptions] = useState<ProgramRunOption[]>([]);
 
   const fetchVenues = useCallback(async () => {
     try {
@@ -380,6 +384,16 @@ export default function BookingsPage() {
       setCourtBlocks(data);
     } catch (e) { console.error(e); }
   }, [selectedVenueId, selectedDate]);
+
+  const fetchProgramRuns = useCallback(async () => {
+    if (!selectedVenueId) return;
+    try {
+      const data = await api.get<ProgramRunOption[]>(
+        `/api/admin/program-runs?venueId=${selectedVenueId}&status=active&slim=1`
+      );
+      setProgramRunOptions(data);
+    } catch (e) { console.error(e); }
+  }, [selectedVenueId]);
 
   const fetchOpenPlayRegs = useCallback(async () => {
     if (!selectedVenueId) return;
@@ -422,7 +436,7 @@ export default function BookingsPage() {
   }, [selectedVenueId]);
 
   useEffect(() => { fetchVenues(); }, [fetchVenues]);
-  useEffect(() => { fetchBookings(); fetchAvailability(); fetchCourtBlocks(); fetchOpenPlayRegs(); fetchCoachLessons(); }, [fetchBookings, fetchAvailability, fetchCourtBlocks, fetchOpenPlayRegs, fetchCoachLessons]);
+  useEffect(() => { fetchBookings(); fetchAvailability(); fetchCourtBlocks(); fetchOpenPlayRegs(); fetchCoachLessons(); fetchProgramRuns(); }, [fetchBookings, fetchAvailability, fetchCourtBlocks, fetchOpenPlayRegs, fetchCoachLessons, fetchProgramRuns]);
   useEffect(() => { setBookingsListFilter("all"); }, [selectedDate]);
   useEffect(() => { fetchVenueDetails(); }, [fetchVenueDetails]);
   useEffect(() => {
@@ -689,6 +703,7 @@ export default function BookingsPage() {
       courtIds: block.courtIds,
       startHour: block.startTime,
       endHour: block.endTime,
+      programRunId: block.programRunId ?? "",
     });
     setShowBlockModal(true);
   };
@@ -1363,6 +1378,7 @@ export default function BookingsPage() {
         availability={availability}
         initialForm={blockModalInitial}
         editBlockId={editBlockId}
+        programRuns={programRunOptions}
         onCreated={async () => {
           await fetchAvailability();
           await fetchCourtBlocks();

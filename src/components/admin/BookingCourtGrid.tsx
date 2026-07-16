@@ -31,6 +31,7 @@ export interface SlotBlockInfo {
   blockId: string;
   type: string;
   title: string | null;
+  programRun?: { id: string; name: string; passType: { name: string } } | null;
 }
 
 export interface SlotScheduleInfo {
@@ -207,6 +208,7 @@ const DEFAULT_BLOCK_LABELS: Record<string, string> = {
   private_competition: "Private Competition",
   open_play: "Open Play",
   competition: "Competition",
+  program_class: "Program Pass",
 };
 
 // ─── Component ─────────────────────────────────────────────────────────────────
@@ -606,45 +608,65 @@ export function BookingCourtGrid({
                         blockInfo.type === "private_competition" && "bg-orange-600/20 border-orange-500/30",
                         blockInfo.type === "open_play" && "bg-emerald-600/20 border-emerald-500/30",
                         blockInfo.type === "competition" && "bg-blue-600/20 border-blue-500/30",
+                        blockInfo.type === "program_class" && "bg-teal-600/20 border-teal-500/30",
                         onBlockClick && "cursor-pointer hover:brightness-125 transition-[filter]",
                       )}
                       style={{ height: ROW_H * blockSpan - 8 }}
                     >
-                      <div className="flex items-center gap-1">
-                        {blockInfo.type === "maintenance" && <Wrench className="h-3 w-3 text-neutral-400 shrink-0" />}
-                        {blockInfo.type === "alobo" && <Ban className="h-3 w-3 text-violet-400 shrink-0" />}
-                        {blockInfo.type === "private_event" && <Calendar className="h-3 w-3 text-amber-400 shrink-0" />}
-                        {blockInfo.type === "private_competition" && <Trophy className="h-3 w-3 text-orange-400 shrink-0" />}
-                        {blockInfo.type === "open_play" && <Users className="h-3 w-3 text-emerald-400 shrink-0" />}
-                        {blockInfo.type === "competition" && <Trophy className="h-3 w-3 text-blue-400 shrink-0" />}
-                        <p
-                          className={cn(
-                            "text-xs font-semibold truncate",
-                            blockInfo.type === "maintenance" && "text-neutral-300",
-                            blockInfo.type === "alobo" && "text-violet-200",
-                            blockInfo.type === "private_event" && "text-amber-200",
-                            blockInfo.type === "private_competition" && "text-orange-200",
-                            blockInfo.type === "open_play" && "text-emerald-200",
-                            blockInfo.type === "competition" && "text-blue-200",
+                      {blockInfo.type === "program_class" && blockInfo.programRun ? (
+                        <>
+                          <div className="flex items-center gap-1">
+                            <GraduationCap className="h-3 w-3 text-teal-400 shrink-0" />
+                            <p className="text-xs font-semibold text-teal-200 truncate leading-none">
+                              {blockInfo.programRun.passType.name}
+                            </p>
+                          </div>
+                          <p className="text-[10px] text-teal-400/70 truncate leading-none mt-0.5">
+                            {blockInfo.programRun.name}
+                          </p>
+                        </>
+                      ) : (
+                        <>
+                          <div className="flex items-center gap-1">
+                            {blockInfo.type === "maintenance" && <Wrench className="h-3 w-3 text-neutral-400 shrink-0" />}
+                            {blockInfo.type === "alobo" && <Ban className="h-3 w-3 text-violet-400 shrink-0" />}
+                            {blockInfo.type === "private_event" && <Calendar className="h-3 w-3 text-amber-400 shrink-0" />}
+                            {blockInfo.type === "private_competition" && <Trophy className="h-3 w-3 text-orange-400 shrink-0" />}
+                            {blockInfo.type === "open_play" && <Users className="h-3 w-3 text-emerald-400 shrink-0" />}
+                            {blockInfo.type === "competition" && <Trophy className="h-3 w-3 text-blue-400 shrink-0" />}
+                            {blockInfo.type === "program_class" && <GraduationCap className="h-3 w-3 text-teal-400 shrink-0" />}
+                            <p
+                              className={cn(
+                                "text-xs font-semibold truncate",
+                                blockInfo.type === "maintenance" && "text-neutral-300",
+                                blockInfo.type === "alobo" && "text-violet-200",
+                                blockInfo.type === "private_event" && "text-amber-200",
+                                blockInfo.type === "private_competition" && "text-orange-200",
+                                blockInfo.type === "open_play" && "text-emerald-200",
+                                blockInfo.type === "competition" && "text-blue-200",
+                                blockInfo.type === "program_class" && "text-teal-200",
+                              )}
+                            >
+                              {blockInfo.title || labelForBlockType(blockInfo.type)}
+                            </p>
+                          </div>
+                          {blockSpan > 1 && (
+                            <p
+                              className={cn(
+                                "text-[10px]",
+                                blockInfo.type === "maintenance" && "text-neutral-500",
+                                blockInfo.type === "alobo" && "text-violet-400/60",
+                                blockInfo.type === "private_event" && "text-amber-400/60",
+                                blockInfo.type === "private_competition" && "text-orange-400/60",
+                                blockInfo.type === "open_play" && "text-emerald-400/60",
+                                blockInfo.type === "competition" && "text-blue-400/60",
+                                blockInfo.type === "program_class" && "text-teal-400/60",
+                              )}
+                            >
+                              {labelForBlockType(blockInfo.type)}
+                            </p>
                           )}
-                        >
-                          {blockInfo.title || labelForBlockType(blockInfo.type)}
-                        </p>
-                      </div>
-                      {blockSpan > 1 && (
-                        <p
-                          className={cn(
-                            "text-[10px]",
-                            blockInfo.type === "maintenance" && "text-neutral-500",
-                            blockInfo.type === "alobo" && "text-violet-400/60",
-                            blockInfo.type === "private_event" && "text-amber-400/60",
-                            blockInfo.type === "private_competition" && "text-orange-400/60",
-                            blockInfo.type === "open_play" && "text-emerald-400/60",
-                            blockInfo.type === "competition" && "text-blue-400/60",
-                          )}
-                        >
-                          {labelForBlockType(blockInfo.type)}
-                        </p>
+                        </>
                       )}
                     </div>
                   ) : isBlockContinuation ? null : isSchedStart && schedInfo ? (

@@ -41,6 +41,7 @@ export async function POST(request: NextRequest) {
       sessionsIncluded?: number;
       passMode?: string;
       isOneTime?: boolean;
+      description?: string | null;
       coachIds?: string[];
     }>(request);
 
@@ -60,6 +61,7 @@ export async function POST(request: NextRequest) {
         sessionsIncluded: body.sessionsIncluded ?? 12,
         passMode,
         isOneTime: body.isOneTime ?? false,
+        description: body.description ?? null,
       },
     });
 

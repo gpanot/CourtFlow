@@ -95,7 +95,8 @@ CREATE TYPE public."CourtBlockType" AS ENUM (
     'maintenance',
     'open_play',
     'competition',
-    'alobo'
+    'alobo',
+    'program_class'
 );
 
 
@@ -718,13 +719,14 @@ CREATE TABLE public.class_instances (
     id text NOT NULL,
     venue_id text NOT NULL,
     coach_id text NOT NULL,
-    court_id text,
     pass_type_id text NOT NULL,
     start_at timestamp(3) without time zone NOT NULL,
     end_at timestamp(3) without time zone NOT NULL,
     max_players integer NOT NULL,
     created_at timestamp(3) without time zone DEFAULT CURRENT_TIMESTAMP NOT NULL,
-    updated_at timestamp(3) without time zone NOT NULL
+    updated_at timestamp(3) without time zone NOT NULL,
+    program_run_id text,
+    court_block_id text
 );
 
 
@@ -765,7 +767,8 @@ CREATE TABLE public.class_passes (
     cycle_end timestamp(3) without time zone NOT NULL,
     sessions_used integer DEFAULT 0 NOT NULL,
     created_at timestamp(3) without time zone DEFAULT CURRENT_TIMESTAMP NOT NULL,
-    updated_at timestamp(3) without time zone NOT NULL
+    updated_at timestamp(3) without time zone NOT NULL,
+    program_run_id text
 );
 
 
@@ -983,7 +986,8 @@ CREATE TABLE public.court_blocks (
     start_time timestamp(3) without time zone NOT NULL,
     end_time timestamp(3) without time zone NOT NULL,
     created_by text,
-    created_at timestamp(3) without time zone DEFAULT CURRENT_TIMESTAMP NOT NULL
+    created_at timestamp(3) without time zone DEFAULT CURRENT_TIMESTAMP NOT NULL,
+    program_run_id text
 );
 
 
@@ -1617,7 +1621,68 @@ CREATE TABLE public.program_pass_types (
     created_at timestamp(3) without time zone DEFAULT CURRENT_TIMESTAMP NOT NULL,
     updated_at timestamp(3) without time zone NOT NULL,
     pass_mode text DEFAULT 'monthly'::text NOT NULL,
-    is_one_time boolean DEFAULT false NOT NULL
+    is_one_time boolean DEFAULT false NOT NULL,
+    description text,
+    image_url text
+);
+
+
+--
+-- Name: program_run_coaches; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.program_run_coaches (
+    run_id text NOT NULL,
+    coach_id text NOT NULL
+);
+
+
+--
+-- Name: program_run_court_block_coaches; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.program_run_court_block_coaches (
+    court_block_id text NOT NULL,
+    coach_id text NOT NULL
+);
+
+
+--
+-- Name: program_run_waitlist; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.program_run_waitlist (
+    id text DEFAULT (gen_random_uuid())::text NOT NULL,
+    run_id text NOT NULL,
+    player_id text NOT NULL,
+    status text DEFAULT 'waiting'::text NOT NULL,
+    promoted_at timestamp with time zone,
+    note text,
+    created_at timestamp with time zone DEFAULT now() NOT NULL
+);
+
+
+--
+-- Name: program_runs; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.program_runs (
+    id text DEFAULT (gen_random_uuid())::text NOT NULL,
+    pass_type_id text NOT NULL,
+    venue_id text NOT NULL,
+    name text NOT NULL,
+    status text DEFAULT 'upcoming'::text NOT NULL,
+    start_date date NOT NULL,
+    recurrence_start_hour integer NOT NULL,
+    recurrence_duration_min integer NOT NULL,
+    recurrence_count integer,
+    recurrence_end_date date,
+    max_capacity integer DEFAULT 20 NOT NULL,
+    court_id text,
+    note text,
+    created_by text,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    updated_at timestamp with time zone DEFAULT now() NOT NULL
 );
 
 
@@ -3038,6 +3103,46 @@ ALTER TABLE ONLY public.program_pass_types
 
 
 --
+-- Name: program_run_coaches program_run_coaches_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.program_run_coaches
+    ADD CONSTRAINT program_run_coaches_pkey PRIMARY KEY (run_id, coach_id);
+
+
+--
+-- Name: program_run_court_block_coaches program_run_court_block_coaches_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.program_run_court_block_coaches
+    ADD CONSTRAINT program_run_court_block_coaches_pkey PRIMARY KEY (court_block_id, coach_id);
+
+
+--
+-- Name: program_run_waitlist program_run_waitlist_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.program_run_waitlist
+    ADD CONSTRAINT program_run_waitlist_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: program_run_waitlist program_run_waitlist_run_id_player_id_key; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.program_run_waitlist
+    ADD CONSTRAINT program_run_waitlist_run_id_player_id_key UNIQUE (run_id, player_id);
+
+
+--
+-- Name: program_runs program_runs_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.program_runs
+    ADD CONSTRAINT program_runs_pkey PRIMARY KEY (id);
+
+
+--
 -- Name: promo_codes promo_codes_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -3795,6 +3900,83 @@ CREATE INDEX face_attempts_event_id_idx ON public.face_attempts USING btree (eve
 --
 
 CREATE INDEX face_recognition_logs_venue_id_created_at_idx ON public.face_recognition_logs USING btree (venue_id, created_at);
+
+
+--
+-- Name: idx_class_instances_court_block_id; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_class_instances_court_block_id ON public.class_instances USING btree (court_block_id);
+
+
+--
+-- Name: idx_class_instances_program_run_id; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_class_instances_program_run_id ON public.class_instances USING btree (program_run_id);
+
+
+--
+-- Name: idx_class_passes_program_run_id; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_class_passes_program_run_id ON public.class_passes USING btree (program_run_id);
+
+
+--
+-- Name: idx_prcbc_coach_id; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_prcbc_coach_id ON public.program_run_court_block_coaches USING btree (coach_id);
+
+
+--
+-- Name: idx_prcbc_court_block_id; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_prcbc_court_block_id ON public.program_run_court_block_coaches USING btree (court_block_id);
+
+
+--
+-- Name: idx_program_run_coaches_coach_id; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_program_run_coaches_coach_id ON public.program_run_coaches USING btree (coach_id);
+
+
+--
+-- Name: idx_program_run_coaches_run_id; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_program_run_coaches_run_id ON public.program_run_coaches USING btree (run_id);
+
+
+--
+-- Name: idx_program_run_waitlist_player_id; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_program_run_waitlist_player_id ON public.program_run_waitlist USING btree (player_id);
+
+
+--
+-- Name: idx_program_run_waitlist_run_id; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_program_run_waitlist_run_id ON public.program_run_waitlist USING btree (run_id);
+
+
+--
+-- Name: idx_program_runs_pass_type_id; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_program_runs_pass_type_id ON public.program_runs USING btree (pass_type_id);
+
+
+--
+-- Name: idx_program_runs_venue_status; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_program_runs_venue_status ON public.program_runs USING btree (venue_id, status);
 
 
 --
@@ -4747,11 +4929,19 @@ ALTER TABLE ONLY public.class_instances
 
 
 --
--- Name: class_instances class_instances_court_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+-- Name: class_instances class_instances_court_block_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.class_instances
-    ADD CONSTRAINT class_instances_court_id_fkey FOREIGN KEY (court_id) REFERENCES public.courts(id) ON UPDATE CASCADE ON DELETE SET NULL;
+    ADD CONSTRAINT class_instances_court_block_id_fkey FOREIGN KEY (court_block_id) REFERENCES public.court_blocks(id) ON DELETE SET NULL;
+
+
+--
+-- Name: class_instances class_instances_program_run_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.class_instances
+    ADD CONSTRAINT class_instances_program_run_id_fkey FOREIGN KEY (program_run_id) REFERENCES public.program_runs(id) ON DELETE SET NULL;
 
 
 --
@@ -4800,6 +4990,14 @@ ALTER TABLE ONLY public.program_pass_types
 
 ALTER TABLE ONLY public.class_passes
     ADD CONSTRAINT class_passes_player_id_fkey FOREIGN KEY (player_id) REFERENCES public.players(id) ON UPDATE CASCADE ON DELETE RESTRICT;
+
+
+--
+-- Name: class_passes class_passes_program_run_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.class_passes
+    ADD CONSTRAINT class_passes_program_run_id_fkey FOREIGN KEY (program_run_id) REFERENCES public.program_runs(id) ON DELETE SET NULL;
 
 
 --
@@ -5024,6 +5222,14 @@ ALTER TABLE ONLY public.face_recognition_logs
 
 ALTER TABLE ONLY public.face_recognition_logs
     ADD CONSTRAINT face_recognition_logs_venue_id_fkey FOREIGN KEY (venue_id) REFERENCES public.venues(id) ON UPDATE CASCADE ON DELETE CASCADE;
+
+
+--
+-- Name: court_blocks fk_court_blocks_program_run; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.court_blocks
+    ADD CONSTRAINT fk_court_blocks_program_run FOREIGN KEY (program_run_id) REFERENCES public.program_runs(id) ON DELETE SET NULL;
 
 
 --
@@ -5352,6 +5558,78 @@ ALTER TABLE ONLY public.program_pass_type_coaches
 
 ALTER TABLE ONLY public.program_pass_type_coaches
     ADD CONSTRAINT program_pass_type_coaches_pass_type_id_fkey FOREIGN KEY (pass_type_id) REFERENCES public.program_pass_types(id) ON DELETE CASCADE;
+
+
+--
+-- Name: program_run_coaches program_run_coaches_coach_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.program_run_coaches
+    ADD CONSTRAINT program_run_coaches_coach_id_fkey FOREIGN KEY (coach_id) REFERENCES public.staff_members(id) ON DELETE CASCADE;
+
+
+--
+-- Name: program_run_coaches program_run_coaches_run_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.program_run_coaches
+    ADD CONSTRAINT program_run_coaches_run_id_fkey FOREIGN KEY (run_id) REFERENCES public.program_runs(id) ON DELETE CASCADE;
+
+
+--
+-- Name: program_run_court_block_coaches program_run_court_block_coaches_coach_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.program_run_court_block_coaches
+    ADD CONSTRAINT program_run_court_block_coaches_coach_id_fkey FOREIGN KEY (coach_id) REFERENCES public.staff_members(id) ON DELETE CASCADE;
+
+
+--
+-- Name: program_run_court_block_coaches program_run_court_block_coaches_court_block_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.program_run_court_block_coaches
+    ADD CONSTRAINT program_run_court_block_coaches_court_block_id_fkey FOREIGN KEY (court_block_id) REFERENCES public.court_blocks(id) ON DELETE CASCADE;
+
+
+--
+-- Name: program_run_waitlist program_run_waitlist_player_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.program_run_waitlist
+    ADD CONSTRAINT program_run_waitlist_player_id_fkey FOREIGN KEY (player_id) REFERENCES public.players(id) ON DELETE CASCADE;
+
+
+--
+-- Name: program_run_waitlist program_run_waitlist_run_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.program_run_waitlist
+    ADD CONSTRAINT program_run_waitlist_run_id_fkey FOREIGN KEY (run_id) REFERENCES public.program_runs(id) ON DELETE CASCADE;
+
+
+--
+-- Name: program_runs program_runs_court_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.program_runs
+    ADD CONSTRAINT program_runs_court_id_fkey FOREIGN KEY (court_id) REFERENCES public.courts(id) ON DELETE SET NULL;
+
+
+--
+-- Name: program_runs program_runs_pass_type_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.program_runs
+    ADD CONSTRAINT program_runs_pass_type_id_fkey FOREIGN KEY (pass_type_id) REFERENCES public.program_pass_types(id) ON DELETE RESTRICT;
+
+
+--
+-- Name: program_runs program_runs_venue_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.program_runs
+    ADD CONSTRAINT program_runs_venue_id_fkey FOREIGN KEY (venue_id) REFERENCES public.venues(id) ON DELETE RESTRICT;
 
 
 --
@@ -5930,4 +6208,5 @@ INSERT INTO public.schema_migrations (version) VALUES
     ('20260709081528'),
     ('20260709091207'),
     ('20260713000106'),
-    ('20260713032737');
+    ('20260713032737'),
+    ('20260716120000');

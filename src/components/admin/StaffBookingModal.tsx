@@ -30,6 +30,7 @@ import {
   GraduationCap,
   ChevronLeft,
   ChevronRight,
+  AlertTriangle,
 } from "lucide-react";
 import { hasGroupPlayerPricing, calculateSessionPrice } from "@/lib/coach-package-pricing";
 import { BookingCourtGrid, formatDateInTz, type CourtSlot, type CourtAvailability, type BookingRecord } from "@/components/admin/BookingCourtGrid";
@@ -264,6 +265,7 @@ export function StaffBookingModal({
 
   const [saving, setSaving] = useState(false);
   const [err, setErr] = useState("");
+  const [programConflictWarning, setProgramConflictWarning] = useState<{ title: string | null } | null>(null);
   const [venueTimezone, setVenueTimezone] = useState<string | undefined>(undefined);
 
   // Availability (used for court + lesson modes)
@@ -912,18 +914,26 @@ export function StaffBookingModal({
           status: lessonStatus as "confirmed" | "completed" | "cancelled" | "no_show",
         });
       } else {
-        await api.post("/api/admin/coach-lessons", {
-          venueId,
-          coachId: lessonCoachId,
-          packageId: lessonPackageId,
-          playerId: selectedPlayer!.id,
-          courtId: first.courtId,
-          date: bookDate,
-          startTime: first.startTime,
-          endTime,
-          note: lessonNote || undefined,
-          ...(selectedPkg && hasGroupPlayerPricing(selectedPkg) ? { playerCount: lessonPlayerCount } : {}),
-        });
+        const lessonResult = await api.post<{ warning?: { code: string; blockInfo?: { title: string | null } } }>(
+          "/api/admin/coach-lessons",
+          {
+            venueId,
+            coachId: lessonCoachId,
+            packageId: lessonPackageId,
+            playerId: selectedPlayer!.id,
+            courtId: first.courtId,
+            date: bookDate,
+            startTime: first.startTime,
+            endTime,
+            note: lessonNote || undefined,
+            ...(selectedPkg && hasGroupPlayerPricing(selectedPkg) ? { playerCount: lessonPlayerCount } : {}),
+          }
+        );
+        if (lessonResult.warning?.code === "COACH_PROGRAM_CONFLICT") {
+          setProgramConflictWarning({ title: lessonResult.warning.blockInfo?.title ?? null });
+          setSaving(false);
+          return; // Stay open so staff can see the warning, then dismiss
+        }
       }
       onCreated();
     } catch (e) { setErr((e as Error).message); }
@@ -1042,6 +1052,27 @@ export function StaffBookingModal({
           <div className="flex-1 overflow-y-auto p-5 space-y-4">
             {err && (
               <p className="rounded-lg bg-red-900/30 px-3 py-2 text-sm text-red-400">{err}</p>
+            )}
+
+            {programConflictWarning && (
+              <div className="flex items-start gap-2 rounded-lg border border-amber-700/40 bg-amber-900/20 px-3 py-2.5">
+                <AlertTriangle className="h-4 w-4 text-amber-400 mt-0.5 shrink-0" />
+                <div className="flex-1">
+                  <p className="text-sm font-medium text-amber-300">Coach program conflict</p>
+                  <p className="text-xs text-amber-400 mt-0.5">
+                    This coach is assigned to a program class
+                    {programConflictWarning.title ? ` ("${programConflictWarning.title}")` : ""}{" "}
+                    during this time slot. The lesson was created — review if needed.
+                  </p>
+                </div>
+                <button
+                  onClick={() => { setProgramConflictWarning(null); onCreated(); }}
+                  className="rounded p-0.5 text-amber-400 hover:text-amber-200"
+                  aria-label="Dismiss"
+                >
+                  <X className="h-3.5 w-3.5" />
+                </button>
+              </div>
             )}
 
             {/* ── COURT MODE ─────────────────────────────────────────────── */}

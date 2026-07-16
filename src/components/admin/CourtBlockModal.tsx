@@ -13,8 +13,14 @@ import { useTranslation } from "react-i18next";
 import adminI18n from "@/i18n/admin-i18n";
 import { api } from "@/lib/api-client";
 import { cn } from "@/lib/cn";
-import { Ban, Trophy, Users } from "lucide-react";
+import { Ban, Trophy, Users, GraduationCap } from "lucide-react";
 import { type CourtAvailability } from "@/components/admin/BookingCourtGrid";
+
+export interface ProgramRunOption {
+  id: string;
+  name: string;
+  passType: { name: string };
+}
 
 export interface CourtBlockFormState {
   type: string;
@@ -25,6 +31,8 @@ export interface CourtBlockFormState {
   startHour: string;
   /** ISO string for end — e.g. last selected slot.endTime */
   endHour: string;
+  /** When type === "program_class", the selected run */
+  programRunId: string;
 }
 
 export interface CourtBlockModalProps {
@@ -41,6 +49,8 @@ export interface CourtBlockModalProps {
   editBlockId?: string;
   /** Called after successful delete */
   onDeleted?: () => void;
+  /** Program runs available for selection when type is program_class */
+  programRuns?: ProgramRunOption[];
 }
 
 const DEFAULT_FORM: CourtBlockFormState = {
@@ -50,6 +60,7 @@ const DEFAULT_FORM: CourtBlockFormState = {
   courtIds: [],
   startHour: "",
   endHour: "",
+  programRunId: "",
 };
 
 function formatTime(iso: string, tz?: string): string {
@@ -71,6 +82,7 @@ export function CourtBlockModal({
   onCreated,
   editBlockId,
   onDeleted,
+  programRuns = [],
 }: CourtBlockModalProps) {
   const { t } = useTranslation("translation", { i18n: adminI18n });
   const [form, setForm] = useState<CourtBlockFormState>(DEFAULT_FORM);
@@ -107,8 +119,11 @@ export function CourtBlockModal({
     return new Date(`${date}T${h}:00:00${tz}`).toISOString();
   }
 
+  const isProgramClass = form.type === "program_class";
+
   const saveBlock = async () => {
     if (!form.courtIds.length || !form.startHour || !form.endHour) return;
+    if (isProgramClass && !form.programRunId) return;
     setSaving(true);
     try {
       const startTimeIso = resolveTimeIso(form.startHour);
@@ -122,6 +137,7 @@ export function CourtBlockModal({
           courtIds: form.courtIds,
           startTime: startTimeIso,
           endTime: endTimeIso,
+          ...(isProgramClass ? { programRunId: form.programRunId || null } : { programRunId: null }),
         });
       } else {
         await api.post("/api/admin/court-blocks", {
@@ -133,6 +149,7 @@ export function CourtBlockModal({
           date,
           startTime: startTimeIso,
           endTime: endTimeIso,
+          ...(isProgramClass ? { programRunId: form.programRunId || undefined } : {}),
         });
       }
       onClose();
@@ -172,6 +189,8 @@ export function CourtBlockModal({
               <Users className="h-5 w-5 text-emerald-400" />
             ) : form.type === "competition" ? (
               <Trophy className="h-5 w-5 text-blue-400" />
+            ) : form.type === "program_class" ? (
+              <GraduationCap className="h-5 w-5 text-teal-400" />
             ) : (
               <Ban className="h-5 w-5 text-neutral-400" />
             )}
@@ -206,7 +225,7 @@ export function CourtBlockModal({
             <label className="text-xs text-neutral-400">{t("bookings.type")}</label>
             <select
               value={form.type}
-              onChange={(e) => setForm({ ...form, type: e.target.value })}
+              onChange={(e) => setForm({ ...form, type: e.target.value, programRunId: "" })}
               className="w-full rounded-lg border border-neutral-700 bg-neutral-800 px-3 py-2 text-sm text-white focus:border-purple-500 focus:outline-none"
             >
               <option value="alobo">{t("bookings.alobo")}</option>
@@ -215,8 +234,30 @@ export function CourtBlockModal({
               <option value="private_event">{t("bookings.privateEvent")}</option>
               <option value="private_competition">{t("bookings.privateCompetition")}</option>
               <option value="maintenance">{t("bookings.maintenance")}</option>
+              <option value="program_class">Program Pass</option>
             </select>
           </div>
+
+          {isProgramClass && (
+            <div>
+              <label className="text-xs text-neutral-400">Program Run</label>
+              <select
+                value={form.programRunId}
+                onChange={(e) => setForm({ ...form, programRunId: e.target.value })}
+                className="w-full rounded-lg border border-neutral-700 bg-neutral-800 px-3 py-2 text-sm text-white focus:border-purple-500 focus:outline-none"
+              >
+                <option value="">— Select a run —</option>
+                {programRuns.map((run) => (
+                  <option key={run.id} value={run.id}>
+                    {run.passType.name} · {run.name}
+                  </option>
+                ))}
+              </select>
+              {programRuns.length === 0 && (
+                <p className="mt-1 text-[11px] text-neutral-500">No program runs found. Create one in Program Passes.</p>
+              )}
+            </div>
+          )}
 
           <div>
             <label className="text-xs text-neutral-400">{t("bookings.titleOptional")}</label>
@@ -348,14 +389,16 @@ export function CourtBlockModal({
             <button
               type="button"
               onClick={saveBlock}
-              disabled={saving || !form.courtIds.length || !form.startHour || !form.endHour}
+              disabled={saving || !form.courtIds.length || !form.startHour || !form.endHour || (isProgramClass && !form.programRunId)}
               className={cn(
                 "flex-1 rounded-xl py-3 font-semibold text-white disabled:opacity-40",
                 form.type === "open_play"
                   ? "bg-emerald-600 hover:bg-emerald-500"
                   : form.type === "competition"
                     ? "bg-blue-600 hover:bg-blue-500"
-                    : "bg-amber-600 hover:bg-amber-500",
+                    : form.type === "program_class"
+                      ? "bg-teal-600 hover:bg-teal-500"
+                      : "bg-amber-600 hover:bg-amber-500",
               )}
             >
               {saving

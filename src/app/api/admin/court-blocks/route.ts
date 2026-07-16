@@ -21,6 +21,9 @@ export async function GET(request: NextRequest) {
     const blocks = await prisma.courtBlock.findMany({
       where,
       orderBy: { startTime: "asc" },
+      include: {
+        programRun: { select: { id: true, name: true, passTypeId: true, passType: { select: { name: true } } } },
+      },
     });
 
     return json(blocks);
@@ -34,20 +37,21 @@ export async function POST(request: NextRequest) {
     const admin = await requireAdminAccess(request.headers);
     const body = await parseBody<{
       venueId: string;
-      type: "private_competition" | "private_event" | "maintenance";
+      type: string;
       title?: string;
       note?: string;
       courtIds: string[];
       date: string;
       startTime: string;
       endTime: string;
+      programRunId?: string;
     }>(request);
 
     if (!body.venueId || !body.type || !body.courtIds?.length || !body.date || !body.startTime || !body.endTime) {
       return error("venueId, type, courtIds, date, startTime, and endTime are required", 400);
     }
 
-    const validTypes = ["private_competition", "private_event", "maintenance", "open_play", "competition", "alobo"];
+    const validTypes = ["private_competition", "private_event", "maintenance", "open_play", "competition", "alobo", "program_class"];
     if (!validTypes.includes(body.type)) {
       return error("Invalid block type", 400);
     }
@@ -72,6 +76,7 @@ export async function POST(request: NextRequest) {
         startTime,
         endTime,
         createdBy: admin.id,
+        ...(body.programRunId ? { programRunId: body.programRunId } : {}),
       },
     });
 

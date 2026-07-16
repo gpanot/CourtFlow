@@ -586,19 +586,19 @@ export default function VenueAnalyticsPage() {
             venueId={selectedVenueId}
             venues={venues}
             onChange={setSelectedVenueId}
-            className="rounded-lg border border-neutral-700 bg-neutral-800 px-3 py-2 text-sm text-white focus:border-purple-500 focus:outline-none"
+            className="w-full sm:w-auto rounded-lg border border-neutral-700 bg-neutral-800 px-3 py-2 text-sm text-white focus:border-purple-500 focus:outline-none"
           />
-          <div className="relative">
+          <div className="relative flex-1 sm:flex-none">
             <select value={rangeKey} onChange={(e) => setRangeKey(e.target.value as RangeKey)}
-              className="appearance-none rounded-lg border border-neutral-700 bg-neutral-800 pl-3 pr-8 py-2 text-sm text-white focus:border-purple-500 focus:outline-none">
+              className="w-full appearance-none rounded-lg border border-neutral-700 bg-neutral-800 pl-3 pr-8 py-2 text-sm text-white focus:border-purple-500 focus:outline-none">
               {Object.entries(RANGE_LABELS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
             </select>
             <ChevronDown className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-neutral-500" />
           </div>
           {rangeKey === "month" && (
-            <div className="relative">
+            <div className="relative flex-1 sm:flex-none">
               <select value={selectedMonth} onChange={(e) => setSelectedMonth(e.target.value)}
-                className="appearance-none rounded-lg border border-neutral-700 bg-neutral-800 pl-3 pr-8 py-2 text-sm text-white focus:border-purple-500 focus:outline-none">
+                className="w-full appearance-none rounded-lg border border-neutral-700 bg-neutral-800 pl-3 pr-8 py-2 text-sm text-white focus:border-purple-500 focus:outline-none">
                 {MONTH_OPTIONS.map((m) => <option key={m.value} value={m.value}>{m.label}</option>)}
               </select>
               <ChevronDown className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-neutral-500" />
@@ -626,12 +626,12 @@ export default function VenueAnalyticsPage() {
       </div>
 
       {rangeKey === "custom" && (
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           <input type="date" value={customFrom} onChange={(e) => setCustomFrom(e.target.value)}
-            className="rounded-lg border border-neutral-700 bg-neutral-800 px-3 py-1.5 text-sm text-white focus:border-purple-500 focus:outline-none" />
+            className="flex-1 min-w-[130px] rounded-lg border border-neutral-700 bg-neutral-800 px-3 py-1.5 text-sm text-white focus:border-purple-500 focus:outline-none" />
           <span className="text-neutral-500 text-sm">{t("venueAnalytics.to")}</span>
           <input type="date" value={customTo} onChange={(e) => setCustomTo(e.target.value)}
-            className="rounded-lg border border-neutral-700 bg-neutral-800 px-3 py-1.5 text-sm text-white focus:border-purple-500 focus:outline-none" />
+            className="flex-1 min-w-[130px] rounded-lg border border-neutral-700 bg-neutral-800 px-3 py-1.5 text-sm text-white focus:border-purple-500 focus:outline-none" />
         </div>
       )}
 
@@ -646,9 +646,9 @@ export default function VenueAnalyticsPage() {
           {/* ===== REVENUE SUMMARY (TOP) ===== */}
           {data.totalRevenue !== undefined && (
             <Section title="Total Revenue — All Sources" icon={DollarSign}>
-              <div className="overflow-x-auto pb-1 -mx-1 px-1">
-                <div className="flex min-w-max items-stretch gap-2 md:gap-3">
-                <div className="min-w-[140px] flex-1">
+              {/* On mobile: simple 2-col grid. On lg+: single equation row with operators */}
+              <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:hidden">
+                <div className="col-span-2 sm:col-span-3">
                   <StatCard
                     icon={DollarSign}
                     label="Cash Collected"
@@ -657,67 +657,28 @@ export default function VenueAnalyticsPage() {
                     color="text-purple-400"
                   />
                 </div>
-                <RevenueEquationOp>=</RevenueEquationOp>
-                <div className="min-w-[140px] flex-1">
-                  <StatCard
-                    icon={Calendar}
-                    label="Court Bookings"
-                    value={fmtPrice(data.courtBookings.bookingRevenue)}
-                    sub={`${data.courtBookings.totalBookings} bookings`}
-                    color="text-blue-400"
-                  />
-                </div>
-                <RevenueEquationOp>+</RevenueEquationOp>
-                <div className="min-w-[140px] flex-1">
-                  <StatCard
-                    icon={Activity}
-                    label="Open Play"
-                    value={fmtPrice(data.openPlay?.revenue ?? 0)}
-                    sub={`${data.openPlay?.totalRegistrations ?? 0} registrations`}
-                    color="text-cyan-400"
-                  />
-                </div>
-                <RevenueEquationOp>+</RevenueEquationOp>
-                <div className="min-w-[140px] flex-1">
-                  <StatCard
-                    icon={CreditCard}
-                    label="CourtPay (Walk-in)"
-                    value={fmtPrice(data.courtPay?.revenue ?? 0)}
-                    sub={`${data.courtPay?.totalTransactions ?? 0} payments · ${data.courtPay?.playersServed ?? 0} players`}
-                    color="text-indigo-400"
-                  />
-                </div>
-                <RevenueEquationOp>+</RevenueEquationOp>
-                <div className="min-w-[140px] flex-1">
-                  <StatCard
-                    icon={GraduationCap}
-                    label="Coaching"
-                    value={fmtPrice(data.coaching.lessonRevenue)}
-                    sub={`${data.coaching.totalLessons} lessons`}
-                    color="text-orange-400"
-                  />
-                </div>
-                <RevenueEquationOp>+</RevenueEquationOp>
-                <div className="min-w-[140px] flex-1">
-                  <StatCard
-                    icon={FileText}
-                    label="Open Bill (paid)"
-                    value={fmtPrice(data.openBill?.collected ?? 0)}
-                    sub="Bills paid in period"
-                    color="text-green-400"
-                  />
-                </div>
-                <RevenueEquationOp>+</RevenueEquationOp>
-                <div className="min-w-[140px] flex-1">
-                  <StatCard
-                    icon={Ticket}
-                    label="Program Passes"
-                    value={fmtPrice(data.programPasses?.revenue ?? 0)}
-                    sub="Payments collected in period"
-                    color="text-pink-400"
-                  />
-                </div>
+                <StatCard icon={Calendar} label="Court Bookings" value={fmtPrice(data.courtBookings.bookingRevenue)} sub={`${data.courtBookings.totalBookings} bookings`} color="text-blue-400" />
+                <StatCard icon={Activity} label="Open Play" value={fmtPrice(data.openPlay?.revenue ?? 0)} sub={`${data.openPlay?.totalRegistrations ?? 0} registrations`} color="text-cyan-400" />
+                <StatCard icon={CreditCard} label="CourtPay" value={fmtPrice(data.courtPay?.revenue ?? 0)} sub={`${data.courtPay?.totalTransactions ?? 0} payments`} color="text-indigo-400" />
+                <StatCard icon={GraduationCap} label="Coaching" value={fmtPrice(data.coaching.lessonRevenue)} sub={`${data.coaching.totalLessons} lessons`} color="text-orange-400" />
+                <StatCard icon={FileText} label="Open Bill (paid)" value={fmtPrice(data.openBill?.collected ?? 0)} sub="Bills paid in period" color="text-green-400" />
+                <StatCard icon={Ticket} label="Program Passes" value={fmtPrice(data.programPasses?.revenue ?? 0)} sub="Collected in period" color="text-pink-400" />
               </div>
+              {/* On lg+: equation row with = and + operators */}
+              <div className="hidden lg:flex items-stretch gap-2">
+                <div className="flex-1"><StatCard icon={DollarSign} label="Cash Collected" value={fmtPrice(data.totalRevenue)} sub="All paid revenue streams" color="text-purple-400" /></div>
+                <EquationOp>=</EquationOp>
+                <div className="flex-1"><StatCard icon={Calendar} label="Court Bookings" value={fmtPrice(data.courtBookings.bookingRevenue)} sub={`${data.courtBookings.totalBookings} bookings`} color="text-blue-400" /></div>
+                <EquationOp>+</EquationOp>
+                <div className="flex-1"><StatCard icon={Activity} label="Open Play" value={fmtPrice(data.openPlay?.revenue ?? 0)} sub={`${data.openPlay?.totalRegistrations ?? 0} registrations`} color="text-cyan-400" /></div>
+                <EquationOp>+</EquationOp>
+                <div className="flex-1"><StatCard icon={CreditCard} label="CourtPay" value={fmtPrice(data.courtPay?.revenue ?? 0)} sub={`${data.courtPay?.totalTransactions ?? 0} payments`} color="text-indigo-400" /></div>
+                <EquationOp>+</EquationOp>
+                <div className="flex-1"><StatCard icon={GraduationCap} label="Coaching" value={fmtPrice(data.coaching.lessonRevenue)} sub={`${data.coaching.totalLessons} lessons`} color="text-orange-400" /></div>
+                <EquationOp>+</EquationOp>
+                <div className="flex-1"><StatCard icon={FileText} label="Open Bill (paid)" value={fmtPrice(data.openBill?.collected ?? 0)} sub="Bills paid in period" color="text-green-400" /></div>
+                <EquationOp>+</EquationOp>
+                <div className="flex-1"><StatCard icon={Ticket} label="Program Passes" value={fmtPrice(data.programPasses?.revenue ?? 0)} sub="Collected in period" color="text-pink-400" /></div>
               </div>
             </Section>
           )}
@@ -1281,7 +1242,7 @@ function PerformanceTab({ perf }: {
   const totalOccupancyHours = perf.occupancyBySource.reduce((s, o) => s + o.hours, 0);
 
   return (
-    <div className="space-y-6 max-w-2xl">
+    <div className="space-y-6">
       {/* 1 — Cash vs Revenue Recognized */}
       <div className="rounded-xl border border-neutral-800 bg-neutral-900 p-4">
         <p className="text-sm text-neutral-400 mb-3">Cash vs revenue, this period</p>
@@ -1315,7 +1276,7 @@ function PerformanceTab({ perf }: {
       </div>
 
       {/* 2 — Three KPI cards */}
-      <div className="grid grid-cols-3 gap-3">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
         <div className="rounded-xl border border-neutral-800 bg-neutral-900 p-4">
           <p className="text-xs text-neutral-500 mb-1">Revenue / court hour</p>
           <p className="text-2xl font-semibold tabular-nums">{fmtPrice(perf.revenuePerCourtHour)}</p>
@@ -1371,7 +1332,7 @@ function PerformanceTab({ perf }: {
       {/* 4 — Revenue Mix by Channel */}
       <div>
         <p className="text-sm text-neutral-400 mb-3">Revenue mix by channel</p>
-        <div className="grid grid-cols-2 gap-4 items-center rounded-xl border border-neutral-800 bg-neutral-900 p-4">
+          <div className="grid grid-cols-1 gap-4 items-center rounded-xl border border-neutral-800 bg-neutral-900 p-4 sm:grid-cols-2">
           {/* Mini doughnut using recharts */}
           <RevenueDoughnut mix={perf.revenueMix} />
           {/* Legend */}
@@ -1390,7 +1351,7 @@ function PerformanceTab({ perf }: {
       {/* 5 — Channel Performance */}
       <div>
         <p className="text-sm text-neutral-400 mb-3">Channel performance</p>
-        <div className="grid grid-cols-2 gap-3">
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           {/* Court bookings */}
           <div className="rounded-xl border border-neutral-800 bg-neutral-900 p-4">
             <div className="flex items-center gap-2 mb-3">
@@ -1516,9 +1477,9 @@ function Section({ title, icon: Icon, onExport, children }: {
           {title}
         </h3>
         {onExport && (
-          <button onClick={onExport} className="flex items-center gap-1.5 rounded-lg border border-neutral-700 bg-neutral-800 px-3 py-1.5 text-xs font-medium text-neutral-400 hover:text-white hover:border-neutral-600 transition-colors" title={`Export ${title} as CSV`}>
+          <button onClick={onExport} className="flex shrink-0 items-center gap-1.5 rounded-lg border border-neutral-700 bg-neutral-800 px-2.5 py-1.5 text-xs font-medium text-neutral-400 hover:text-white hover:border-neutral-600 transition-colors" title={`Export ${title} as CSV`}>
             <Download className="h-3.5 w-3.5" />
-            Export CSV
+            <span className="hidden sm:inline">Export CSV</span>
           </button>
         )}
       </div>
@@ -1527,9 +1488,10 @@ function Section({ title, icon: Icon, onExport, children }: {
   );
 }
 
-function RevenueEquationOp({ children }: { children: string }) {
+
+function EquationOp({ children }: { children: string }) {
   return (
-    <span className="flex shrink-0 items-center justify-center self-center px-0.5 text-lg font-bold text-neutral-500 md:text-xl">
+    <span className="flex shrink-0 items-center justify-center self-center px-1 text-xl font-bold text-neutral-500">
       {children}
     </span>
   );

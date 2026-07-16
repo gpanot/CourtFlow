@@ -4,6 +4,7 @@ import { json, error, parseBody } from "@/lib/api-helpers";
 import { requireAdminAccess } from "@/lib/auth";
 import { hasGroupPlayerPricing, calculateSessionPrice } from "@/lib/coach-package-pricing";
 import { buildLessonEmailContext, sendLessonEventEmails } from "@/lib/email/send";
+import { checkProgramBlockConflict } from "@/lib/program-run";
 
 export const dynamic = "force-dynamic";
 export async function GET(request: NextRequest) {
@@ -185,6 +186,12 @@ export async function POST(request: NextRequest) {
     });
     if (conflict) return error("Coach has a conflicting lesson at this time", 409);
 
+    // Soft conflict: check whether the coach is assigned to a program_class block at this time.
+    // Does NOT reject — returns a warning in the response so staff can see and override.
+    // MUST use dateForWrite (noon-local) for the @db.Date WHERE — local midnight drifts to
+    // the previous UTC day and the comparison would always miss stored dates.
+    const programConflict = await checkProgramBlockConflict(body.coachId, dateForWrite, startTime, endTime);
+
     if (body.courtId) {
       const courtConflict = await prisma.coachLesson.findFirst({
         where: {
@@ -247,7 +254,20 @@ export async function POST(request: NextRequest) {
       }
     })();
 
-    return json(lesson, 201);
+    return json(
+      {
+        ...lesson,
+        ...(programConflict.hasConflict
+          ? {
+              warning: {
+                code: "COACH_PROGRAM_CONFLICT",
+                blockInfo: programConflict.blockInfo,
+              },
+            }
+          : {}),
+      },
+      201
+    );
   } catch (e) {
     return error((e as Error).message, 500);
   }

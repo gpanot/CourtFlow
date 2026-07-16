@@ -248,6 +248,7 @@ export interface SlotBlockInfo {
   blockId: string;
   type: string;
   title: string | null;
+  programRun?: { id: string; name: string; passType: { name: string } } | null;
 }
 
 export interface SlotScheduleInfo {
@@ -608,7 +609,10 @@ export async function getAvailableSlots(
 
   const courtBlocks = await prisma.courtBlock.findMany({
     where: { venueId, date: dateOnly },
-    select: { id: true, type: true, title: true, courtIds: true, startTime: true, endTime: true },
+    select: {
+      id: true, type: true, title: true, courtIds: true, startTime: true, endTime: true,
+      programRun: { select: { id: true, name: true, passType: { select: { name: true } } } },
+    },
   });
 
   const coachLessons = await prisma.coachLesson.findMany({
@@ -720,7 +724,7 @@ export async function getAvailableSlots(
         ...slot,
         available: !isPast && !isBooked && !matchingBlock && !matchingScheduleWindow && !matchingLesson,
         ...(matchingBlock
-          ? { block: { blockId: matchingBlock.id, type: matchingBlock.type, title: matchingBlock.title } }
+          ? { block: { blockId: matchingBlock.id, type: matchingBlock.type, title: matchingBlock.title, programRun: matchingBlock.programRun ?? null } }
           : {}),
         ...(matchingScheduleWindow && !matchingBlock
           ? { schedule: { entryId: matchingScheduleWindow.entry.id, type: matchingScheduleWindow.entry.type, title: matchingScheduleWindow.entry.title } }

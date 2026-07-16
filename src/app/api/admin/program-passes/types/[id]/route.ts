@@ -18,6 +18,7 @@ export async function PATCH(
       sessionsIncluded?: number;
       passMode?: string;
       isOneTime?: boolean;
+      description?: string | null;
       coachIds?: string[];
     }>(request);
 
@@ -37,6 +38,7 @@ export async function PATCH(
         ...(body.sessionsIncluded !== undefined && { sessionsIncluded: body.sessionsIncluded }),
         ...(body.passMode !== undefined && { passMode: body.passMode }),
         ...(body.isOneTime !== undefined && { isOneTime: body.isOneTime }),
+        ...("description" in body && { description: body.description ?? null }),
       },
     });
 

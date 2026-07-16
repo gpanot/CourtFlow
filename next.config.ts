@@ -8,6 +8,7 @@ const COURTPASS_HOST = process.env.NEXT_PUBLIC_COURTPASS_URL
 
 const nextConfig: NextConfig = {
   output: "standalone",
+  serverExternalPackages: ["sharp"],
   outputFileTracingExcludes: {
     "*": [
       "mobile/android/**",

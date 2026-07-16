@@ -16,12 +16,13 @@ export async function PATCH(
     if (!existing) return notFound("Court block not found");
 
     const body = await parseBody<{
-      type?: "private_competition" | "private_event" | "maintenance";
+      type?: string;
       title?: string;
       note?: string;
       courtIds?: string[];
       startTime?: string;
       endTime?: string;
+      programRunId?: string | null;
     }>(request);
 
     const data: Record<string, unknown> = {};
@@ -31,6 +32,7 @@ export async function PATCH(
     if (body.courtIds) data.courtIds = body.courtIds;
     if (body.startTime) data.startTime = new Date(body.startTime);
     if (body.endTime) data.endTime = new Date(body.endTime);
+    if ("programRunId" in body) data.programRunId = body.programRunId ?? null;
 
     const block = await prisma.courtBlock.update({ where: { id }, data });
     return json(block);
