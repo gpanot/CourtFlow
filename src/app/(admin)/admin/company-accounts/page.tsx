@@ -661,6 +661,7 @@ function BillsTab({ account }: { account: CompanyAccount }) {
                     onIssue={handleIssueBill}
                     onMarkPaid={handleMarkPaid}
                     onVoid={handleVoidBill}
+                    onLineItemsChanged={() => loadBills(page, statusFilter, selectedMonth)}
                   />
                 ))}
               </tbody>
@@ -707,6 +708,7 @@ function BillTableRow({
   onIssue,
   onMarkPaid,
   onVoid,
+  onLineItemsChanged,
 }: {
   bill: BillRow;
   accountId: string;
@@ -717,31 +719,73 @@ function BillTableRow({
   onIssue: (id: string) => void;
   onMarkPaid: (id: string) => void;
   onVoid: (id: string) => void;
+  onLineItemsChanged: () => void;
 }) {
   const [expanded, setExpanded] = useState(true);
   const [lineItems, setLineItems] = useState<BillLineItem[]>([]);
   const [loadingItems, setLoadingItems] = useState(false);
 
+  // Inline price editing state: bookingId → draft value string
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editValue, setEditValue] = useState("");
+  const [saving, setSaving] = useState(false);
+
+  const canEditPrices = bill.status === "open";
+
+  async function fetchItems() {
+    setLoadingItems(true);
+    try {
+      const data = await api.get<BillLineItem[]>(
+        `/api/admin/company-accounts/${accountId}/bills/${bill.id}/line-items`
+      );
+      setLineItems(data);
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setLoadingItems(false);
+    }
+  }
+
   // Fetch line items on mount since rows start expanded
   useEffect(() => {
-    async function fetchItems() {
-      setLoadingItems(true);
-      try {
-        const data = await api.get<BillLineItem[]>(
-          `/api/admin/company-accounts/${accountId}/bills/${bill.id}/line-items`
-        );
-        setLineItems(data);
-      } catch (e) {
-        console.error(e);
-      } finally {
-        setLoadingItems(false);
-      }
-    }
     void fetchItems();
   }, [accountId, bill.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   async function toggleExpand() {
     setExpanded((v) => !v);
+  }
+
+  function startEdit(item: BillLineItem) {
+    setEditingId(item.bookingId);
+    setEditValue(String(item.priceValue));
+  }
+
+  function cancelEdit() {
+    setEditingId(null);
+    setEditValue("");
+  }
+
+  async function commitEdit(bookingId: string) {
+    const parsed = parseInt(editValue, 10);
+    if (isNaN(parsed) || parsed < 0) { cancelEdit(); return; }
+    setSaving(true);
+    try {
+      await api.patch(
+        `/api/admin/company-accounts/${accountId}/bills/${bill.id}/line-items/${bookingId}`,
+        { priceValue: parsed }
+      );
+      // Update local state optimistically then refresh
+      setLineItems((prev) =>
+        prev.map((i) => i.bookingId === bookingId ? { ...i, priceValue: parsed } : i)
+      );
+      setEditingId(null);
+      // Notify parent to refresh bill totals
+      onLineItemsChanged();
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setSaving(false);
+    }
   }
 
   const fmtTime = (iso: string) =>
@@ -838,35 +882,89 @@ function BillTableRow({
                     {!isSolo && <th className="text-left px-4 py-2 font-medium text-neutral-600">Booker</th>}
                     <th className="text-left px-4 py-2 font-medium text-neutral-600">Status</th>
                     <th className="text-right px-4 py-2 font-medium text-neutral-600">Price</th>
+                    {canEditPrices && <th className="w-8" />}
                   </tr>
                 </thead>
                 <tbody>
-                  {lineItems.map((item) => (
-                    <tr
-                      key={item.bookingId}
-                      className={cn(
-                        "border-b border-neutral-800/30 last:border-0",
-                        item.isCancelled ? "opacity-40" : "hover:bg-neutral-800/20"
-                      )}
-                    >
-                      <td className="pl-10 py-2" />
-                      <td className="px-4 py-2 text-neutral-400 whitespace-nowrap">{fmtShortDate(item.date)}</td>
-                      <td className="px-4 py-2 text-neutral-400 whitespace-nowrap tabular-nums">
-                        {fmtTime(item.startTime)} – {fmtTime(item.endTime)}
-                      </td>
-                      <td className="px-4 py-2 text-neutral-300">{item.courtLabel}</td>
-                      {!isSolo && <td className="px-4 py-2 text-neutral-400">{item.bookerName}</td>}
-                      <td className="px-4 py-2">
-                        {item.isCancelled
-                          ? <span className="px-1.5 py-0.5 rounded bg-neutral-700/40 text-neutral-500">Cancelled</span>
-                          : <span className="px-1.5 py-0.5 rounded bg-green-600/15 text-green-500">Confirmed</span>
-                        }
-                      </td>
-                      <td className="px-4 py-2 text-right tabular-nums text-neutral-400">
-                        {item.isCancelled ? <span className="text-neutral-700">0 ₫</span> : fmt(item.priceValue)}
-                      </td>
-                    </tr>
-                  ))}
+                  {lineItems.map((item) => {
+                    const isEditing = editingId === item.bookingId;
+                    return (
+                      <tr
+                        key={item.bookingId}
+                        className={cn(
+                          "border-b border-neutral-800/30 last:border-0",
+                          item.isCancelled ? "opacity-40" : "hover:bg-neutral-800/20"
+                        )}
+                      >
+                        <td className="pl-10 py-2" />
+                        <td className="px-4 py-2 text-neutral-400 whitespace-nowrap">{fmtShortDate(item.date)}</td>
+                        <td className="px-4 py-2 text-neutral-400 whitespace-nowrap tabular-nums">
+                          {fmtTime(item.startTime)} – {fmtTime(item.endTime)}
+                        </td>
+                        <td className="px-4 py-2 text-neutral-300">{item.courtLabel}</td>
+                        {!isSolo && <td className="px-4 py-2 text-neutral-400">{item.bookerName}</td>}
+                        <td className="px-4 py-2">
+                          {item.isCancelled
+                            ? <span className="px-1.5 py-0.5 rounded bg-neutral-700/40 text-neutral-500">Cancelled</span>
+                            : <span className="px-1.5 py-0.5 rounded bg-green-600/15 text-green-500">Confirmed</span>
+                          }
+                        </td>
+                        {/* Price cell — shows inline editor when editing */}
+                        <td className="px-4 py-2 text-right tabular-nums">
+                          {item.isCancelled ? (
+                            <span className="text-neutral-700">0 ₫</span>
+                          ) : isEditing ? (
+                            <div className="flex items-center justify-end gap-1" onClick={(e) => e.stopPropagation()}>
+                              <input
+                                autoFocus
+                                type="text"
+                                inputMode="numeric"
+                                pattern="[0-9]*"
+                                value={editValue}
+                                onChange={(e) => setEditValue(e.target.value.replace(/\D/g, ""))}
+                                onKeyDown={(e) => {
+                                  if (e.key === "Enter") void commitEdit(item.bookingId);
+                                  if (e.key === "Escape") cancelEdit();
+                                }}
+                                className="w-28 text-right bg-neutral-800 border border-purple-600/60 rounded px-2 py-0.5 text-xs text-white focus:outline-none focus:border-purple-500"
+                              />
+                              <button
+                                onClick={() => void commitEdit(item.bookingId)}
+                                disabled={saving}
+                                className="p-1 rounded text-green-400 hover:bg-green-900/30 disabled:opacity-50"
+                                title="Save"
+                              >
+                                {saving ? <Loader2 size={11} className="animate-spin" /> : <CheckSquare size={11} />}
+                              </button>
+                              <button
+                                onClick={cancelEdit}
+                                className="p-1 rounded text-neutral-500 hover:text-neutral-300 hover:bg-neutral-700"
+                                title="Cancel"
+                              >
+                                <X size={11} />
+                              </button>
+                            </div>
+                          ) : (
+                            <span className="text-neutral-400">{fmt(item.priceValue)}</span>
+                          )}
+                        </td>
+                        {/* Edit button column — only on open bills, only non-cancelled rows */}
+                        {canEditPrices && (
+                          <td className="pr-3 py-2" onClick={(e) => e.stopPropagation()}>
+                            {!item.isCancelled && !isEditing && (
+                              <button
+                                onClick={() => startEdit(item)}
+                                className="p-1 rounded text-neutral-700 hover:text-purple-400 hover:bg-purple-900/20 transition-colors"
+                                title="Edit price"
+                              >
+                                <Pencil size={11} />
+                              </button>
+                            )}
+                          </td>
+                        )}
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
             )}
