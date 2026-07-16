@@ -42,7 +42,7 @@ export async function POST(
       .toBuffer();
 
     await mkdir(UPLOAD_DIR, { recursive: true });
-    const filename = `${id}.webp`;
+    const filename = `${id}-${Date.now()}.webp`;
     await writeFile(path.join(UPLOAD_DIR, filename), webp);
 
     const imageUrl = `/uploads/program-passes/${filename}`;

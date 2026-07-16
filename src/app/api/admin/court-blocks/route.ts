@@ -2,6 +2,7 @@ import { NextRequest } from "next/server";
 import { prisma } from "@/lib/db";
 import { json, error, parseBody } from "@/lib/api-helpers";
 import { requireAdminAccess } from "@/lib/auth";
+import type { CourtBlockType } from "@prisma/client";
 
 export const dynamic = "force-dynamic";
 export async function GET(request: NextRequest) {
@@ -68,7 +69,7 @@ export async function POST(request: NextRequest) {
     const block = await prisma.courtBlock.create({
       data: {
         venueId: body.venueId,
-        type: body.type,
+        type: body.type as CourtBlockType,
         title: body.title || null,
         note: body.note || null,
         courtIds: body.courtIds,

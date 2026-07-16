@@ -1,6 +1,6 @@
 import { NextRequest } from "next/server";
 import { json, error } from "@/lib/api-helpers";
-import { requireSuperAdmin } from "@/lib/auth";
+import { requireAdminAccess } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 
 export const dynamic = "force-dynamic";
@@ -10,7 +10,7 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    requireSuperAdmin(request.headers);
+    await requireAdminAccess(request.headers);
     const { id } = await params;
 
     const instances = await prisma.classInstance.findMany({

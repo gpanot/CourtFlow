@@ -216,53 +216,53 @@ model StaffVenueAssignment {
 }
 
 model StaffMember {
-  id                              String                            @id @default(cuid())
-  name                            String
-  phone                           String                            @unique
-  email                           String?                           @unique
-  role                            StaffRole                         @default(staff)
-  passwordHash                    String                            @map("password_hash")
-  onboardingCompleted             Boolean                           @default(false) @map("onboarding_completed")
-  createdAt                       DateTime                          @default(now()) @map("created_at")
-  coachBio                        String?                           @map("coach_bio")
-  coachPhoto                      String?                           @map("coach_photo")
-  isCoach                         Boolean                           @default(false) @map("is_coach")
-  pushNotificationsEnabled        Boolean                           @default(false) @map("push_notifications_enabled")
+  id                        String                 @id @default(cuid())
+  name                      String
+  phone                     String                 @unique
+  email                     String?                @unique
+  role                      StaffRole              @default(staff)
+  passwordHash              String                 @map("password_hash")
+  onboardingCompleted       Boolean                @default(false) @map("onboarding_completed")
+  createdAt                 DateTime               @default(now()) @map("created_at")
+  coachBio                  String?                @map("coach_bio")
+  coachPhoto                String?                @map("coach_photo")
+  isCoach                   Boolean                @default(false) @map("is_coach")
+  pushNotificationsEnabled  Boolean                @default(false) @map("push_notifications_enabled")
   /// Default Reclub club (group) for session roster — staff-level, not per-venue.
-  reclubGroupId                   Int?                              @map("reclub_group_id")
-  coachDupr                       String?                           @map("coach_dupr")
-  coachGender                     String?                           @map("coach_gender")
-  coachLanguages                  String[]                          @default([]) @map("coach_languages")
-  coachSpecialties                String[]                          @default([]) @map("coach_specialties")
-  coachFocusLevels                String[]                          @default([]) @map("coach_focus_levels")
-  coachYearsExperience            String?                           @map("coach_years_experience")
-  coachGroupSizes                 String[]                          @default([]) @map("coach_group_sizes")
-  googleRefreshToken              String?                           @map("google_refresh_token")
-  googleCalendarId                String?                           @map("google_calendar_id")
-  calendarSyncEnabled             Boolean                           @default(false) @map("calendar_sync_enabled")
-  creditPackageValidityDays       Int                               @default(90) @map("credit_package_validity_days")
-  auditLogs                       AuditLog[]
-  classInstances                  ClassInstance[]
-  coachAvailabilities             CoachAvailability[]
-  coachHolidays                   CoachHoliday[]
-  coachLessons                    CoachLesson[]
-  coachPackages                   CoachPackage[]
-  faceRecognitionLogs             FaceRecognitionLog[]
-  coachCredits                    PlayerCoachCredit[]
-  customPrices                    PlayerCustomPrice[]
-  playerRankings                  PlayerRanking[]
-  linkedPlayers                   Player[]                          @relation("PlayerCoachLink")
-  programPassTypeCoaches          ProgramPassTypeCoach[]
-  programPassTypes                ProgramPassType[]
-  programRunCoaches               ProgramRunCoach[]
-  courtBlockCoaches               CourtBlockCoach[]
-  sessions                        Session[]
-  authLogs                        StaffAuthLog[]
-  paidPayments                    StaffPayment[]                    @relation("PaidByStaff")
-  payments                        StaffPayment[]                    @relation("StaffPayments")
-  pushTokens                      StaffPushToken[]
-  venueAssignments                StaffVenueAssignment[]
-  ownedVenues                     Venue[]                           @relation("VenueOwner")
+  reclubGroupId             Int?                   @map("reclub_group_id")
+  coachDupr                 String?                @map("coach_dupr")
+  coachGender               String?                @map("coach_gender")
+  coachLanguages            String[]               @default([]) @map("coach_languages")
+  coachSpecialties          String[]               @default([]) @map("coach_specialties")
+  coachFocusLevels          String[]               @default([]) @map("coach_focus_levels")
+  coachYearsExperience      String?                @map("coach_years_experience")
+  coachGroupSizes           String[]               @default([]) @map("coach_group_sizes")
+  googleRefreshToken        String?                @map("google_refresh_token")
+  googleCalendarId          String?                @map("google_calendar_id")
+  calendarSyncEnabled       Boolean                @default(false) @map("calendar_sync_enabled")
+  creditPackageValidityDays Int                    @default(90) @map("credit_package_validity_days")
+  auditLogs                 AuditLog[]
+  classInstances            ClassInstance[]
+  coachAvailabilities       CoachAvailability[]
+  coachHolidays             CoachHoliday[]
+  coachLessons              CoachLesson[]
+  coachPackages             CoachPackage[]
+  faceRecognitionLogs       FaceRecognitionLog[]
+  coachCredits              PlayerCoachCredit[]
+  customPrices              PlayerCustomPrice[]
+  playerRankings            PlayerRanking[]
+  linkedPlayers             Player[]               @relation("PlayerCoachLink")
+  programPassTypeCoaches    ProgramPassTypeCoach[]
+  programPassTypes          ProgramPassType[]
+  programRunCoaches         ProgramRunCoach[]
+  courtBlockCoaches         CourtBlockCoach[]
+  sessions                  Session[]
+  authLogs                  StaffAuthLog[]
+  paidPayments              StaffPayment[]         @relation("PaidByStaff")
+  payments                  StaffPayment[]         @relation("StaffPayments")
+  pushTokens                StaffPushToken[]
+  venueAssignments          StaffVenueAssignment[]
+  ownedVenues               Venue[]                @relation("VenueOwner")
 
   @@map("staff_members")
 }
@@ -489,22 +489,22 @@ model MembershipPayment {
 }
 
 model CourtBlock {
-  id                              String                            @id @default(cuid())
-  venueId                         String                            @map("venue_id")
-  type                            CourtBlockType
-  title                           String?
-  note                            String?
-  courtIds                        String[]                          @map("court_ids")
-  date                            DateTime                          @db.Date
-  startTime                       DateTime                          @map("start_time")
-  endTime                         DateTime                          @map("end_time")
-  createdBy                       String?                           @map("created_by")
-  createdAt                       DateTime                          @default(now()) @map("created_at")
-  programRunId                    String?                           @map("program_run_id")
-  classInstances                  ClassInstance[]
-  venue                           Venue                             @relation(fields: [venueId], references: [id])
-  programRun                      ProgramRun?                       @relation(fields: [programRunId], references: [id], onUpdate: NoAction, map: "fk_court_blocks_program_run")
-  courtBlockCoaches               CourtBlockCoach[]
+  id                String            @id @default(cuid())
+  venueId           String            @map("venue_id")
+  type              CourtBlockType
+  title             String?
+  note              String?
+  courtIds          String[]          @map("court_ids")
+  date              DateTime          @db.Date
+  startTime         DateTime          @map("start_time")
+  endTime           DateTime          @map("end_time")
+  createdBy         String?           @map("created_by")
+  createdAt         DateTime          @default(now()) @map("created_at")
+  programRunId      String?           @map("program_run_id")
+  classInstances    ClassInstance[]
+  venue             Venue             @relation(fields: [venueId], references: [id])
+  programRun        ProgramRun?       @relation(fields: [programRunId], references: [id], onUpdate: NoAction, map: "fk_court_blocks_program_run")
+  courtBlockCoaches CourtBlockCoach[]
 
   @@index([venueId, date])
   @@map("court_blocks")
@@ -1312,12 +1312,16 @@ model ProgramPassType {
   isOneTime        Boolean                @default(false) @map("is_one_time")
   description      String?
   imageUrl         String?                @map("image_url")
+  level            String?
+  skillTags        String[]               @map("skill_tags")
+  prerequisites    String?
+  ageRange         String?                @map("age_range")
   classInstances   ClassInstance[]
   programPasses    ProgramPass[]
   coaches          ProgramPassTypeCoach[]
-  programRuns      ProgramRun[]
   linkedCoach      StaffMember?           @relation(fields: [linkedCoachId], references: [id], map: "class_pass_tiers_linked_coach_id_fkey")
   venue            Venue                  @relation(fields: [venueId], references: [id], map: "class_pass_tiers_venue_id_fkey")
+  programRuns      ProgramRun[]
 
   @@index([linkedCoachId], map: "class_pass_tiers_linked_coach_id_idx")
   @@index([venueId, isActive], map: "class_pass_tiers_venue_id_is_active_idx")
@@ -1326,23 +1330,24 @@ model ProgramPassType {
 
 /// A scheduled occurrence of a class that program-pass holders can check into.
 model ClassInstance {
-  id             String          @id @default(cuid())
-  venueId        String          @map("venue_id")
-  coachId        String          @map("coach_id")
-  passTypeId     String          @map("pass_type_id")
-  startAt        DateTime        @map("start_at")
-  endAt          DateTime        @map("end_at")
-  maxPlayers     Int             @map("max_players")
-  createdAt      DateTime        @default(now()) @map("created_at")
-  updatedAt      DateTime        @updatedAt @map("updated_at")
-  programRunId   String?         @map("program_run_id")
-  courtBlockId   String?         @map("court_block_id")
-  checkIns       ClassCheckIn[]
-  coach          StaffMember     @relation(fields: [coachId], references: [id])
-  courtBlock     CourtBlock?     @relation(fields: [courtBlockId], references: [id], onUpdate: NoAction)
-  programRun     ProgramRun?     @relation(fields: [programRunId], references: [id], onUpdate: NoAction)
-  passType       ProgramPassType @relation(fields: [passTypeId], references: [id], map: "class_instances_tier_id_fkey")
-  venue          Venue           @relation(fields: [venueId], references: [id])
+  id           String          @id @default(cuid())
+  venueId      String          @map("venue_id")
+  coachId      String          @map("coach_id")
+  passTypeId   String          @map("pass_type_id")
+  startAt      DateTime        @map("start_at")
+  endAt        DateTime        @map("end_at")
+  maxPlayers   Int             @map("max_players")
+  createdAt    DateTime        @default(now()) @map("created_at")
+  updatedAt    DateTime        @updatedAt @map("updated_at")
+  programRunId String?         @map("program_run_id")
+  courtBlockId String?         @map("court_block_id")
+  topic        String?
+  checkIns     ClassCheckIn[]
+  coach        StaffMember     @relation(fields: [coachId], references: [id])
+  courtBlock   CourtBlock?     @relation(fields: [courtBlockId], references: [id], onUpdate: NoAction)
+  programRun   ProgramRun?     @relation(fields: [programRunId], references: [id], onUpdate: NoAction)
+  passType     ProgramPassType @relation(fields: [passTypeId], references: [id], map: "class_instances_tier_id_fkey")
+  venue        Venue           @relation(fields: [venueId], references: [id])
 
   @@index([venueId, startAt])
   @@index([coachId, startAt])
@@ -1689,10 +1694,10 @@ model PromoRedemption {
 }
 
 model ProgramRunCoach {
-  runId         String      @map("run_id")
-  coachId       String      @map("coach_id")
-  coach         StaffMember @relation(fields: [coachId], references: [id], onDelete: Cascade, onUpdate: NoAction)
-  programRun    ProgramRun  @relation(fields: [runId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  runId      String      @map("run_id")
+  coachId    String      @map("coach_id")
+  coach      StaffMember @relation(fields: [coachId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  programRun ProgramRun  @relation(fields: [runId], references: [id], onDelete: Cascade, onUpdate: NoAction)
 
   @@id([runId, coachId])
   @@index([coachId], map: "idx_program_run_coaches_coach_id")
@@ -1701,8 +1706,8 @@ model ProgramRunCoach {
 }
 
 model CourtBlockCoach {
-  courtBlockId String     @map("court_block_id")
-  coachId      String     @map("coach_id")
+  courtBlockId String      @map("court_block_id")
+  coachId      String      @map("coach_id")
   coach        StaffMember @relation(fields: [coachId], references: [id], onDelete: Cascade, onUpdate: NoAction)
   courtBlock   CourtBlock  @relation(fields: [courtBlockId], references: [id], onDelete: Cascade, onUpdate: NoAction)
 
@@ -1713,15 +1718,15 @@ model CourtBlockCoach {
 }
 
 model ProgramRunWaitlistEntry {
-  id          String     @id @default(dbgenerated("(gen_random_uuid())::text"))
-  runId       String     @map("run_id")
-  playerId    String     @map("player_id")
-  status      String     @default("waiting")
-  promotedAt  DateTime?  @map("promoted_at") @db.Timestamptz(6)
-  note        String?
-  createdAt   DateTime   @default(now()) @map("created_at") @db.Timestamptz(6)
-  player      Player     @relation(fields: [playerId], references: [id], onDelete: Cascade, onUpdate: NoAction)
-  programRun  ProgramRun @relation(fields: [runId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  id         String     @id @default(dbgenerated("(gen_random_uuid())::text"))
+  runId      String     @map("run_id")
+  playerId   String     @map("player_id")
+  status     String     @default("waiting")
+  promotedAt DateTime?  @map("promoted_at") @db.Timestamptz(6)
+  note       String?
+  createdAt  DateTime   @default(now()) @map("created_at") @db.Timestamptz(6)
+  player     Player     @relation(fields: [playerId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  programRun ProgramRun @relation(fields: [runId], references: [id], onDelete: Cascade, onUpdate: NoAction)
 
   @@unique([runId, playerId])
   @@index([playerId], map: "idx_program_run_waitlist_player_id")

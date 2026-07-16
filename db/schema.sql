@@ -726,7 +726,8 @@ CREATE TABLE public.class_instances (
     created_at timestamp(3) without time zone DEFAULT CURRENT_TIMESTAMP NOT NULL,
     updated_at timestamp(3) without time zone NOT NULL,
     program_run_id text,
-    court_block_id text
+    court_block_id text,
+    topic text
 );
 
 
@@ -1623,7 +1624,11 @@ CREATE TABLE public.program_pass_types (
     pass_mode text DEFAULT 'monthly'::text NOT NULL,
     is_one_time boolean DEFAULT false NOT NULL,
     description text,
-    image_url text
+    image_url text,
+    level text,
+    skill_tags text[],
+    prerequisites text,
+    age_range text
 );
 
 
@@ -6209,4 +6214,5 @@ INSERT INTO public.schema_migrations (version) VALUES
     ('20260709091207'),
     ('20260713000106'),
     ('20260713032737'),
+    ('20260716094008'),
     ('20260716120000');

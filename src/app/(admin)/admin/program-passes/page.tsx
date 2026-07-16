@@ -75,6 +75,10 @@ interface PassType {
   isActive: boolean;
   description: string | null;
   imageUrl: string | null;
+  level: string | null;
+  skillTags: string[];
+  prerequisites: string | null;
+  ageRange: string | null;
   coaches: PassTypeCoach[];
   _count: { programPasses: number };
 }
@@ -150,6 +154,7 @@ interface RunInstance {
   id: string;
   startAt: string;
   endAt: string;
+  topic: string | null;
   programRunId: string;
   courtBlockId: string | null;
   courtBlock: {
@@ -669,6 +674,9 @@ export default function ProgramPassesPage() {
                                 {new Date(inst.endAt).toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" })}
                                 {" · "}{inst._count.checkIns} checked in
                               </p>
+                              {inst.topic && (
+                                <p className="text-[11px] text-sky-400/80 italic truncate">{inst.topic}</p>
+                              )}
                               {inst.courtBlock?.courtBlockCoaches && inst.courtBlock.courtBlockCoaches.length > 0 && (
                                 <p className="text-[11px] text-neutral-500">
                                   {inst.courtBlock.courtBlockCoaches.map((c) => c.coach.name).join(", ")}
@@ -869,7 +877,28 @@ function PassTypeCard({
               One-time
             </span>
           )}
+          {pt.level && (
+            <span className="rounded-full bg-teal-900/40 px-2.5 py-0.5 text-[11px] text-teal-300 capitalize">
+              {pt.level}
+            </span>
+          )}
+          {pt.ageRange && (
+            <span className="rounded-full bg-sky-900/40 px-2.5 py-0.5 text-[11px] text-sky-300">
+              {pt.ageRange}
+            </span>
+          )}
         </div>
+
+        {/* Skill tags */}
+        {pt.skillTags.length > 0 && (
+          <div className="flex flex-wrap gap-1">
+            {pt.skillTags.map((tag) => (
+              <span key={tag} className="rounded-full bg-blue-900/30 border border-blue-800/40 px-2 py-0.5 text-[10px] text-blue-300">
+                {tag}
+              </span>
+            ))}
+          </div>
+        )}
 
         {/* Coaches */}
         {pt.coaches.length > 0 && (
@@ -924,6 +953,61 @@ function PassStatusBadge({ status }: { status: string }) {
   );
 }
 
+const PRESET_LEVELS = ["beginner", "intermediate", "advanced", "pro"];
+
+function LevelField({
+  value,
+  onChange,
+  inputCls,
+}: {
+  value: string;
+  onChange: (v: string) => void;
+  inputCls: string;
+}) {
+  const isCustom = value !== "" && !PRESET_LEVELS.includes(value);
+  // show the text input when: currently editing a custom value, OR user just picked "custom"
+  const [customMode, setCustomMode] = useState(isCustom);
+
+  const selectValue = customMode ? "__custom__" : value;
+
+  return (
+    <div>
+      <label className="text-xs text-neutral-400 mb-1 block">Level</label>
+      <select
+        value={selectValue}
+        onChange={(e) => {
+          if (e.target.value === "__custom__") {
+            setCustomMode(true);
+            // keep current value so they can edit it; if it was a preset, clear it
+            if (!isCustom) onChange("");
+          } else {
+            setCustomMode(false);
+            onChange(e.target.value);
+          }
+        }}
+        className={inputCls}
+      >
+        <option value="">— Not specified —</option>
+        <option value="beginner">Beginner</option>
+        <option value="intermediate">Intermediate</option>
+        <option value="advanced">Advanced</option>
+        <option value="pro">Pro</option>
+        <option value="__custom__">Custom…</option>
+      </select>
+      {customMode && (
+        <input
+          type="text"
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          placeholder="e.g. Elite, Junior, Open…"
+          className={`${inputCls} mt-2`}
+          autoFocus
+        />
+      )}
+    </div>
+  );
+}
+
 function AmountInput({
   value,
   onChange,
@@ -975,6 +1059,10 @@ function PassTypeFormModal({
   const [passMode, setPassMode] = useState<PassMode>(passType?.passMode ?? "monthly");
   const [isOneTime, setIsOneTime] = useState(passType?.isOneTime ?? false);
   const [description, setDescription] = useState(passType?.description ?? "");
+  const [level, setLevel] = useState<string>(passType?.level ?? "");
+  const [ageRange, setAgeRange] = useState(passType?.ageRange ?? "");
+  const [skillTagsRaw, setSkillTagsRaw] = useState((passType?.skillTags ?? []).join(", "));
+  const [prerequisites, setPrerequisites] = useState(passType?.prerequisites ?? "");
   const [imageUrl, setImageUrl] = useState(passType?.imageUrl ?? "");
   const [imageFile, setImageFile] = useState<File | null>(null);
   const [imagePreview, setImagePreview] = useState<string>(passType?.imageUrl ?? "");
@@ -1001,6 +1089,12 @@ function PassTypeFormModal({
     setSaving(true);
     try {
       let savedId: string;
+      const curriculumPayload = {
+        level: level || null,
+        skillTags: skillTagsRaw.split(",").map((t) => t.trim()).filter(Boolean),
+        prerequisites: prerequisites.trim() || null,
+        ageRange: ageRange.trim() || null,
+      };
       if (passType) {
         await api.patch(`/api/admin/program-passes/types/${passType.id}`, {
           name: name.trim(),
@@ -1010,6 +1104,7 @@ function PassTypeFormModal({
           isOneTime,
           description: description.trim() || null,
           coachIds: selectedCoachIds,
+          ...curriculumPayload,
         });
         savedId = passType.id;
       } else {
@@ -1022,6 +1117,7 @@ function PassTypeFormModal({
           isOneTime,
           description: description.trim() || null,
           coachIds: selectedCoachIds,
+          ...curriculumPayload,
         });
         savedId = res.id;
       }
@@ -1189,12 +1285,70 @@ function PassTypeFormModal({
                   value={description}
                   onChange={(e) => setDescription(e.target.value)}
                   placeholder={"What to Expect\nDescribe the program overview…\n\nWhat you will learn\nList the key skills and topics…\n\nPrerequisites\nWho is this for?"}
-                  rows={14}
+                  rows={8}
                   className="w-full rounded-lg border border-neutral-700 bg-neutral-800 px-3 py-2.5 text-sm text-white placeholder:text-neutral-600 focus:border-purple-500 focus:outline-none resize-none leading-relaxed"
                 />
                 <p className="text-[11px] text-neutral-600 mt-1 text-right">
                   {description.length} chars
                 </p>
+              </div>
+
+              {/* Level */}
+              <LevelField value={level} onChange={setLevel} inputCls={inputCls} />
+
+              {/* Age range */}
+              <div>
+                <label className="text-xs text-neutral-400 mb-1 block">Age range</label>
+                <input
+                  type="text"
+                  value={ageRange}
+                  onChange={(e) => setAgeRange(e.target.value)}
+                  placeholder='e.g. "5-12", "Adults 18+", "All ages"'
+                  className={inputCls}
+                />
+              </div>
+
+              {/* Skill tags */}
+              <div>
+                <label className="text-xs text-neutral-400 mb-1 block">Skill tags</label>
+                <input
+                  type="text"
+                  value={skillTagsRaw}
+                  onChange={(e) => setSkillTagsRaw(e.target.value)}
+                  placeholder="e.g. Footwork, Serve, Backhand (comma-separated)"
+                  className={inputCls}
+                />
+                {skillTagsRaw.trim() && (
+                  <div className="flex flex-wrap gap-1.5 mt-2">
+                    {skillTagsRaw.split(",").map((t) => t.trim()).filter(Boolean).map((tag, i) => (
+                      <span key={i} className="inline-flex items-center gap-1 rounded-full bg-blue-900/40 border border-blue-700/40 px-2.5 py-0.5 text-[11px] text-blue-300">
+                        {tag}
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const tags = skillTagsRaw.split(",").map((t) => t.trim()).filter(Boolean);
+                            tags.splice(i, 1);
+                            setSkillTagsRaw(tags.join(", "));
+                          }}
+                          className="ml-0.5 text-blue-400 hover:text-white leading-none"
+                        >×</button>
+                      </span>
+                    ))}
+                  </div>
+                )}
+                <p className="text-[11px] text-neutral-600 mt-1">Separate tags with commas. Click × to remove.</p>
+              </div>
+
+              {/* Prerequisites */}
+              <div>
+                <label className="text-xs text-neutral-400 mb-1 block">Prerequisites</label>
+                <textarea
+                  value={prerequisites}
+                  onChange={(e) => setPrerequisites(e.target.value)}
+                  placeholder="Who is this program for? Any prior experience required?"
+                  rows={3}
+                  className="w-full rounded-lg border border-neutral-700 bg-neutral-800 px-3 py-2.5 text-sm text-white placeholder:text-neutral-600 focus:border-purple-500 focus:outline-none resize-none leading-relaxed"
+                />
               </div>
             </div>
           )}
@@ -2115,6 +2269,9 @@ function EditInstanceModal({
     ? new Date(instance.courtBlock.date).toLocaleDateString("sv-SE")
     : new Date(instance.startAt).toLocaleDateString("sv-SE");
 
+  // ── Topic state ──
+  const [topic, setTopic] = useState(instance.topic ?? "");
+
   // ── Schedule state ──
   const [newDate, setNewDate] = useState(originalDate);
   const [newStartTime, setNewStartTime] = useState(
@@ -2146,11 +2303,16 @@ function EditInstanceModal({
     newStartTime !== new Date(instance.startAt).toLocaleTimeString("sv-SE", { hour: "2-digit", minute: "2-digit" }) ||
     newEndTime !== new Date(instance.endAt).toLocaleTimeString("sv-SE", { hour: "2-digit", minute: "2-digit" });
 
+  const topicChanged = topic !== (instance.topic ?? "");
+
   const save = async () => {
-    if (!scheduleChanged && !coachesChanged) { onClose(); return; }
+    if (!scheduleChanged && !coachesChanged && !topicChanged) { onClose(); return; }
     setSaving(true);
     try {
       const payload: Record<string, unknown> = {};
+      if (topicChanged) {
+        payload.topic = topic.trim() || null;
+      }
       if (scheduleChanged) {
         payload.newDate = newDate;
         payload.newStartTime = new Date(`${newDate}T${newStartTime}:00`).toISOString();
@@ -2174,6 +2336,18 @@ function EditInstanceModal({
         <div className="flex items-center justify-between">
           <h3 className="text-base font-bold">Edit Session</h3>
           <button onClick={onClose} className="rounded-lg p-1.5 text-neutral-400 hover:bg-neutral-800"><X className="h-4 w-4" /></button>
+        </div>
+
+        {/* ── Topic ── */}
+        <div>
+          <p className="text-[11px] font-semibold uppercase tracking-wider text-neutral-500 mb-2">Session topic</p>
+          <input
+            type="text"
+            value={topic}
+            onChange={(e) => setTopic(e.target.value)}
+            placeholder='e.g. "Grips and footwork"'
+            className={inputCls}
+          />
         </div>
 
         {/* ── Schedule ── */}

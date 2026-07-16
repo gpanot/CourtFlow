@@ -19,6 +19,10 @@ export async function PATCH(
       passMode?: string;
       isOneTime?: boolean;
       description?: string | null;
+      level?: string | null;
+      skillTags?: string[];
+      prerequisites?: string | null;
+      ageRange?: string | null;
       coachIds?: string[];
     }>(request);
 
@@ -39,6 +43,10 @@ export async function PATCH(
         ...(body.passMode !== undefined && { passMode: body.passMode }),
         ...(body.isOneTime !== undefined && { isOneTime: body.isOneTime }),
         ...("description" in body && { description: body.description ?? null }),
+        ...("level" in body && { level: body.level ?? null }),
+        ...("skillTags" in body && { skillTags: body.skillTags ?? [] }),
+        ...("prerequisites" in body && { prerequisites: body.prerequisites ?? null }),
+        ...("ageRange" in body && { ageRange: body.ageRange ?? null }),
       },
     });
 

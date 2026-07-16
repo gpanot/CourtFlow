@@ -42,6 +42,10 @@ export async function POST(request: NextRequest) {
       passMode?: string;
       isOneTime?: boolean;
       description?: string | null;
+      level?: string | null;
+      skillTags?: string[];
+      prerequisites?: string | null;
+      ageRange?: string | null;
       coachIds?: string[];
     }>(request);
 
@@ -62,6 +66,10 @@ export async function POST(request: NextRequest) {
         passMode,
         isOneTime: body.isOneTime ?? false,
         description: body.description ?? null,
+        level: body.level ?? null,
+        skillTags: body.skillTags ?? [],
+        prerequisites: body.prerequisites ?? null,
+        ageRange: body.ageRange ?? null,
       },
     });
 

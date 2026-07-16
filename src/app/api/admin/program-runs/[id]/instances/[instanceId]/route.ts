@@ -40,6 +40,8 @@ export async function PATCH(
       newDate?: string;        // "YYYY-MM-DD"
       newStartTime?: string;   // ISO datetime string
       newEndTime?: string;     // ISO datetime string
+      // Session topic label
+      topic?: string | null;
       // Coach override for this instance's block
       coachIds?: string[];
       /** When true, also apply coachIds to all future instances in the same run */
@@ -51,6 +53,14 @@ export async function PATCH(
       select: { id: true, courtBlockId: true, startAt: true },
     });
     if (!instance) return error("Class instance not found", 404);
+
+    // Update topic label if provided
+    if ("topic" in body) {
+      await prisma.classInstance.update({
+        where: { id: instanceId },
+        data: { topic: body.topic ?? null },
+      });
+    }
 
     // Reschedule the date/time if provided
     if (body.newDate && body.newStartTime && body.newEndTime) {
@@ -99,7 +109,13 @@ export async function PATCH(
 
     const result = await prisma.classInstance.findUnique({
       where: { id: instanceId },
-      include: {
+      select: {
+        id: true,
+        topic: true,
+        startAt: true,
+        endAt: true,
+        programRunId: true,
+        courtBlockId: true,
         courtBlock: {
           select: {
             id: true,
