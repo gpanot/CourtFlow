@@ -277,6 +277,8 @@
       "historyEmptyHint": "Thống kê sẽ hiện sau khi bạn đóng phiên.",
       "historyPlayers": "người chơi",
       "historyGames": "trận",
+      "historyQr": "QR",
+      "historyCash": "Tiền mặt",
       "openSessionTitle": "Mở phiên",
       "selectCourts": "Chọn sân kích hoạt:",
       "openSessionWithCount": "Mở phiên ({{count}} sân)",

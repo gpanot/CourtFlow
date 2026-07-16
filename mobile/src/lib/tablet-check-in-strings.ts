@@ -249,6 +249,8 @@ const CHECK_IN_SCANNER_EN = {
   "sessionClosed": "closed",
   "sessionRevenue": "Revenue",
   "sessionPayments": "payments",
+  "sessionQrCount": "QR",
+  "sessionCashCount": "Cash",
   "sessionCancelledFree": "Cancelled/Free",
 
   // ── Check-in tab ───────────────────────────────────────────────────────────
@@ -911,6 +913,8 @@ const CHECK_IN_SCANNER_VI = {
   "sessionClosed": "đã đóng",
   "sessionRevenue": "Doanh thu",
   "sessionPayments": "thanh toán",
+  "sessionQrCount": "QR",
+  "sessionCashCount": "Tiền mặt",
   "sessionCancelledFree": "Huỷ/Miễn phí",
 
   // ── Check-in tab ───────────────────────────────────────────────────────────

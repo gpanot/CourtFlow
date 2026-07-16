@@ -2299,6 +2299,8 @@ interface SessionHistoryItem {
   paymentCount: number;
   cancelledCount?: number;
   paymentRevenue: number;
+  paymentQrCount?: number;
+  paymentCashCount?: number;
 }
 
 function SessionHistoryPanel({
@@ -2399,6 +2401,11 @@ function SessionHistoryPanel({
                   <div className="text-right min-w-[88px]">
                     <p className="text-sm font-medium text-emerald-300">{formatVndCompact(s.paymentRevenue)}</p>
                     <p className="text-[10px] text-neutral-600">{s.paymentCount} paid{(s.cancelledCount ?? 0) > 0 ? ` · ${s.cancelledCount} cancelled` : ""}</p>
+                    {((s.paymentQrCount ?? 0) > 0 || (s.paymentCashCount ?? 0) > 0) && (
+                      <p className="text-[10px] text-neutral-600">
+                        {t("staff.dashboard.historyQr")}: {s.paymentQrCount ?? 0} · {t("staff.dashboard.historyCash")}: {s.paymentCashCount ?? 0}
+                      </p>
+                    )}
                   </div>
                   <ChevronRight className="h-4 w-4 text-neutral-600" />
                 </div>

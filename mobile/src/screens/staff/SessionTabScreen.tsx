@@ -427,6 +427,11 @@ export function SessionTabScreen() {
                   {s.paymentCount ?? 0} {t("sessionPayments")}
                   {(s.cancelledCount ?? 0) > 0 ? ` · ${s.cancelledCount} ${t("sessionCancelledFree")}` : ""}
                 </Text>
+                {((s.paymentQrCount ?? 0) > 0 || (s.paymentCashCount ?? 0) > 0) && (
+                  <Text style={styles.historyFee}>
+                    {t("sessionQrCount")}: {s.paymentQrCount ?? 0} · {t("sessionCashCount")}: {s.paymentCashCount ?? 0}
+                  </Text>
+                )}
                 <Text style={styles.historyTime}>
                   {new Date(s.openedAt).toLocaleTimeString()}
                   {s.closedAt ? ` — ${new Date(s.closedAt).toLocaleTimeString()}` : ""}

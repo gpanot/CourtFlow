@@ -277,6 +277,8 @@
       "historyEmptyHint": "Session statistics will appear here after you close a session.",
       "historyPlayers": "players",
       "historyGames": "games",
+      "historyQr": "QR",
+      "historyCash": "Cash",
       "openSessionTitle": "Open Session",
       "selectCourts": "Select courts to activate:",
       "openSessionWithCount": "Open Session ({{count}} courts)",
