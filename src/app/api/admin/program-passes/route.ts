@@ -18,7 +18,7 @@ export async function GET(request: NextRequest) {
       where: {
         venueId,
         ...(passTypeId && { passTypeId }),
-        ...(status && { status: status as "active" | "paused" | "expired" | "cancelled" }),
+        ...(status && { status: status as "active" | "expired" | "cancelled" | "pending" }),
       },
       include: {
         player: { select: { id: true, name: true, phone: true, avatar: true } },

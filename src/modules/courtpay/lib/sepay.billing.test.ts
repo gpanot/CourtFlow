@@ -12,6 +12,11 @@ const { mockPrisma, mockEmitToVenue } = vi.hoisted(() => ({
     },
     venue: {
       updateMany: vi.fn(),
+      findUnique: vi.fn(),
+    },
+    programPassPayment: {
+      findFirst: vi.fn(),
+      update: vi.fn(),
     },
   },
   mockEmitToVenue: vi.fn(),
@@ -209,5 +214,115 @@ describe("processSepayWebhook — billing CF-BILL- refs", () => {
     expect(result).toEqual({ matched: false });
     expect(mockPrisma.billingInvoice.findUnique).not.toHaveBeenCalled();
     expect(mockPrisma.pendingPayment.findUnique).not.toHaveBeenCalled();
+  });
+});
+
+// ─── Program Pass Payment handler ────────────────────────────────────────────
+describe("processSepayWebhook — program pass CF-PRG- refs", () => {
+  const PRG_REF = "CF-PRG-XYZABC";
+  const VENUE_ID = "venue-001";
+
+  function makeProgramPassPayment(overrides?: Partial<{
+    id: string;
+    status: string;
+    amountValue: number;
+    paymentRef: string;
+  }>) {
+    return {
+      id: "ppp-1",
+      status: "UNPAID",
+      amountValue: 500000,
+      paymentRef: PRG_REF,
+      programPass: { venueId: VENUE_ID },
+      ...overrides,
+    };
+  }
+
+  function makeVenueWithAuto(auto: boolean) {
+    return {
+      settings: {
+        autoPaymentEnabled: auto,
+        sepayEnabled: auto,
+      },
+    };
+  }
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it("routes CF-PRG- to programPassPayment handler (not billing or pending)", async () => {
+    mockPrisma.programPassPayment.findFirst.mockResolvedValue(makeProgramPassPayment());
+    mockPrisma.venue.findUnique.mockResolvedValue(makeVenueWithAuto(true));
+    mockPrisma.programPassPayment.update.mockResolvedValue({});
+
+    const result = await processSepayWebhook(makePayload(PRG_REF, 500000));
+
+    expect(result.matched).toBe(true);
+    expect(result.paymentId).toBe("ppp-1");
+    expect(mockPrisma.billingInvoice.findUnique).not.toHaveBeenCalled();
+    expect(mockPrisma.pendingPayment.findUnique).not.toHaveBeenCalled();
+  });
+
+  it("returns matched:false when no UNPAID program pass payment found", async () => {
+    mockPrisma.programPassPayment.findFirst.mockResolvedValue(null);
+
+    const result = await processSepayWebhook(makePayload(PRG_REF, 500000));
+
+    expect(result.matched).toBe(false);
+    expect(mockPrisma.programPassPayment.update).not.toHaveBeenCalled();
+  });
+
+  it("returns matched:false when payment is already PAID", async () => {
+    mockPrisma.programPassPayment.findFirst.mockResolvedValue(
+      makeProgramPassPayment({ status: "PAID" })
+    );
+
+    const result = await processSepayWebhook(makePayload(PRG_REF, 500000));
+
+    expect(result.matched).toBe(false);
+    expect(mockPrisma.programPassPayment.update).not.toHaveBeenCalled();
+  });
+
+  it("returns matched:false when transferAmount is less than amountValue", async () => {
+    mockPrisma.programPassPayment.findFirst.mockResolvedValue(
+      makeProgramPassPayment({ amountValue: 500000 })
+    );
+
+    const result = await processSepayWebhook(makePayload(PRG_REF, 400000));
+
+    expect(result.matched).toBe(false);
+    expect(mockPrisma.programPassPayment.update).not.toHaveBeenCalled();
+  });
+
+  it("returns matched:false when venue has autoPayment disabled", async () => {
+    mockPrisma.programPassPayment.findFirst.mockResolvedValue(makeProgramPassPayment());
+    mockPrisma.venue.findUnique.mockResolvedValue(makeVenueWithAuto(false));
+
+    const result = await processSepayWebhook(makePayload(PRG_REF, 500000));
+
+    expect(result.matched).toBe(false);
+    expect(mockPrisma.programPassPayment.update).not.toHaveBeenCalled();
+  });
+
+  it("updates status to PAID and emits socket event on match", async () => {
+    mockPrisma.programPassPayment.findFirst.mockResolvedValue(makeProgramPassPayment());
+    mockPrisma.venue.findUnique.mockResolvedValue(makeVenueWithAuto(true));
+    mockPrisma.programPassPayment.update.mockResolvedValue({});
+
+    const result = await processSepayWebhook(makePayload(PRG_REF, 600000)); // overpay allowed
+
+    expect(result.matched).toBe(true);
+    expect(mockPrisma.programPassPayment.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { id: "ppp-1" },
+        data: expect.objectContaining({ status: "PAID", paymentMethod: "vietqr" }),
+      })
+    );
+    expect(mockEmitToVenue).toHaveBeenCalledWith(
+      VENUE_ID,
+      "payment:confirmed",
+      expect.objectContaining({ paymentRef: PRG_REF })
+    );
   });
 });

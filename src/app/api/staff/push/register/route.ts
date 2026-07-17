@@ -44,18 +44,18 @@ export async function POST(request: NextRequest) {
         staffId_token: { staffId: auth.id, token: body.token },
       },
       update: {
-        venueId: venueId,
+        venueId: venueId ?? undefined,
         platform: body.platform || "android",
-        deviceId: body.deviceId || null,
+        deviceId: body.deviceId ?? undefined,
         active: true,
         lastSeenAt: new Date(),
       },
       create: {
         staffId: auth.id,
-        venueId: venueId,
+        venueId: venueId ?? "",
         token: body.token,
         platform: body.platform || "android",
-        deviceId: body.deviceId || null,
+        deviceId: body.deviceId ?? undefined,
       },
     });
 
