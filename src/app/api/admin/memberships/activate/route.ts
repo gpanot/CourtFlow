@@ -60,8 +60,28 @@ export async function POST(request: NextRequest) {
         periodEnd: renewalDate,
         amountValue: tier.priceValue,
         status: "UNPAID",
+        paymentType: "recurring",
       },
     });
+
+    // Initiation fee: create once per membership lifetime (guard against double-charge on reactivation)
+    if (tier.initiationFeeValue > 0) {
+      const existingInitiation = await prisma.membershipPayment.findFirst({
+        where: { membershipId: membership.id, paymentType: "initiation" },
+      });
+      if (!existingInitiation) {
+        await prisma.membershipPayment.create({
+          data: {
+            membershipId: membership.id,
+            periodStart: now,
+            periodEnd: now,
+            amountValue: tier.initiationFeeValue,
+            status: "UNPAID",
+            paymentType: "initiation",
+          },
+        });
+      }
+    }
 
     return json(membership, 201);
   } catch (e) {

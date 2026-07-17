@@ -11,7 +11,7 @@ export async function GET(request: NextRequest) {
     if (!venueId) return error("venueId is required");
 
     const tiers = await prisma.membershipTier.findMany({
-      where: { venueId, isActive: true },
+      where: { venueId, isActive: true, isPublished: true },
       orderBy: { sortOrder: "asc" },
       select: {
         id: true,

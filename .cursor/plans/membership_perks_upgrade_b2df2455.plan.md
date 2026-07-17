@@ -4,28 +4,28 @@ overview: Upgrade the CourtFlow Membership system to enforce structured perks (c
 todos:
   - id: p1-migration
     content: "DB migration: add structured_perks (JSONB), initiation_fee_value (INT), minimum_commitment_cycles (INT nullable) to membership_tiers via dbmate"
-    status: pending
+    status: completed
   - id: p2-cron
     content: "Build daily grace-period cron: POST /api/cron/suspend-overdue-memberships — suspend active memberships 7+ days past renewal with unpaid payment"
-    status: pending
+    status: completed
   - id: p3-perk-lib
     content: Create src/modules/memberships/ with getActiveMembershipPerks and applyMembershipDiscount pure functions
-    status: pending
+    status: completed
   - id: p4-booking-discount
     content: Wire COURT_BOOKING_DISCOUNT_PERCENT into booking price computation in src/lib/booking.ts + booking creation route
-    status: pending
+    status: completed
   - id: p5-lesson-discount
     content: Wire LESSON_DISCOUNT_PERCENT into coach lesson price computation
-    status: pending
+    status: completed
   - id: p6-admin-ui
     content: "Admin UI: structured perks builder, initiation fee field, minimum commitment dropdown, tier card summary display"
-    status: pending
+    status: completed
   - id: p7-initiation-commitment
     content: "Initiation fee: charge once on genuine first activation (guard against reactivation double-charge). Minimum commitment: block cancellation before cycles elapsed"
-    status: pending
+    status: completed
   - id: p8-open-play-wiring
     content: Wire incrementSessionCount into approve-payment path; apply OPEN_PLAY_DISCOUNT_PERCENT as fallback when sessions exhausted; staff override flag
-    status: pending
+    status: completed
 isProject: false
 ---
 

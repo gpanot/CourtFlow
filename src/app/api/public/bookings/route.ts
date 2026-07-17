@@ -21,6 +21,9 @@ import {
   getOpenBillVenueSettings,
 } from "@/lib/open-bill";
 import { validatePromoCode, redeemPromoCode } from "@/modules/marketing/lib/promo-code";
+import { getActiveMembershipPerks } from "@/modules/memberships/lib/getActivePerks";
+import { applyMembershipDiscount } from "@/modules/memberships/lib/applyDiscount";
+import { PerkType } from "@/modules/memberships/types";
 
 export const dynamic = "force-dynamic";
 
@@ -109,9 +112,18 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // Validate promo code if provided (before opening the transaction)
+    // Membership discount — membership always wins over promo code (spec §5.2)
+    const memberPerks = await getActiveMembershipPerks(playerId, venueId);
+    const memberDiscountedPrice = applyMembershipDiscount(
+      totalPrice,
+      PerkType.COURT_BOOKING_DISCOUNT_PERCENT,
+      memberPerks
+    );
+    const memberDiscountApplied = memberDiscountedPrice < totalPrice;
+
+    // Validate promo code only when no membership discount is in effect
     let promoResult: Awaited<ReturnType<typeof validatePromoCode>> | null = null;
-    if (promoCode) {
+    if (promoCode && !memberDiscountApplied) {
       promoResult = await validatePromoCode({
         code: promoCode,
         venueId,
@@ -121,7 +133,11 @@ export async function POST(request: NextRequest) {
       });
     }
 
-    const effectiveTotalPrice = promoResult?.valid ? promoResult.finalPrice : totalPrice;
+    const effectiveTotalPrice = memberDiscountApplied
+      ? memberDiscountedPrice
+      : promoResult?.valid
+      ? promoResult.finalPrice
+      : totalPrice;
     const paymentRef = openBillAccount ? null : await generatePaymentRef("booking");
     const holdExpiresAt = openBillAccount ? null : new Date(Date.now() + HOLD_MINUTES * 60 * 1000);
 
@@ -203,6 +219,7 @@ export async function POST(request: NextRequest) {
         return json(
           {
             booking,
+            memberDiscountApplied,
             payment: {
               mode: "open_bill",
               companyAccountId: openBillAccount.companyAccountId,
@@ -223,6 +240,7 @@ export async function POST(request: NextRequest) {
       return json(
         {
           booking,
+          memberDiscountApplied,
           payment: {
             paymentRef,
             holdExpiresAt: holdExpiresAt!.toISOString(),

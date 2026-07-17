@@ -13,6 +13,9 @@ import {
 } from "@/lib/booking";
 import { sendBookingEmail, wrapPaymentUrlWithMagicLogin } from "@/lib/email/send";
 import { wrapPaymentUrlForNewPlayer, getBaseUrl } from "@/lib/player-reset-password";
+import { getActiveMembershipPerks } from "@/modules/memberships/lib/getActivePerks";
+import { applyMembershipDiscount } from "@/modules/memberships/lib/applyDiscount";
+import { PerkType } from "@/modules/memberships/types";
 export const dynamic = "force-dynamic";
 
 export async function POST(request: NextRequest) {
@@ -85,12 +88,29 @@ export async function POST(request: NextRequest) {
 
     const pricing = resolveGroupBookingPrice(config, courtsInput, venueTimezone, courtMatrices);
 
-    // Apply optional staff discount
-    const discountPct = typeof body.discountPct === "number" && body.discountPct > 0 && body.discountPct <= 100
-      ? body.discountPct
+    // Membership discount — applied automatically when no manual discountPct is provided.
+    const memberPerks = await getActiveMembershipPerks(body.playerId, body.venueId);
+    const memberDiscountedTotal = applyMembershipDiscount(
+      pricing.total,
+      PerkType.COURT_BOOKING_DISCOUNT_PERCENT,
+      memberPerks
+    );
+    const memberDiscountApplied = memberDiscountedTotal < pricing.total;
+
+    // Staff-provided manual discount overrides membership perk when explicitly set.
+    const manualDiscountPct =
+      typeof body.discountPct === "number" && body.discountPct > 0 && body.discountPct <= 100
+        ? body.discountPct
+        : 0;
+
+    const effectiveDiscountPct = manualDiscountPct > 0
+      ? manualDiscountPct
+      : memberDiscountApplied
+      ? Math.round((1 - memberDiscountedTotal / pricing.total) * 100)
       : 0;
+
     const applyDiscount = (price: number) =>
-      discountPct > 0 ? Math.round(price * (100 - discountPct) / 100) : price;
+      effectiveDiscountPct > 0 ? Math.round(price * (100 - effectiveDiscountPct) / 100) : price;
 
     const result = await prisma.$transaction(async (tx) => {
       // Conflict-check each court independently using its own time window
@@ -201,7 +221,7 @@ export async function POST(request: NextRequest) {
       console.log(`[staffBatchBooking] no email on player "${player?.name}" — skipping confirmation email`);
     }
 
-    return json(result, 201);
+    return json({ ...result, memberDiscountApplied }, 201);
   } catch (e) {
     const msg = (e as Error).message;
     if (msg.startsWith("CONFLICT:")) {

@@ -5,6 +5,9 @@ import { requireAdminAccess } from "@/lib/auth";
 import { hasGroupPlayerPricing, calculateSessionPrice } from "@/lib/coach-package-pricing";
 import { buildLessonEmailContext, sendLessonEventEmails } from "@/lib/email/send";
 import { checkProgramBlockConflict } from "@/lib/program-run";
+import { getActiveMembershipPerks } from "@/modules/memberships/lib/getActivePerks";
+import { applyMembershipDiscount } from "@/modules/memberships/lib/applyDiscount";
+import { PerkType } from "@/modules/memberships/types";
 
 export const dynamic = "force-dynamic";
 export async function GET(request: NextRequest) {
@@ -219,9 +222,14 @@ export async function POST(request: NextRequest) {
     // durationMinCheck already validated above — reuse it
     const slotCount = durationMinCheck / pkg.durationMin;
 
-    const priceValue = hasGroupPlayerPricing(pkg)
+    const basePrice = hasGroupPlayerPricing(pkg)
       ? calculateSessionPrice(pkg, { playerCount: body.playerCount, slotCount })
       : Math.round((pkg.priceValue / pkg.durationMin) * durationMinCheck);
+
+    // Apply membership lesson discount perk if the player has an active membership
+    const memberPerks = await getActiveMembershipPerks(body.playerId, body.venueId);
+    const priceValue = applyMembershipDiscount(basePrice, PerkType.LESSON_DISCOUNT_PERCENT, memberPerks);
+    const memberDiscountApplied = priceValue < basePrice;
 
     const lesson = await prisma.coachLesson.create({
       data: {
@@ -257,6 +265,7 @@ export async function POST(request: NextRequest) {
     return json(
       {
         ...lesson,
+        memberDiscountApplied,
         ...(programConflict.hasConflict
           ? {
               warning: {

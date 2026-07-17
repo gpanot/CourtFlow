@@ -1177,7 +1177,8 @@ CREATE TABLE public.membership_payments (
     payment_method text,
     note text,
     created_at timestamp(3) without time zone DEFAULT CURRENT_TIMESTAMP NOT NULL,
-    proof_url text
+    proof_url text,
+    payment_type text DEFAULT 'recurring'::text NOT NULL
 );
 
 
@@ -1195,7 +1196,11 @@ CREATE TABLE public.membership_tiers (
     show_badge boolean DEFAULT false NOT NULL,
     is_active boolean DEFAULT true NOT NULL,
     created_at timestamp(3) without time zone DEFAULT CURRENT_TIMESTAMP NOT NULL,
-    perks jsonb DEFAULT '[]'::jsonb NOT NULL
+    perks jsonb DEFAULT '[]'::jsonb NOT NULL,
+    structured_perks jsonb DEFAULT '[]'::jsonb NOT NULL,
+    initiation_fee_value integer DEFAULT 0 NOT NULL,
+    minimum_commitment_cycles integer,
+    is_published boolean DEFAULT true NOT NULL
 );
 
 
@@ -6217,4 +6222,7 @@ INSERT INTO public.schema_migrations (version) VALUES
     ('20260713032737'),
     ('20260716094008'),
     ('20260716103355'),
-    ('20260716120000');
+    ('20260716120000'),
+    ('20260717001209'),
+    ('20260717002208'),
+    ('20260717013051');

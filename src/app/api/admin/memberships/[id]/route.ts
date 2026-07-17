@@ -29,6 +29,22 @@ export async function PATCH(
       if (!["suspended", "cancelled"].includes(body.status)) {
         return error("Status must be 'suspended' or 'cancelled'", 400);
       }
+
+      // Minimum commitment cancel guard
+      if (body.status === "cancelled" && existing.tier.minimumCommitmentCycles != null) {
+        const activatedAt = existing.activatedAt;
+        const cyclesElapsed = Math.floor(
+          (Date.now() - activatedAt.getTime()) / (30 * 86_400_000)
+        );
+        const remaining = existing.tier.minimumCommitmentCycles - cyclesElapsed;
+        if (remaining > 0) {
+          return error(
+            `Member is under minimum commitment (${remaining} cycle${remaining === 1 ? "" : "s"} remaining)`,
+            400
+          );
+        }
+      }
+
       data.status = body.status;
     }
 

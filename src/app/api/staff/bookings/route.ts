@@ -12,6 +12,9 @@ import {
 import { attachBookingToOpenBill, getPlayerOpenBillAccount } from "@/lib/open-bill";
 import { sendBookingEmail, wrapPaymentUrlWithMagicLogin } from "@/lib/email/send";
 import { wrapPaymentUrlForNewPlayer, getBaseUrl } from "@/lib/player-reset-password";
+import { getActiveMembershipPerks } from "@/modules/memberships/lib/getActivePerks";
+import { applyMembershipDiscount } from "@/modules/memberships/lib/applyDiscount";
+import { PerkType } from "@/modules/memberships/types";
 
 export const dynamic = "force-dynamic";
 
@@ -109,16 +112,29 @@ export async function POST(request: NextRequest) {
 
     const openBillAccount = await getPlayerOpenBillAccount(body.playerId, body.venueId);
 
-    // Apply optional staff discount for regular bookings only.
-    // Open-bill clients get their configured percent discount at statement issue time.
-    const discountPct = typeof body.discountPct === "number" && body.discountPct > 0 && body.discountPct <= 100
-      ? body.discountPct
-      : 0;
+    // Membership discount — applied automatically when no manual discountPct is provided.
+    // Open-bill accounts handle discounts at statement time, so skip membership discount for them.
+    const memberPerks = openBillAccount
+      ? []
+      : await getActiveMembershipPerks(body.playerId, body.venueId);
+    const memberDiscountedPrice = applyMembershipDiscount(
+      totalPrice,
+      PerkType.COURT_BOOKING_DISCOUNT_PERCENT,
+      memberPerks
+    );
+    const memberDiscountApplied = !openBillAccount && memberDiscountedPrice < totalPrice;
+
+    // Staff-provided manual discount overrides membership perk when explicitly set.
+    const manualDiscountPct =
+      typeof body.discountPct === "number" && body.discountPct > 0 && body.discountPct <= 100
+        ? body.discountPct
+        : 0;
+
     const finalPrice = openBillAccount
       ? totalPrice
-      : discountPct > 0
-      ? Math.round(totalPrice * (100 - discountPct) / 100)
-      : totalPrice;
+      : manualDiscountPct > 0
+      ? Math.round(totalPrice * (100 - manualDiscountPct) / 100)
+      : memberDiscountedPrice;
 
     // Full span conflict check
     const conflicting = await prisma.booking.findFirst({
@@ -199,7 +215,7 @@ export async function POST(request: NextRequest) {
       console.log(`[staffBooking] no email on player "${booking.player.name}" — skipping confirmation email`);
     }
 
-    return json(booking, 201);
+    return json({ ...booking, memberDiscountApplied }, 201);
   } catch (e) {
     if ((e as { code?: string }).code === "P2002") {
       return error("Slot no longer available — pick another.", 409);

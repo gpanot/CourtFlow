@@ -27,7 +27,17 @@ import {
   Undo2,
   Settings,
   Save,
+  Tag,
+  Eye,
+  EyeOff,
 } from "lucide-react";
+import {
+  PerkType,
+  PERK_LABELS,
+  PERK_UNIT,
+  perkToLegacyString,
+  type Perk,
+} from "@/modules/memberships/types";
 
 export const dynamic = "force-dynamic";
 
@@ -49,10 +59,38 @@ interface Tier {
   sessionsIncluded: number | null;
   showBadge: boolean;
   perks: string[];
+  structuredPerks: Perk[];
+  initiationFeeValue: number;
+  minimumCommitmentCycles: number | null;
   sortOrder: number;
   isActive: boolean;
+  isPublished: boolean;
   _count: { memberships: number };
 }
+
+interface TierFormState {
+  name: string;
+  price: string;
+  sessionsIncluded: string;
+  showBadge: boolean;
+  perks: string[];
+  structuredPerks: Perk[];
+  initiationFee: string;
+  minimumCommitmentCycles: number | null;
+  isFree: boolean;
+}
+
+const DEFAULT_TIER_FORM: TierFormState = {
+  name: "",
+  price: "",
+  sessionsIncluded: "",
+  showBadge: false,
+  perks: [],
+  structuredPerks: [],
+  initiationFee: "",
+  minimumCommitmentCycles: null,
+  isFree: false,
+};
 
 interface PaymentRecord {
   id: string;
@@ -112,9 +150,9 @@ export default function MembershipsPage() {
   const [filterPayment, setFilterPayment] = useState<string>("all");
 
   const [showCreateTier, setShowCreateTier] = useState(false);
-  const [tierForm, setTierForm] = useState({ name: "", price: "", sessionsIncluded: "" as string, showBadge: false, perks: [] as string[] });
+  const [tierForm, setTierForm] = useState<TierFormState>(DEFAULT_TIER_FORM);
   const [editingTierId, setEditingTierId] = useState<string | null>(null);
-  const [editTierForm, setEditTierForm] = useState({ name: "", price: "", sessionsIncluded: "" as string, showBadge: false, perks: [] as string[] });
+  const [editTierForm, setEditTierForm] = useState<TierFormState>(DEFAULT_TIER_FORM);
 
   const [showActivate, setShowActivate] = useState(false);
   const [playerSearch, setPlayerSearch] = useState("");
@@ -186,32 +224,40 @@ export default function MembershipsPage() {
     return () => clearTimeout(t);
   }, [playerSearch, searchPlayers]);
 
+  const buildTierPayload = (form: TierFormState) => {
+    const legacyPerks = [
+      ...form.perks,
+      // auto-append human-readable strings for structured perks
+      ...form.structuredPerks.map(perkToLegacyString),
+    ];
+    return {
+      name: form.name.trim(),
+      priceValue: form.isFree ? 0 : parseInt(form.price.replace(/[^0-9]/g, "") || "0", 10),
+      sessionsIncluded: form.sessionsIncluded === "" ? null : Number(form.sessionsIncluded),
+      showBadge: form.showBadge,
+      perks: [...new Set(legacyPerks)],
+      structuredPerks: form.structuredPerks,
+      initiationFeeValue: form.isFree ? 0 : parseInt(form.initiationFee.replace(/[^0-9]/g, "") || "0", 10),
+      minimumCommitmentCycles: form.minimumCommitmentCycles ?? null,
+    };
+  };
+
   const createTier = async () => {
     if (!tierForm.name.trim()) return;
     try {
       await api.post("/api/admin/membership-tiers", {
         venueId: selectedVenueId,
-        name: tierForm.name.trim(),
-        priceValue: parseInt(tierForm.price.replace(/[^0-9]/g, "") || "0", 10),
-        sessionsIncluded: tierForm.sessionsIncluded === "" ? null : Number(tierForm.sessionsIncluded),
-        showBadge: tierForm.showBadge,
-        perks: tierForm.perks,
+        ...buildTierPayload(tierForm),
       });
       setShowCreateTier(false);
-      setTierForm({ name: "", price: "", sessionsIncluded: "", showBadge: false, perks: [] });
+      setTierForm(DEFAULT_TIER_FORM);
       await fetchTiers();
     } catch (e) { alert((e as Error).message); }
   };
 
   const updateTier = async (id: string) => {
     try {
-      await api.patch(`/api/admin/membership-tiers/${id}`, {
-        name: editTierForm.name.trim(),
-        priceValue: parseInt(editTierForm.price.replace(/[^0-9]/g, "") || "0", 10),
-        sessionsIncluded: editTierForm.sessionsIncluded === "" ? null : Number(editTierForm.sessionsIncluded),
-        showBadge: editTierForm.showBadge,
-        perks: editTierForm.perks,
-      });
+      await api.patch(`/api/admin/membership-tiers/${id}`, buildTierPayload(editTierForm));
       setEditingTierId(null);
       await fetchTiers();
     } catch (e) { alert((e as Error).message); }
@@ -221,6 +267,13 @@ export default function MembershipsPage() {
     if (!confirm("Deactivate this tier? It will be hidden from new sign-ups.")) return;
     try {
       await api.delete(`/api/admin/membership-tiers/${id}`);
+      await fetchTiers();
+    } catch (e) { alert((e as Error).message); }
+  };
+
+  const togglePublishTier = async (id: string, publish: boolean) => {
+    try {
+      await api.patch(`/api/admin/membership-tiers/${id}`, { isPublished: publish });
       await fetchTiers();
     } catch (e) { alert((e as Error).message); }
   };
@@ -453,14 +506,15 @@ export default function MembershipsPage() {
             form={tierForm}
             setForm={setTierForm}
             onSave={createTier}
-            onCancel={() => { setShowCreateTier(false); setTierForm({ name: "", price: "", sessionsIncluded: "", showBadge: false, perks: [] }); }}
+            onCancel={() => { setShowCreateTier(false); setTierForm(DEFAULT_TIER_FORM); }}
             title={t("memberships.newTierTitle")}
             allPerks={allPerks}
           />
         )}
 
+        {/* Published tiers */}
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-          {tiers.filter((t) => t.isActive).map((tier) => (
+          {tiers.filter((t) => t.isActive && t.isPublished).map((tier) => (
             editingTierId === tier.id ? (
               <TierFormCard
                 key={tier.id}
@@ -472,49 +526,76 @@ export default function MembershipsPage() {
                 allPerks={allPerks}
               />
             ) : (
-              <div key={tier.id} className="rounded-xl border border-neutral-800 bg-neutral-900 p-4 space-y-2">
-                <div className="flex items-start justify-between">
-                  <div>
-                    <div className="flex items-center gap-2">
-                      {tier.showBadge && <Crown className="h-4 w-4 text-amber-400" />}
-                      <h4 className="font-semibold">{tier.name}</h4>
-                    </div>
-                    <p className="text-lg font-bold text-purple-400">{fmtPrice(tier.priceValue)}<span className="text-xs font-normal text-neutral-500">/mo</span></p>
-                  </div>
-                  <div className="flex gap-1">
-                    <button
-                      onClick={() => { setEditingTierId(tier.id); setEditTierForm({ name: tier.name, price: tier.priceValue.toLocaleString("vi-VN"), sessionsIncluded: tier.sessionsIncluded === null ? "" : String(tier.sessionsIncluded), showBadge: tier.showBadge, perks: (tier.perks as string[]) || [] }); }}
-                      className="rounded p-1.5 text-neutral-500 hover:bg-neutral-800 hover:text-white"
-                    ><Pencil className="h-3.5 w-3.5" /></button>
-                    <button
-                      onClick={() => deactivateTier(tier.id)}
-                      className="rounded p-1.5 text-neutral-500 hover:bg-red-900/40 hover:text-red-400"
-                    ><Trash2 className="h-3.5 w-3.5" /></button>
-                  </div>
-                </div>
-                <p className="text-xs text-neutral-400">
-                  {tier.sessionsIncluded === null ? t("memberships.unlimitedSessions") : t("memberships.sessionsPerMonth", { count: tier.sessionsIncluded })}
-                </p>
-                {((tier.perks as string[]) || []).length > 0 && (
-                  <ul className="space-y-0.5">
-                    {((tier.perks as string[]) || []).map((perk, i) => (
-                      <li key={i} className="flex items-center gap-1.5 text-xs text-neutral-400">
-                        <Check className="h-3 w-3 shrink-0 text-green-500" />
-                        {perk}
-                      </li>
-                    ))}
-                  </ul>
-                )}
-                <p className="text-xs text-neutral-500">{t("memberships.activeMembers", { count: tier._count.memberships })}</p>
-              </div>
+              <TierCard
+                key={tier.id}
+                tier={tier}
+                fmtPrice={fmtPrice}
+                t={t}
+                onEdit={() => {
+                  setEditingTierId(tier.id);
+                  setEditTierForm({
+                    name: tier.name,
+                    price: tier.priceValue.toLocaleString("en-US"),
+                    sessionsIncluded: tier.sessionsIncluded === null ? "" : String(tier.sessionsIncluded),
+                    showBadge: tier.showBadge,
+                    perks: (tier.perks as string[]) || [],
+                    structuredPerks: (tier.structuredPerks as Perk[]) || [],
+                    initiationFee: tier.initiationFeeValue > 0 ? String(tier.initiationFeeValue) : "",
+                    minimumCommitmentCycles: tier.minimumCommitmentCycles ?? null,
+                    isFree: tier.priceValue === 0,
+                  });
+                }}
+                onTogglePublish={() => togglePublishTier(tier.id, false)}
+                onDeactivate={() => deactivateTier(tier.id)}
+              />
             )
           ))}
         </div>
 
-        {tiers.some((tier) => !tier.isActive) && (
-          <p className="text-xs text-neutral-600">
-            {t("memberships.inactiveTiersHidden", { count: tiers.filter((tier) => !tier.isActive).length })}
-          </p>
+        {/* Draft (hidden) tiers */}
+        {tiers.some((t) => t.isActive && !t.isPublished) && (
+          <div className="space-y-2">
+            <p className="text-xs font-medium uppercase tracking-wider text-neutral-600">Draft / Hidden</p>
+            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+              {tiers.filter((t) => t.isActive && !t.isPublished).map((tier) => (
+                editingTierId === tier.id ? (
+                  <TierFormCard
+                    key={tier.id}
+                    form={editTierForm}
+                    setForm={setEditTierForm}
+                    onSave={() => updateTier(tier.id)}
+                    onCancel={() => setEditingTierId(null)}
+                    title={t("memberships.editTierTitle")}
+                    allPerks={allPerks}
+                  />
+                ) : (
+                  <TierCard
+                    key={tier.id}
+                    tier={tier}
+                    fmtPrice={fmtPrice}
+                    t={t}
+                    isDraft
+                    onEdit={() => {
+                      setEditingTierId(tier.id);
+                      setEditTierForm({
+                        name: tier.name,
+                        price: tier.priceValue.toLocaleString("en-US"),
+                        sessionsIncluded: tier.sessionsIncluded === null ? "" : String(tier.sessionsIncluded),
+                        showBadge: tier.showBadge,
+                        perks: (tier.perks as string[]) || [],
+                        structuredPerks: (tier.structuredPerks as Perk[]) || [],
+                        initiationFee: tier.initiationFeeValue > 0 ? String(tier.initiationFeeValue) : "",
+                        minimumCommitmentCycles: tier.minimumCommitmentCycles ?? null,
+                        isFree: tier.priceValue === 0,
+                      });
+                    }}
+                    onTogglePublish={() => togglePublishTier(tier.id, true)}
+                    onDeactivate={() => deactivateTier(tier.id)}
+                  />
+                )
+              ))}
+            </div>
+          </div>
         )}
       </section>
 
@@ -896,6 +977,128 @@ function StatusBadge({ status }: { status: string }) {
   );
 }
 
+// Sentinel used for the sessions-included row inside the perk builder.
+// It does NOT become a structured perk — it writes to form.sessionsIncluded instead.
+const SESSIONS_INCLUDED_SENTINEL = "__SESSIONS_INCLUDED__" as const;
+
+const PERK_TYPE_OPTIONS = [
+  { value: SESSIONS_INCLUDED_SENTINEL, label: "Open Play sessions/mo (blank = unlimited)" },
+  { value: PerkType.COURT_BOOKING_DISCOUNT_PERCENT, label: "Court booking discount (%)" },
+  { value: PerkType.LESSON_DISCOUNT_PERCENT, label: "Lesson discount (%)" },
+  { value: PerkType.OPEN_PLAY_DISCOUNT_PERCENT, label: "Open Play discount (%) — after limit" },
+  { value: PerkType.ADVANCE_BOOKING_WINDOW_DAYS, label: "Advance booking window (days)" },
+];
+
+const PERK_UNIT_WITH_SESSIONS: Record<string, string> = {
+  [SESSIONS_INCLUDED_SENTINEL]: "sessions",
+  [PerkType.COURT_BOOKING_DISCOUNT_PERCENT]: "%",
+  [PerkType.LESSON_DISCOUNT_PERCENT]: "%",
+  [PerkType.OPEN_PLAY_DISCOUNT_PERCENT]: "%",
+  [PerkType.ADVANCE_BOOKING_WINDOW_DAYS]: "days",
+};
+
+const COMMITMENT_OPTIONS = [
+  { value: null, label: "No minimum" },
+  { value: 1, label: "1 month" },
+  { value: 2, label: "2 months" },
+  { value: 3, label: "3 months" },
+  { value: 6, label: "6 months" },
+  { value: 12, label: "12 months" },
+];
+
+function TierCard({
+  tier,
+  fmtPrice,
+  t,
+  isDraft = false,
+  onEdit,
+  onTogglePublish,
+  onDeactivate,
+}: {
+  tier: Tier;
+  fmtPrice: (v: number) => string;
+  t: (key: string, opts?: Record<string, unknown>) => string;
+  isDraft?: boolean;
+  onEdit: () => void;
+  onTogglePublish: () => void;
+  onDeactivate: () => void;
+}) {
+  return (
+    <div className={cn(
+      "rounded-xl border bg-neutral-900 p-4 space-y-2",
+      isDraft ? "border-neutral-700 opacity-70" : "border-neutral-800",
+    )}>
+      <div className="flex items-start justify-between">
+        <div>
+          <div className="flex items-center gap-2">
+            {tier.showBadge && <Crown className="h-4 w-4 text-amber-400" />}
+            <h4 className="font-semibold">{tier.name}</h4>
+            {isDraft && (
+              <span className="rounded-full bg-neutral-700 px-1.5 py-0.5 text-[9px] font-medium uppercase tracking-wider text-neutral-400">Draft</span>
+            )}
+          </div>
+          <p className="text-lg font-bold text-purple-400">
+            {fmtPrice(tier.priceValue)}<span className="text-xs font-normal text-neutral-500">/mo</span>
+          </p>
+        </div>
+        <div className="flex gap-1">
+          {/* Publish / Hide toggle */}
+          <button
+            onClick={onTogglePublish}
+            title={isDraft ? "Publish tier" : "Hide tier (draft)"}
+            className={cn(
+              "rounded p-1.5 transition-colors",
+              isDraft
+                ? "text-green-500 hover:bg-green-900/30"
+                : "text-neutral-500 hover:bg-neutral-800 hover:text-yellow-400",
+            )}
+          >
+            {isDraft ? <Eye className="h-3.5 w-3.5" /> : <EyeOff className="h-3.5 w-3.5" />}
+          </button>
+          <button onClick={onEdit} className="rounded p-1.5 text-neutral-500 hover:bg-neutral-800 hover:text-white">
+            <Pencil className="h-3.5 w-3.5" />
+          </button>
+          <button onClick={onDeactivate} className="rounded p-1.5 text-neutral-500 hover:bg-red-900/40 hover:text-red-400">
+            <Trash2 className="h-3.5 w-3.5" />
+          </button>
+        </div>
+      </div>
+      <p className="text-xs text-neutral-400">
+        {tier.sessionsIncluded === null ? t("memberships.unlimitedSessions") : t("memberships.sessionsPerMonth", { count: tier.sessionsIncluded })}
+      </p>
+      {((tier.structuredPerks as Perk[]) || []).length > 0 && (
+        <div className="flex flex-wrap gap-1">
+          {((tier.structuredPerks as Perk[]) || []).slice(0, 3).map((p, i) => (
+            <span key={i} className="inline-flex items-center gap-1 rounded-full bg-purple-600/15 px-2 py-0.5 text-[10px] font-medium text-purple-300">
+              <Tag className="h-2.5 w-2.5" />{p.value}{PERK_UNIT[p.type as PerkType]} {PERK_LABELS[p.type as PerkType]}
+            </span>
+          ))}
+          {((tier.structuredPerks as Perk[]) || []).length > 3 && (
+            <span className="text-[10px] text-neutral-500">+{((tier.structuredPerks as Perk[]) || []).length - 3} more</span>
+          )}
+        </div>
+      )}
+      {((tier.perks as string[]) || []).filter(p => !((tier.structuredPerks as Perk[]) || []).some(sp => p.includes(String(sp.value)))).length > 0 && (
+        <ul className="space-y-0.5">
+          {((tier.perks as string[]) || []).filter(p => !((tier.structuredPerks as Perk[]) || []).some(sp => p.includes(String(sp.value)))).map((perk, i) => (
+            <li key={i} className="flex items-center gap-1.5 text-xs text-neutral-400">
+              <Check className="h-3 w-3 shrink-0 text-green-500" />
+              {perk}
+            </li>
+          ))}
+        </ul>
+      )}
+      {tier.initiationFeeValue > 0 && (
+        <p className="text-[10px] text-amber-400/80">+{fmtPrice(tier.initiationFeeValue)} initiation fee</p>
+      )}
+      {tier.minimumCommitmentCycles != null && tier.minimumCommitmentCycles > 0 && (
+        <p className="text-[10px] text-neutral-500">{tier.minimumCommitmentCycles}× min. commitment</p>
+      )}
+      <p className="text-xs text-neutral-500">{t("memberships.activeMembers", { count: tier._count.memberships })}</p>
+    </div>
+  );
+}
+
 function TierFormCard({
   form,
   setForm,
@@ -904,8 +1107,8 @@ function TierFormCard({
   title,
   allPerks,
 }: {
-  form: { name: string; price: string; sessionsIncluded: string; showBadge: boolean; perks: string[] };
-  setForm: (f: typeof form) => void;
+  form: TierFormState;
+  setForm: (f: TierFormState) => void;
   onSave: () => void;
   onCancel: () => void;
   title: string;
@@ -930,34 +1133,187 @@ function TierFormCard({
     setNewPerk("");
   };
 
-  const combined = [...new Set([...allPerks, ...form.perks])];
+  // Unified perk rows shown in the builder:
+  // { type: SESSIONS_INCLUDED_SENTINEL, value: <n> }  → writes to form.sessionsIncluded
+  // { type: PerkType.*, value: <n> }                  → writes to form.structuredPerks
+  const perkRows: Array<{ type: string; value: number }> = [
+    ...(form.sessionsIncluded !== "" ? [{ type: SESSIONS_INCLUDED_SENTINEL, value: parseInt(form.sessionsIncluded, 10) || 0 }] : []),
+    ...form.structuredPerks,
+  ];
 
+  const addStructuredPerk = () => {
+    const usedTypes = new Set(perkRows.map((r) => r.type));
+    const firstUnused = PERK_TYPE_OPTIONS.find((o) => !usedTypes.has(o.value));
+    if (!firstUnused) return; // all types already in use
+    if (firstUnused.value === SESSIONS_INCLUDED_SENTINEL) {
+      // Next unused is sessions — add to sessionsIncluded instead of structuredPerks
+      setForm({ ...form, sessionsIncluded: "" });
+    } else {
+      setForm({
+        ...form,
+        structuredPerks: [...form.structuredPerks, { type: firstUnused.value as PerkType, value: 10 }],
+      });
+    }
+  };
+
+  const updatePerkRow = (rowIndex: number, field: "type" | "value", rawValue: string) => {
+    const row = perkRows[rowIndex];
+    const isSessionsRow = row.type === SESSIONS_INCLUDED_SENTINEL;
+    const spOffset = form.sessionsIncluded !== "" ? 1 : 0;
+
+    if (field === "type") {
+      const newType = rawValue;
+      if (isSessionsRow && newType !== SESSIONS_INCLUDED_SENTINEL) {
+        // Sessions row → switching to a real perk: clear sessionsIncluded, add perk
+        setForm({
+          ...form,
+          sessionsIncluded: "",
+          structuredPerks: [{ type: newType as PerkType, value: 10 }, ...form.structuredPerks],
+        });
+      } else if (!isSessionsRow && newType === SESSIONS_INCLUDED_SENTINEL) {
+        // Real perk row → switching to sessions: remove from structuredPerks, set sessionsIncluded
+        const spIdx = rowIndex - spOffset;
+        setForm({
+          ...form,
+          sessionsIncluded: String(perkRows[rowIndex].value || ""),
+          structuredPerks: form.structuredPerks.filter((_, i) => i !== spIdx),
+        });
+      } else if (!isSessionsRow) {
+        // Normal perk type change
+        const spIdx = rowIndex - spOffset;
+        const updated = form.structuredPerks.map((p, i) =>
+          i === spIdx ? { ...p, type: newType as PerkType } : p
+        );
+        setForm({ ...form, structuredPerks: updated });
+      }
+    } else {
+      // field === "value"
+      const num = parseInt(rawValue, 10) || 0;
+      if (isSessionsRow) {
+        setForm({ ...form, sessionsIncluded: String(num) });
+      } else {
+        const spIdx = rowIndex - spOffset;
+        const updated = form.structuredPerks.map((p, i) =>
+          i === spIdx ? { ...p, value: num } : p
+        );
+        setForm({ ...form, structuredPerks: updated });
+      }
+    }
+  };
+
+  const removePerkRow = (rowIndex: number) => {
+    const row = perkRows[rowIndex];
+    if (row.type === SESSIONS_INCLUDED_SENTINEL) {
+      setForm({ ...form, sessionsIncluded: "" });
+    } else {
+      const spIdx = rowIndex - (form.sessionsIncluded !== "" ? 1 : 0);
+      setForm({ ...form, structuredPerks: form.structuredPerks.filter((_, i) => i !== spIdx) });
+    }
+  };
+
+  const combined = [...new Set([...allPerks, ...form.perks])];
   const inputCls = "w-full rounded-lg border border-neutral-700 bg-neutral-800 px-3 py-2 text-sm text-white placeholder:text-neutral-500 focus:border-purple-500 focus:outline-none";
+  const smallInputCls = "w-full rounded-lg border border-neutral-700 bg-neutral-800 px-2.5 py-1.5 text-xs text-white placeholder:text-neutral-500 focus:border-purple-500 focus:outline-none";
 
   return (
-    <div className="rounded-xl border border-neutral-700 bg-neutral-900 p-4 space-y-3">
+    <div className="rounded-xl border border-neutral-700 bg-neutral-900 p-4 space-y-4 col-span-1 sm:col-span-2">
       <h4 className="text-sm font-semibold">{title}</h4>
+
+      {/* Tier name */}
       <input type="text" placeholder={t("memberships.tierName")} value={form.name}
         onChange={(e) => setForm({ ...form, name: e.target.value })} className={inputCls} autoFocus />
-      <div className="grid grid-cols-2 gap-2">
+
+      {/* Free membership toggle */}
+      <label className="flex items-center gap-2 cursor-pointer select-none">
+        <input type="checkbox" checked={form.isFree}
+          onChange={(e) => setForm({ ...form, isFree: e.target.checked, price: e.target.checked ? "0" : form.price, initiationFee: e.target.checked ? "" : form.initiationFee })}
+          className="h-4 w-4 rounded border-neutral-600 bg-neutral-800 accent-purple-500" />
+        <span className="text-xs text-neutral-400">Free membership (no charge)</span>
+      </label>
+
+      {/* Price / Initiation fee / Minimum commitment — single row */}
+      <div className="grid grid-cols-3 gap-2">
         <div>
-          <label className="text-xs text-neutral-500">{t("memberships.price")}</label>
-          <input type="text" inputMode="numeric" value={form.price}
-            onChange={(e) => { const digits = e.target.value.replace(/[^0-9]/g, ""); setForm({ ...form, price: digits ? parseInt(digits, 10).toLocaleString("en-US") : "" }); }} placeholder="0" className={inputCls} />
+          <label className="text-xs text-neutral-500">{t("memberships.price")} /mo</label>
+          <input type="text" inputMode="numeric" value={form.isFree ? "0" : form.price} disabled={form.isFree}
+            onChange={(e) => { const digits = e.target.value.replace(/[^0-9]/g, ""); setForm({ ...form, price: digits ? parseInt(digits, 10).toLocaleString("en-US") : "" }); }}
+            placeholder="0" className={cn(inputCls, form.isFree && "opacity-40 cursor-not-allowed")} />
         </div>
         <div>
-          <label className="text-xs text-neutral-500">{t("memberships.sessionsPerMoLabel")}</label>
-          <input type="text" inputMode="numeric" value={form.sessionsIncluded}
-            onChange={(e) => setForm({ ...form, sessionsIncluded: e.target.value })} placeholder="∞" className={inputCls} />
+          <label className="text-xs text-neutral-500">Initiation fee (one-time)</label>
+          <input type="text" inputMode="numeric" value={form.isFree ? "" : form.initiationFee} disabled={form.isFree}
+            onChange={(e) => { const digits = e.target.value.replace(/[^0-9]/g, ""); setForm({ ...form, initiationFee: digits }); }}
+            placeholder="0 (optional)" className={cn(inputCls, form.isFree && "opacity-40 cursor-not-allowed")} />
+        </div>
+        <div>
+          <label className="text-xs text-neutral-500">Minimum commitment</label>
+          <select value={form.minimumCommitmentCycles ?? ""}
+            onChange={(e) => setForm({ ...form, minimumCommitmentCycles: e.target.value === "" ? null : Number(e.target.value) })}
+            className={inputCls}>
+            {COMMITMENT_OPTIONS.map((opt) => (
+              <option key={String(opt.value)} value={opt.value ?? ""}>{opt.label}</option>
+            ))}
+          </select>
         </div>
       </div>
+
+      {/* Badge toggle */}
       <label className="flex items-center gap-2 cursor-pointer select-none">
         <input type="checkbox" checked={form.showBadge} onChange={(e) => setForm({ ...form, showBadge: e.target.checked })}
-          className="h-4 w-4 rounded border-neutral-600 bg-neutral-800 text-purple-500 accent-purple-500" />
+          className="h-4 w-4 rounded border-neutral-600 bg-neutral-800 accent-purple-500" />
         <span className="text-xs text-neutral-400">{t("memberships.showBadge")}</span>
       </label>
+
+      {/* Unified perk rows builder (sessions + enforced discounts) */}
       <div className="space-y-2">
-        <label className="text-xs text-neutral-500">{t("memberships.perks")}</label>
+        <div className="flex items-center justify-between">
+          <label className="text-xs font-medium text-neutral-400 uppercase tracking-wider">Perks &amp; Sessions (enforced)</label>
+          <button type="button" onClick={addStructuredPerk}
+            disabled={perkRows.length >= PERK_TYPE_OPTIONS.length}
+            className="flex items-center gap-1 rounded bg-purple-600/20 px-2 py-1 text-[11px] font-medium text-purple-300 hover:bg-purple-600/30 transition-colors disabled:opacity-30 disabled:cursor-not-allowed">
+            <Plus className="h-3 w-3" /> Add perk
+          </button>
+        </div>
+        {perkRows.length === 0 && (
+          <p className="text-[11px] text-neutral-600">No perks yet — click &ldquo;Add perk&rdquo; to configure sessions or discounts</p>
+        )}
+        {perkRows.map((perk, i) => {
+          const isSessionsRow = perk.type === SESSIONS_INCLUDED_SENTINEL;
+          const maxVal = perk.type === PerkType.ADVANCE_BOOKING_WINDOW_DAYS ? 90 : isSessionsRow ? 9999 : 100;
+          // Only show perk types that are not already used by another row (current row's own type always included)
+          const usedTypes = new Set(perkRows.map((r) => r.type));
+          const opts = PERK_TYPE_OPTIONS.filter(
+            (o) => o.value === perk.type || !usedTypes.has(o.value)
+          );
+          return (
+            <div key={i} className="flex items-center gap-2">
+              <select value={perk.type}
+                onChange={(e) => updatePerkRow(i, "type", e.target.value)}
+                className="flex-1 rounded-lg border border-neutral-700 bg-neutral-800 px-2 py-1.5 text-xs text-white focus:border-purple-500 focus:outline-none">
+                {opts.map((opt) => (
+                  <option key={opt.value} value={opt.value}>{opt.label}</option>
+                ))}
+              </select>
+              <div className="flex items-center gap-1 w-28 shrink-0">
+                <input type="number" min={1} max={maxVal}
+                  value={isSessionsRow ? (form.sessionsIncluded || "") : perk.value}
+                  placeholder={isSessionsRow ? "∞" : undefined}
+                  onChange={(e) => updatePerkRow(i, "value", e.target.value)}
+                  className="w-16 rounded-lg border border-neutral-700 bg-neutral-800 px-2 py-1.5 text-xs text-white text-center focus:border-purple-500 focus:outline-none" />
+                <span className="text-[11px] text-neutral-500 shrink-0">{PERK_UNIT_WITH_SESSIONS[perk.type] ?? ""}</span>
+              </div>
+              <button type="button" onClick={() => removePerkRow(i)}
+                className="rounded p-1 text-neutral-600 hover:text-red-400 hover:bg-red-900/20 transition-colors">
+                <Trash2 className="h-3.5 w-3.5" />
+              </button>
+            </div>
+          );
+        })}
+      </div>
+
+      {/* Legacy free-text perks */}
+      <div className="space-y-2">
+        <label className="text-xs text-neutral-500">{t("memberships.perks")} (free-text notes)</label>
         {combined.length > 0 && (
           <div className="space-y-1">
             {combined.map((perk) => (
@@ -973,11 +1329,12 @@ function TierFormCard({
           <input type="text" value={newPerk} onChange={(e) => setNewPerk(e.target.value)}
             onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); addPerk(); } }}
             placeholder={t("memberships.addPerkPlaceholder")}
-            className="flex-1 rounded-lg border border-neutral-700 bg-neutral-800 px-2.5 py-1.5 text-xs text-white placeholder:text-neutral-500 focus:border-purple-500 focus:outline-none" />
+            className={cn(smallInputCls, "flex-1")} />
           <button type="button" onClick={addPerk} disabled={!newPerk.trim()}
             className="rounded-lg bg-neutral-700 px-2.5 py-1.5 text-xs font-medium text-neutral-300 hover:bg-neutral-600 disabled:opacity-40">{t("memberships.add")}</button>
         </div>
       </div>
+
       <div className="flex gap-2">
         <button onClick={onSave} disabled={!form.name.trim()}
           className="rounded-lg bg-purple-600 px-4 py-2 text-sm font-medium text-white hover:bg-purple-500 disabled:opacity-40">{t("common.save")}</button>

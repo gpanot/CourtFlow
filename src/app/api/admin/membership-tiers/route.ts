@@ -36,6 +36,10 @@ export async function POST(request: NextRequest) {
       sessionsIncluded?: number | null;
       showBadge?: boolean;
       perks?: string[];
+      structuredPerks?: object[];
+      initiationFeeValue?: number;
+      minimumCommitmentCycles?: number | null;
+      isPublished?: boolean;
     }>(request);
 
     const existingCount = await prisma.membershipTier.count({
@@ -59,6 +63,10 @@ export async function POST(request: NextRequest) {
         sessionsIncluded: body.sessionsIncluded ?? null,
         showBadge: body.showBadge ?? false,
         perks: body.perks ?? [],
+        structuredPerks: body.structuredPerks ?? [],
+        initiationFeeValue: body.initiationFeeValue ?? 0,
+        minimumCommitmentCycles: body.minimumCommitmentCycles ?? null,
+        isPublished: body.isPublished ?? true,
         sortOrder: (maxSort._max.sortOrder ?? 0) + 1,
       },
     });

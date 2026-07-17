@@ -111,8 +111,10 @@ export async function incrementSessionCount(
 }
 
 /**
- * Batch helper: mark memberships as expired when they haven't been renewed
- * past their renewal date (with a grace buffer). Intended for a cron job.
+ * @deprecated Superseded by /api/cron/suspend-overdue-memberships which
+ * implements the authoritative 7-day grace-then-suspend rule.
+ * This function is retained to avoid breaking any future references but
+ * should not be called — no cron or route should invoke it.
  */
 export async function expireMemberships(): Promise<number> {
   const now = new Date();

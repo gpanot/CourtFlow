@@ -15,6 +15,9 @@ import {
 import { generatePaymentRef } from "@/modules/courtpay/lib/payment-reference";
 import { buildVietQRUrl } from "@/lib/vietqr";
 import { validatePromoCode, redeemPromoCode } from "@/modules/marketing/lib/promo-code";
+import { getActiveMembershipPerks } from "@/modules/memberships/lib/getActivePerks";
+import { applyMembershipDiscount } from "@/modules/memberships/lib/applyDiscount";
+import { PerkType } from "@/modules/memberships/types";
 
 export const dynamic = "force-dynamic";
 
@@ -102,9 +105,18 @@ export async function POST(request: NextRequest) {
 
     const pricing = resolveGroupBookingPrice(config, courtsInput, venueTimezone, courtMatrices);
 
-    // Validate promo before the transaction
+    // Membership discount — membership always wins over promo code (spec §5.2)
+    const memberPerks = await getActiveMembershipPerks(playerId, venueId);
+    const memberDiscountedTotal = applyMembershipDiscount(
+      pricing.total,
+      PerkType.COURT_BOOKING_DISCOUNT_PERCENT,
+      memberPerks
+    );
+    const memberDiscountApplied = memberDiscountedTotal < pricing.total;
+
+    // Validate promo before the transaction, only when no membership discount applies
     let promoResult: Awaited<ReturnType<typeof validatePromoCode>> | null = null;
-    if (promoCode) {
+    if (promoCode && !memberDiscountApplied) {
       promoResult = await validatePromoCode({
         code: promoCode,
         venueId,
@@ -113,7 +125,11 @@ export async function POST(request: NextRequest) {
         originalPrice: pricing.total,
       });
     }
-    const effectiveTotal = promoResult?.valid ? promoResult.finalPrice : pricing.total;
+    const effectiveTotal = memberDiscountApplied
+      ? memberDiscountedTotal
+      : promoResult?.valid
+      ? promoResult.finalPrice
+      : pricing.total;
 
     const paymentRef = await generatePaymentRef("booking");
     const holdExpiresAt = new Date(Date.now() + HOLD_MINUTES * 60 * 1000);
@@ -219,6 +235,7 @@ export async function POST(request: NextRequest) {
         {
           group: result.group,
           bookings: result.bookings,
+          memberDiscountApplied,
           payment: {
             paymentRef,
             holdExpiresAt: holdExpiresAt.toISOString(),

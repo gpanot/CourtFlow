@@ -18,6 +18,10 @@ export async function PATCH(
       showBadge?: boolean;
       sortOrder?: number;
       perks?: string[];
+      structuredPerks?: object[];
+      initiationFeeValue?: number;
+      minimumCommitmentCycles?: number | null;
+      isPublished?: boolean;
     }>(request);
 
     const existing = await prisma.membershipTier.findUnique({ where: { id } });
@@ -32,6 +36,10 @@ export async function PATCH(
         ...(body.showBadge !== undefined && { showBadge: body.showBadge }),
         ...(body.perks !== undefined && { perks: body.perks }),
         ...(body.sortOrder !== undefined && { sortOrder: body.sortOrder }),
+        ...(body.structuredPerks !== undefined && { structuredPerks: body.structuredPerks }),
+        ...(body.initiationFeeValue !== undefined && { initiationFeeValue: body.initiationFeeValue }),
+        ...(body.minimumCommitmentCycles !== undefined && { minimumCommitmentCycles: body.minimumCommitmentCycles }),
+        ...(body.isPublished !== undefined && { isPublished: body.isPublished }),
       },
     });
 

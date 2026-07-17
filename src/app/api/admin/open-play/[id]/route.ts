@@ -10,6 +10,10 @@ import {
   paidCancellationUpdate,
   requirePaidCancellationReason,
 } from "@/lib/paid-cancellation";
+import { checkSessionLimit, incrementSessionCount } from "@/lib/membership";
+import { getActiveMembershipPerks } from "@/modules/memberships/lib/getActivePerks";
+import { applyMembershipDiscount } from "@/modules/memberships/lib/applyDiscount";
+import { PerkType } from "@/modules/memberships/types";
 
 export const dynamic = "force-dynamic";
 
@@ -37,6 +41,26 @@ export async function PATCH(
       if (!allowedStatuses.includes(reg.paymentStatus)) {
         return error(`Cannot approve: payment status is "${reg.paymentStatus}"`, 400);
       }
+
+      // Resolve session limit and potential price adjustment before writing.
+      // body.overrideNoCount = true lets staff skip the session increment (staff exception).
+      let discountedPrice: number | null = null;
+      let sessionWasIncluded = false;
+
+      if (!body.overrideNoCount) {
+        const sessionResult = await checkSessionLimit(reg.playerId, reg.venueId);
+        if (sessionResult.isUnlimited || sessionResult.allowed) {
+          sessionWasIncluded = true;
+        } else {
+          // Session limit exhausted — apply fallback OPEN_PLAY_DISCOUNT_PERCENT perk
+          const memberPerks = await getActiveMembershipPerks(reg.playerId, reg.venueId);
+          const reduced = applyMembershipDiscount(reg.priceValue, PerkType.OPEN_PLAY_DISCOUNT_PERCENT, memberPerks);
+          if (reduced < reg.priceValue) {
+            discountedPrice = reduced;
+          }
+        }
+      }
+
       const invoiceNumber = await allocateInvoiceNumber(reg.venueId, "OP");
       const updated = await prisma.openPlayRegistration.update({
         where: { id },
@@ -45,10 +69,16 @@ export async function PATCH(
           holdExpiresAt: null,
           invoiceNumber,
           invoicedAt: new Date(),
+          ...(discountedPrice !== null ? { priceValue: discountedPrice } : {}),
           ...(body.paymentMethod ? { paymentMethod: body.paymentMethod } : {}),
         },
       });
-      return json(updated);
+
+      if (sessionWasIncluded) {
+        await incrementSessionCount(reg.playerId, reg.venueId);
+      }
+
+      return json({ ...updated, sessionWasIncluded, discountApplied: discountedPrice !== null });
     }
 
     if (action === "cancel") {
