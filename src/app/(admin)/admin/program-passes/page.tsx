@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState, useCallback } from "react";
+import { useSearchParams } from "next/navigation";
 import { useTranslation } from "react-i18next";
 import { api } from "@/lib/api-client";
 import { cn } from "@/lib/cn";
@@ -213,7 +214,14 @@ export default function ProgramPassesPage() {
     venues: venueOptions,
   } = useAdminVenuePicker({ autoSelect: true });
 
-  const [activeTab, setActiveTab] = useState<"passes" | "passTypes" | "programRuns" | "allPrograms">("passes");
+  const searchParams = useSearchParams();
+  const [activeTab, setActiveTab] = useState<"passes" | "passTypes" | "programRuns" | "allPrograms">(
+    () => {
+      const t = searchParams.get("tab");
+      if (t === "allPrograms" || t === "passTypes" || t === "programRuns" || t === "passes") return t;
+      return "passes";
+    }
+  );
 
   // Pass Types state
   const [passTypes, setPassTypes] = useState<PassType[]>([]);
@@ -744,7 +752,11 @@ export default function ProgramPassesPage() {
 
       {/* ── ALL PROGRAMS TAB ── */}
       {activeTab === "allPrograms" && selectedVenueId && (
-        <AllProgramsTab venueId={selectedVenueId} passTypes={passTypes} />
+        <AllProgramsTab
+          venueId={selectedVenueId}
+          passTypes={passTypes}
+          initialPaymentFilter={searchParams.get("paymentStatus") ?? "all"}
+        />
       )}
 
       {/* ── MODALS ── */}
@@ -2760,9 +2772,11 @@ const PROG_PASS_STATUS_COLORS: Record<string, string> = {
 function AllProgramsTab({
   venueId,
   passTypes,
+  initialPaymentFilter = "all",
 }: {
   venueId: string;
   passTypes: Array<{ id: string; name: string }>;
+  initialPaymentFilter?: string;
 }) {
   const { t } = useTranslation("translation", { i18n: adminI18n });
   const today = new Date();
@@ -2771,7 +2785,7 @@ function AllProgramsTab({
 
   const [dateFrom, setDateFrom] = useState(defaultFrom);
   const [dateTo, setDateTo] = useState(defaultTo);
-  const [paymentFilter, setPaymentFilter] = useState("all");
+  const [paymentFilter, setPaymentFilter] = useState(initialPaymentFilter);
   const [passTypeFilter, setPassTypeFilter] = useState("all");
   const [search, setSearch] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");

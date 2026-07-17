@@ -68,6 +68,7 @@ const PAYMENT_LABEL_KEYS: Record<string, { key: string; color: string }> = {
   proof_submitted: { key: "overview.statusProofSubmitted", color: "text-amber-400" },
   paid: { key: "overview.statusPaid", color: "text-emerald-400" },
   refunded: { key: "overview.statusRefunded", color: "text-blue-400" },
+  void: { key: "overview.statusCancelled", color: "text-red-400" },
 };
 
 const CANCELLATION_REASON_COLORS: Record<string, string> = {
@@ -486,7 +487,7 @@ export function PaymentActionModal({ target, onClose, onUpdated }: Props) {
                   </button>
                 )}
 
-                {/* Program: quick approve button for pending payments */}
+                {/* Program: quick approve button for pending/proof_submitted payments */}
                 {isProgram && normalizedPayment === "pending" && (
                   <button
                     onClick={() => setConfirmingAction("approve")}
@@ -498,7 +499,7 @@ export function PaymentActionModal({ target, onClose, onUpdated }: Props) {
                 )}
 
                 {/* Status actions */}
-                {isActive && (
+                {isActive && normalizedPayment !== "void" && (
                   <div className="flex gap-2 pt-1">
                     <button
                       onClick={() => setConfirmingAction("cancel")}

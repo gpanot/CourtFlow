@@ -598,7 +598,7 @@ export default function AdminOverview() {
               bg="bg-indigo-500/10 border-indigo-500/20"
               text={t("overview.unpaidPrograms", { count: data.programs!.unpaidCount, amount: fmtPrice(data.programs!.unpaidAmount) })}
               action={t("overview.view")}
-              onClick={() => router.push("/admin/program-passes")}
+              onClick={() => router.push("/admin/program-passes?tab=allPrograms&paymentStatus=pending")}
             />
           )}
           {data.memberships.expiringThisWeek > 0 && (

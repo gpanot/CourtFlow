@@ -16,7 +16,7 @@ export async function PATCH(
   try {
     requireSuperAdmin(request.headers);
     const { id } = await params;
-    const body = await parseBody<{ action: "approve" | "cancel"; paymentMethod?: string }>(request);
+    const body = await parseBody<{ action: "approve" | "cancel"; paymentMethod?: string; voidReason?: string }>(request);
 
     const payment = await prisma.programPassPayment.findUnique({
       where: { id },
@@ -39,7 +39,7 @@ export async function PATCH(
     if (body.action === "cancel") {
       const updated = await prisma.programPassPayment.update({
         where: { id },
-        data: { status: "VOID", voidReason: "Cancelled by admin" },
+        data: { status: "VOID", voidReason: body.voidReason ?? "Cancelled by admin" },
       });
       return json(updated);
     }
