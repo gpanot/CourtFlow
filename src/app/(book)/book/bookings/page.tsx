@@ -3,7 +3,8 @@ export const dynamic = "force-dynamic";
 import { portalFetch } from "@/lib/portal-fetch";
 
 import { usePlayerSession } from "../components/usePlayerSession";
-import { useRouter } from "next/navigation";
+import { usePlayerVenue } from "../components/PlayerVenueContext";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useTranslation } from "react-i18next";
@@ -69,8 +70,22 @@ interface OpenPlayItem {
   venue?: { name: string };
 }
 
-type MainTab = "courts" | "sessions" | "openplay";
+type MainTab = "courts" | "sessions" | "openplay" | "programs";
 type TimeFilter = "upcoming" | "past";
+
+interface EnrolledProgram {
+  programPassId: string;
+  run: {
+    id: string;
+    name: string;
+    status: string;
+    passType: { name: string; imageUrl: string | null; price: number };
+    coaches: { name: string }[];
+    instances: { id: string; startAt: string; endAt: string; topic: string | null; checkIns: { id: string }[] }[];
+  };
+  checkInCount: number;
+  totalSessions: number;
+}
 
 function PaymentPill({ status, bookingStatus }: { status: string | null; bookingStatus?: string }) {
   const { t } = useTranslation();
@@ -301,13 +316,16 @@ function collapseGroupBookings(items: BookingItem[]): CollapsedBookingItem[] {
 export default function MyBookingsPage() {
   const { status } = usePlayerSession();
   const router = useRouter();
+  const searchParams = useSearchParams();
   const { t } = useTranslation();
   const { formatDate, formatDateField, formatTime, formatPrice } = useBookFormatters();
-  const [tab, setTab] = useState<MainTab>("courts");
+  const { venueId } = usePlayerVenue();
+  const [tab, setTab] = useState<MainTab>((searchParams.get("tab") as MainTab) ?? "courts");
   const [timeFilter, setTimeFilter] = useState<TimeFilter>("upcoming");
   const [bookings, setBookings] = useState<BookingItem[]>([]);
   const [lessons, setLessons] = useState<LessonItem[]>([]);
   const [openPlayRegs, setOpenPlayRegs] = useState<OpenPlayItem[]>([]);
+  const [enrolledPrograms, setEnrolledPrograms] = useState<EnrolledProgram[]>([]);
   const [loaded, setLoaded] = useState(false);
   const [showAllCourts, setShowAllCourts] = useState(false);
   const [showAllSessions, setShowAllSessions] = useState(false);
@@ -331,12 +349,22 @@ export default function MyBookingsPage() {
     }
   }, [status, router]);
 
+  // Load enrolled programs separately (needs venueId)
+  useEffect(() => {
+    if (status !== "authenticated" || !venueId) return;
+    portalFetch(`/api/public/program-runs?enrolled=true&venueId=${venueId}`)
+      .then((r) => r.json())
+      .then((d) => setEnrolledPrograms(Array.isArray(d) ? d : []))
+      .catch(() => {});
+  }, [status, venueId]);
+
   function handleTabChange(next: MainTab) {
     setTab(next);
     setTimeFilter("upcoming");
     setShowAllCourts(false);
     setShowAllSessions(false);
     setShowAllOP(false);
+    router.replace(`/book/bookings${next !== "courts" ? `?tab=${next}` : ""}`, { scroll: false });
   }
 
   if (!loaded) {
@@ -394,13 +422,13 @@ export default function MyBookingsPage() {
       <BookTabTopBar title={t("bookings.title")} />
 
       <div className="px-4 pb-8">
-        {/* Main tabs — full width, equal thirds */}
+        {/* Main tabs */}
         <div className="flex mb-4 rounded-xl overflow-hidden border border-[var(--cm-border)] bg-[var(--cm-bg-surface)]">
-          {(["courts", "sessions", "openplay"] as const).map((tabKey, idx) => (
+          {(["courts", "sessions", "openplay", "programs"] as const).map((tabKey, idx) => (
             <button
               key={tabKey}
               onClick={() => handleTabChange(tabKey)}
-              className={`flex-1 py-2.5 text-sm font-medium transition-colors ${
+              className={`flex-1 py-2.5 text-xs font-medium transition-colors ${
                 idx > 0 ? "border-l border-[var(--cm-border)]" : ""
               } ${
                 tab === tabKey
@@ -412,7 +440,9 @@ export default function MyBookingsPage() {
                 ? t("bookings.tabCourt")
                 : tabKey === "sessions"
                 ? t("bookings.tabCoach")
-                : t("bookings.tabOpenPlay")}
+                : tabKey === "openplay"
+                ? t("bookings.tabOpenPlay")
+                : t("bookings.tabPrograms")}
             </button>
           ))}
         </div>
@@ -677,6 +707,68 @@ export default function MyBookingsPage() {
                   formatPrice={formatPrice}
                 />
               ))
+            )}
+          </>
+        )}
+
+        {/* ── Programs ── */}
+        {tab === "programs" && (
+          <>
+            {enrolledPrograms.length === 0 ? (
+              <div className="pt-16 flex flex-col items-center text-center gap-3">
+                <span className="text-4xl">🏸</span>
+                <p className="text-[var(--cm-text-muted)] text-sm">{t("programs.noEnrolledPrograms")}</p>
+                <button
+                  onClick={() => router.push("/book/programs")}
+                  className="mt-2 px-4 py-2 bg-[var(--cm-accent)] text-black rounded-xl text-sm font-semibold"
+                >
+                  {t("programs.browsePrograms")}
+                </button>
+              </div>
+            ) : (
+              <div className="space-y-4">
+                {enrolledPrograms.map((entry) => {
+                  const now2 = new Date();
+                  const nextSession = entry.run.instances.find((i) => new Date(i.startAt) >= now2);
+                  const progressPct = entry.totalSessions > 0
+                    ? Math.round((entry.checkInCount / entry.totalSessions) * 100) : 0;
+                  return (
+                    <Link key={entry.programPassId} href={`/book/programs/${entry.run.id}/progress`} className="block">
+                      <div className="bg-[var(--cm-bg-card)] border border-[var(--cm-border)] rounded-2xl p-4">
+                        <div className="flex gap-3 items-start">
+                          {entry.run.passType.imageUrl ? (
+                            <img src={entry.run.passType.imageUrl} alt="" className="w-14 h-14 rounded-xl object-cover shrink-0" />
+                          ) : (
+                            <div className="w-14 h-14 rounded-xl bg-[var(--cm-accent-bg)] flex items-center justify-center text-2xl shrink-0">🏸</div>
+                          )}
+                          <div className="flex-1 min-w-0">
+                            <p className="font-bold text-[var(--cm-text)] text-sm leading-tight truncate">{entry.run.passType.name}</p>
+                            <p className="text-xs text-[var(--cm-text-muted)] truncate">{entry.run.name}</p>
+                            <p className="text-xs text-[var(--cm-text-muted)] mt-0.5">
+                              {entry.checkInCount}/{entry.totalSessions} {t("programs.sessions")}
+                            </p>
+                          </div>
+                          <ChevronRight className="h-4 w-4 text-[var(--cm-text-muted)] shrink-0 mt-1" />
+                        </div>
+
+                        {/* Progress bar */}
+                        <div className="mt-3">
+                          <div className="h-1.5 bg-[var(--cm-bg-surface)] rounded-full overflow-hidden">
+                            <div className="h-full bg-[var(--cm-accent)] rounded-full" style={{ width: `${progressPct}%` }} />
+                          </div>
+                          <p className="text-[10px] text-[var(--cm-text-muted)] mt-1">{progressPct}% {t("programs.complete")}</p>
+                        </div>
+
+                        {nextSession && (
+                          <p className="text-xs text-[var(--cm-text-sec)] mt-2">
+                            📅 {t("programs.nextSession")}: {new Date(nextSession.startAt).toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" })}
+                          </p>
+                        )}
+                      </div>
+                    </Link>
+                  );
+                })}
+              </div>
             )}
           </>
         )}

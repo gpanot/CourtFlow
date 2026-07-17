@@ -11,6 +11,7 @@ const HIDDEN_PATHS = ["/book/login", "/book/intro", "/book/onboarding"];
 const BASE_TABS = [
   { labelKey: "nav.book", href: "/book", icon: BookIcon, requiresAuth: false, coachOnly: false },
   { labelKey: "nav.coaches", href: "/book/coaches", icon: CoachIcon, requiresAuth: false, coachOnly: false },
+  { labelKey: "nav.programs", href: "/book/programs", icon: ProgramsIcon, requiresAuth: false, coachOnly: false },
   { labelKey: "nav.bookings", href: "/book/bookings", icon: BookingsIcon, requiresAuth: true, coachOnly: false },
   { labelKey: "nav.profile", href: "/book/account", icon: ProfileIcon, requiresAuth: true, coachOnly: false },
 ] as const;
@@ -115,6 +116,17 @@ function ProfileIcon({ filled }: { filled: boolean }) {
     <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={filled ? 2.5 : 1.5} strokeLinecap="round" strokeLinejoin="round">
       <path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2" />
       <circle cx="12" cy="7" r="4" />
+    </svg>
+  );
+}
+
+function ProgramsIcon({ filled }: { filled: boolean }) {
+  return (
+    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={filled ? 2.5 : 1.5} strokeLinecap="round" strokeLinejoin="round">
+      <rect x="2" y="3" width="20" height="14" rx="2" />
+      <path d="M8 21h8" />
+      <path d="M12 17v4" />
+      <path d="M10 8l6 3-6 3V8z" fill={filled ? "currentColor" : "none"} />
     </svg>
   );
 }

@@ -38,6 +38,7 @@ CREATE TABLE IF NOT EXISTS program_runs (
   recurrence_end_date    DATE,
   max_capacity           INT         NOT NULL DEFAULT 20,
   court_id               TEXT        REFERENCES courts(id) ON DELETE SET NULL,
+  court_ids              TEXT[]      NOT NULL DEFAULT '{}',
   note                   TEXT,
   created_by             TEXT,
   created_at             TIMESTAMPTZ NOT NULL DEFAULT now(),

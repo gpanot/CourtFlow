@@ -359,6 +359,40 @@ async function handleOpenBillPayment(
   return { matched: true, paymentId: bill.id };
 }
 
+async function handleProgramPassPayment(
+  payload: SepayWebhookPayload,
+  ref: string
+): Promise<{ matched: boolean; paymentId?: string }> {
+  const payment = await prisma.programPassPayment.findFirst({
+    where: { paymentRef: ref },
+    include: { programPass: { select: { venueId: true } } },
+  });
+
+  if (!payment || payment.status !== "UNPAID") return { matched: false };
+  if (payload.transferAmount < payment.amountValue) return { matched: false };
+
+  const venueId = payment.programPass.venueId;
+  const venue = await prisma.venue.findUnique({ where: { id: venueId }, select: { settings: true } });
+  const venueSettings = (venue?.settings ?? {}) as Record<string, unknown>;
+  if (!venueSettings.autoPaymentEnabled || !venueSettings.sepayEnabled) return { matched: false };
+
+  await prisma.programPassPayment.update({
+    where: { id: payment.id },
+    data: {
+      status: "PAID",
+      paidAt: new Date(),
+      paymentMethod: "vietqr",
+    },
+  });
+
+  emitToVenue(venueId, "payment:confirmed", {
+    paymentRef: ref,
+    programPassPaymentId: payment.id,
+  });
+
+  return { matched: true, paymentId: payment.id };
+}
+
 /**
  * Process a SePay webhook payload: match payment, confirm, and activate subscription if applicable.
  * Returns true if a payment was matched and processed.
@@ -397,6 +431,9 @@ export async function processSepayWebhook(
   }
   if (ref.startsWith("CF-OB-")) {
     return handleOpenBillPayment(payload, ref);
+  }
+  if (ref.startsWith("CF-PRG-")) {
+    return handleProgramPassPayment(payload, ref);
   }
 
   const pending = await prisma.pendingPayment.findUnique({

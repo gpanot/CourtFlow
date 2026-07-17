@@ -287,6 +287,8 @@ export async function checkProgramBlockConflict(
 
 export interface EnrollResult {
   programPassId: string;
+  paymentId: string | null;
+  paymentRef: string | null;
   enrolledCount: number;
   maxCapacity: number;
 }
@@ -295,6 +297,10 @@ export interface EnrollResult {
  * Enroll a player in a specific ProgramRun and record payment.
  *
  * Serializable transaction — enrollment count and row creation are atomic.
+ *
+ * paymentStatus defaults to "UNPAID" (CourtPass self-serve flow — player pays
+ * after enrollment via VietQR). Pass "PAID" for the admin/staff flow where
+ * payment is collected up front.
  */
 export async function enrollInRun(params: {
   runId: string;
@@ -302,9 +308,11 @@ export async function enrollInRun(params: {
   venueId: string;
   amountValue: number;
   paymentMethod?: string;
+  paymentStatus?: "PAID" | "UNPAID";
+  paymentRef?: string;
   note?: string;
 }): Promise<EnrollResult> {
-  const { runId, playerId, venueId, amountValue, paymentMethod, note } = params;
+  const { runId, playerId, venueId, amountValue, paymentMethod, paymentStatus = "UNPAID", paymentRef, note } = params;
 
   try {
     return await prisma.$transaction(
@@ -364,23 +372,29 @@ export async function enrollInRun(params: {
         });
 
         // Record payment
+        let paymentId: string | null = null;
         if (amountValue > 0) {
-          await tx.programPassPayment.create({
+          const isPaid = paymentStatus === "PAID";
+          const payment = await tx.programPassPayment.create({
             data: {
               programPassId: programPass.id,
               periodStart: now,
               periodEnd: cycleEnd,
               amountValue,
-              status: "PAID",
-              paymentMethod: paymentMethod ?? "cash",
-              paidAt: now,
+              status: paymentStatus,
+              paymentMethod: paymentMethod ?? (isPaid ? "cash" : null),
+              paidAt: isPaid ? now : null,
+              paymentRef: paymentRef ?? null,
               note: note ?? null,
             },
           });
+          paymentId = payment.id;
         }
 
         return {
           programPassId: programPass.id,
+          paymentId,
+          paymentRef: paymentRef ?? null,
           enrolledCount: enrolledCount + 1,
           maxCapacity: run.maxCapacity,
         };
