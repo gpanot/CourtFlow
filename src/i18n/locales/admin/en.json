@@ -215,6 +215,7 @@
     "lessonPayment": "Lesson Payment",
     "bookingPayment": "Booking Payment",
     "openPlayPayment": "Open Play Payment",
+    "programPayment": "Program Pass Payment",
     "updatePaymentDetails": "Update Payment Details",
     "cancelBookingAction": "Cancel Booking",
     "approvePaymentQuestion": "Approve this payment?",
@@ -1757,6 +1758,7 @@
   },
   "programPasses": {
     "title": "Program Passes",
+    "tabAllPrograms": "All Programs",
     "tabPasses": "Program Passes",
     "tabPassTypes": "Pass Types",
     "tabRuns": "Program Runs",

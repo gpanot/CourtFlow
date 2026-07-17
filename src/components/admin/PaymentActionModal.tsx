@@ -18,7 +18,7 @@ import {
 } from "@/components/admin/CancelPaidBookingModal";
 
 export interface PaymentActionTarget {
-  type: "booking" | "lesson" | "openplay";
+  type: "booking" | "lesson" | "openplay" | "program";
   entityId: string;
   /** For group bookings — the booking_groups.id */
   groupId?: string | null;
@@ -116,6 +116,7 @@ export function PaymentActionModal({ target, onClose, onUpdated }: Props) {
   const isLesson = target.type === "lesson";
   const isBooking = target.type === "booking";
   const isOpenPlay = target.type === "openplay";
+  const isProgram = target.type === "program";
 
   const psEntry = PAYMENT_LABEL_KEYS[normalizedPayment];
   const ps = psEntry
@@ -130,6 +131,7 @@ export function PaymentActionModal({ target, onClose, onUpdated }: Props) {
     booking: t("overview.bookingPayment"),
     lesson: t("overview.lessonPayment"),
     openplay: t("overview.openPlayPayment"),
+    program: t("overview.programPayment"),
   };
 
   async function executeAction(action: ConfirmingAction, method?: string) {
@@ -167,6 +169,14 @@ export function PaymentActionModal({ target, onClose, onUpdated }: Props) {
         } else if (action === "no_show") {
           await api.patch(`/api/admin/open-play/${target.entityId}`, { action: "no_show" });
         }
+      } else if (target.type === "program") {
+        // entityId is the ProgramPassPayment id
+        if (action === "approve") {
+          await api.patch(`/api/admin/program-passes/payments/${target.entityId}`, { action: "approve", paymentMethod: method });
+        } else if (action === "cancel") {
+          await api.patch(`/api/admin/program-passes/payments/${target.entityId}`, { action: "cancel" });
+        }
+        // no_show is not applicable for program passes
       }
       setConfirmingAction(null);
       onUpdated();
@@ -476,6 +486,17 @@ export function PaymentActionModal({ target, onClose, onUpdated }: Props) {
                   </button>
                 )}
 
+                {/* Program: quick approve button for pending payments */}
+                {isProgram && normalizedPayment === "pending" && (
+                  <button
+                    onClick={() => setConfirmingAction("approve")}
+                    className="w-full rounded-xl bg-purple-600 py-2.5 text-sm font-semibold text-white hover:bg-purple-500 transition-colors flex items-center justify-center gap-2"
+                  >
+                    <CheckCircle className="h-4 w-4" />
+                    {t("overview.recordPayment")}
+                  </button>
+                )}
+
                 {/* Status actions */}
                 {isActive && (
                   <div className="flex gap-2 pt-1">
@@ -484,15 +505,17 @@ export function PaymentActionModal({ target, onClose, onUpdated }: Props) {
                       className="flex-1 rounded-xl border border-red-600/40 bg-red-600/10 py-2 text-xs font-medium text-red-400 hover:bg-red-600/20 transition-colors flex items-center justify-center gap-1.5"
                     >
                       <XCircle className="h-3.5 w-3.5" />
-                      {isLesson ? t("overview.cancelLesson") : isBooking ? t("overview.cancelBookingAction") : t("overview.cancelRegistration")}
+                      {isLesson ? t("overview.cancelLesson") : isBooking ? t("overview.cancelBookingAction") : isProgram ? t("overview.cancelRegistration") : t("overview.cancelRegistration")}
                     </button>
-                    <button
-                      onClick={() => setConfirmingAction("no_show")}
-                      className="flex-1 rounded-xl border border-amber-600/40 bg-amber-600/10 py-2 text-xs font-medium text-amber-400 hover:bg-amber-600/20 transition-colors flex items-center justify-center gap-1.5"
-                    >
-                      <AlertTriangle className="h-3.5 w-3.5" />
-                      {t("overview.markNoShow")}
-                    </button>
+                    {!isProgram && (
+                      <button
+                        onClick={() => setConfirmingAction("no_show")}
+                        className="flex-1 rounded-xl border border-amber-600/40 bg-amber-600/10 py-2 text-xs font-medium text-amber-400 hover:bg-amber-600/20 transition-colors flex items-center justify-center gap-1.5"
+                      >
+                        <AlertTriangle className="h-3.5 w-3.5" />
+                        {t("overview.markNoShow")}
+                      </button>
+                    )}
                   </div>
                 )}
               </div>

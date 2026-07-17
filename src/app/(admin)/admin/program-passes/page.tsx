@@ -27,7 +27,19 @@ import {
   RefreshCcw,
   ChevronDown,
   ChevronUp,
+  TableProperties,
+  Filter,
+  Loader2,
+  ChevronLeft,
+  ChevronRight,
+  Play,
 } from "lucide-react";
+import { PaymentStatusBadge, PaymentMethodBadge } from "@/components/admin/EditBookingModal";
+import {
+  PaymentActionModal,
+  type PaymentActionTarget,
+} from "@/components/admin/PaymentActionModal";
+import { useSessionStore } from "@/stores/session-store";
 
 export const dynamic = "force-dynamic";
 
@@ -201,7 +213,7 @@ export default function ProgramPassesPage() {
     venues: venueOptions,
   } = useAdminVenuePicker({ autoSelect: true });
 
-  const [activeTab, setActiveTab] = useState<"passes" | "passTypes" | "programRuns">("passes");
+  const [activeTab, setActiveTab] = useState<"passes" | "passTypes" | "programRuns" | "allPrograms">("passes");
 
   // Pass Types state
   const [passTypes, setPassTypes] = useState<PassType[]>([]);
@@ -343,6 +355,7 @@ export default function ProgramPassesPage() {
       {/* Tabs */}
       <div className="flex gap-1 border-b border-neutral-800">
         {([
+          { key: "allPrograms" as const, label: t("programPasses.tabAllPrograms"), icon: TableProperties },
           { key: "passes" as const, label: t("programPasses.tabPasses") },
           { key: "passTypes" as const, label: t("programPasses.tabPassTypes") },
           { key: "programRuns" as const, label: t("programPasses.tabRuns") },
@@ -351,12 +364,13 @@ export default function ProgramPassesPage() {
             key={tab.key}
             onClick={() => setActiveTab(tab.key)}
             className={cn(
-              "px-4 py-2.5 text-sm font-medium transition-colors border-b-2 -mb-px",
+              "flex items-center gap-1.5 px-4 py-2.5 text-sm font-medium transition-colors border-b-2 -mb-px",
               activeTab === tab.key
                 ? "border-purple-500 text-white"
                 : "border-transparent text-neutral-500 hover:text-neutral-300"
             )}
           >
+            {"icon" in tab && tab.icon && <tab.icon className="h-3.5 w-3.5" />}
             {tab.label}
           </button>
         ))}
@@ -726,6 +740,11 @@ export default function ProgramPassesPage() {
             )}
           </div>
         </section>
+      )}
+
+      {/* ── ALL PROGRAMS TAB ── */}
+      {activeTab === "allPrograms" && selectedVenueId && (
+        <AllProgramsTab venueId={selectedVenueId} passTypes={passTypes} />
       )}
 
       {/* ── MODALS ── */}
@@ -2672,6 +2691,432 @@ function EditInstanceModal({
           </button>
         </div>
       </div>
+    </div>
+  );
+}
+
+// ─── AllProgramsTab ──────────────────────────────────────────────────────────
+
+interface AllProgramRow {
+  id: string;
+  venueId: string;
+  playerId: string;
+  passTypeId: string;
+  programRunId: string | null;
+  status: string;
+  sessionsUsed: number;
+  createdAt: string;
+  player: { id: string; name: string; phone: string; avatar: string };
+  passType: { id: string; name: string; price: number; sessionsIncluded: number; isOneTime: boolean };
+  programRun: { id: string; name: string } | null;
+  latestPayment: {
+    id: string;
+    status: string;
+    amountValue: number;
+    paymentMethod: string | null;
+    paidAt: string | null;
+    proofUrl: string | null;
+    paymentRef: string | null;
+    note: string | null;
+    createdAt: string;
+    periodStart: string;
+    periodEnd: string;
+  } | null;
+  paymentStatus: string | null;
+}
+
+const PROG_DATE_PRESETS = [
+  { label: "Last 7 days", days: 7, direction: "past" as const },
+  { label: "Last 30 days", days: 30, direction: "past" as const },
+  { label: "Last 90 days", days: 90, direction: "past" as const },
+  { label: "All time", days: 0, direction: null as null },
+];
+
+function progLocalISODate(d: Date): string {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
+
+const PROG_PAYMENT_COLORS: Record<string, string> = {
+  paid: "bg-green-600/20 text-green-400",
+  proof_submitted: "bg-orange-600/20 text-orange-400",
+  pending: "bg-neutral-700/30 text-neutral-400",
+  overdue: "bg-red-600/20 text-red-400",
+};
+
+const PROG_PAYMENT_LABELS: Record<string, string> = {
+  paid: "Paid",
+  proof_submitted: "Proof",
+  pending: "Unpaid",
+  overdue: "Overdue",
+};
+
+const PROG_PASS_STATUS_COLORS: Record<string, string> = {
+  active: "bg-green-600/20 text-green-400",
+  pending: "bg-yellow-600/20 text-yellow-400",
+  expired: "bg-neutral-700/40 text-neutral-400",
+  cancelled: "bg-red-600/20 text-red-400",
+};
+
+function AllProgramsTab({
+  venueId,
+  passTypes,
+}: {
+  venueId: string;
+  passTypes: Array<{ id: string; name: string }>;
+}) {
+  const { t } = useTranslation("translation", { i18n: adminI18n });
+  const today = new Date();
+  const defaultFrom = progLocalISODate(new Date(Date.now() - 30 * 24 * 60 * 60 * 1000));
+  const defaultTo = progLocalISODate(today);
+
+  const [dateFrom, setDateFrom] = useState(defaultFrom);
+  const [dateTo, setDateTo] = useState(defaultTo);
+  const [paymentFilter, setPaymentFilter] = useState("all");
+  const [passTypeFilter, setPassTypeFilter] = useState("all");
+  const [search, setSearch] = useState("");
+  const [debouncedSearch, setDebouncedSearch] = useState("");
+  const [page, setPage] = useState(1);
+  const [rows, setRows] = useState<AllProgramRow[]>([]);
+  const [total, setTotal] = useState(0);
+  const [totalPages, setTotalPages] = useState(1);
+  const [loading, setLoading] = useState(false);
+  const [paymentActionTarget, setPaymentActionTarget] = useState<PaymentActionTarget | null>(null);
+  const [allTime, setAllTime] = useState(false);
+
+  useEffect(() => {
+    const timer = setTimeout(() => setDebouncedSearch(search), 300);
+    return () => clearTimeout(timer);
+  }, [search]);
+
+  const fetchRows = useCallback(async () => {
+    setLoading(true);
+    try {
+      const params = new URLSearchParams({ venueId, list: "true", page: String(page), pageSize: "50" });
+      if (!allTime) { params.set("dateFrom", dateFrom); params.set("dateTo", dateTo); }
+      if (paymentFilter !== "all") params.set("paymentStatus", paymentFilter);
+      if (passTypeFilter !== "all") params.set("passTypeId", passTypeFilter);
+      if (debouncedSearch.trim().length >= 2) params.set("search", debouncedSearch.trim());
+      const data = await api.get<{ rows: AllProgramRow[]; total: number; totalPages: number }>(
+        `/api/admin/program-passes?${params}`
+      );
+      setRows(data.rows ?? []);
+      setTotal(data.total ?? 0);
+      setTotalPages(data.totalPages ?? 1);
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setLoading(false);
+    }
+  }, [venueId, dateFrom, dateTo, paymentFilter, passTypeFilter, debouncedSearch, page, allTime]);
+
+  useEffect(() => { void fetchRows(); }, [fetchRows]);
+  useEffect(() => { setPage(1); }, [venueId, dateFrom, dateTo, paymentFilter, passTypeFilter, debouncedSearch, allTime]);
+
+  const applyPreset = (days: number, direction: "past" | null) => {
+    if (direction === null) { setAllTime(true); return; }
+    setAllTime(false);
+    const now = new Date();
+    setDateTo(progLocalISODate(now));
+    setDateFrom(progLocalISODate(new Date(Date.now() - days * 24 * 60 * 60 * 1000)));
+  };
+
+  const fmtDate = (iso: string) => new Date(iso).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" });
+  const fmtTime = (iso: string) => new Date(iso).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+  const fmtPrice = (v: number) => new Intl.NumberFormat("vi-VN").format(v);
+
+  const openPaymentModal = (row: AllProgramRow) => {
+    if (!row.latestPayment) return;
+    setPaymentActionTarget({
+      type: "program",
+      entityId: row.latestPayment.id,
+      playerName: row.player.name,
+      playerPhone: row.player.phone,
+      detail: row.passType.name + (row.programRun ? ` — ${row.programRun.name}` : ""),
+      date: row.latestPayment.periodStart,
+      startTime: row.latestPayment.periodStart,
+      endTime: row.latestPayment.periodEnd,
+      priceValue: row.latestPayment.amountValue,
+      paymentStatus: row.paymentStatus ?? "pending",
+      paymentMethod: row.latestPayment.paymentMethod,
+      paymentProofUrl: row.latestPayment.proofUrl,
+      bookingStatus: row.status,
+    });
+  };
+
+  const unpaidCount = rows.filter((r) => r.paymentStatus === "pending").length;
+  const proofCount = rows.filter((r) => r.paymentStatus === "proof_submitted").length;
+
+  const [exporting, setExporting] = useState(false);
+  const handleExport = async () => {
+    setExporting(true);
+    try {
+      const params = new URLSearchParams({ venueId, list: "true", pageSize: "10000", page: "1" });
+      if (!allTime) { params.set("dateFrom", dateFrom); params.set("dateTo", dateTo); }
+      if (paymentFilter !== "all") params.set("paymentStatus", paymentFilter);
+      if (passTypeFilter !== "all") params.set("passTypeId", passTypeFilter);
+      if (debouncedSearch.trim().length >= 2) params.set("search", debouncedSearch.trim());
+      const token = useSessionStore.getState().token ?? "";
+      const res = await fetch(`/api/admin/program-passes?${params}`, {
+        credentials: "include",
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+      });
+      if (!res.ok) throw new Error("Export failed");
+      const data = await res.json() as { rows: AllProgramRow[] };
+      // CSV export
+      const headers = ["Player", "Phone", "Program", "Run", "Status", "Payment", "Ref", "Enrolled On", "Amount"];
+      const csvRows = (data.rows ?? []).map((r) => [
+        r.player.name,
+        r.player.phone,
+        r.passType.name,
+        r.programRun?.name ?? "",
+        r.status,
+        r.paymentStatus ?? "",
+        r.latestPayment?.paymentRef ?? "",
+        fmtDate(r.createdAt),
+        r.latestPayment ? fmtPrice(r.latestPayment.amountValue) : "",
+      ].map((v) => `"${String(v).replace(/"/g, '""')}"`).join(","));
+      const csv = [headers.join(","), ...csvRows].join("\n");
+      const blob = new Blob([csv], { type: "text/csv" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a"); a.href = url;
+      a.download = `programs-${dateFrom}-to-${dateTo}.csv`;
+      a.click(); URL.revokeObjectURL(url);
+    } catch (e) { console.error(e); } finally { setExporting(false); }
+  };
+
+  return (
+    <div className="space-y-4">
+      {/* Filter bar */}
+      <div className="rounded-xl border border-neutral-800 bg-neutral-900 p-4 space-y-3">
+        <div className="flex items-center gap-2 flex-wrap">
+          <Filter className="h-3.5 w-3.5 text-neutral-500 shrink-0" />
+          {PROG_DATE_PRESETS.map((p) => (
+            <button
+              key={p.label}
+              onClick={() => applyPreset(p.days, p.direction)}
+              className={cn(
+                "rounded-full border px-3 py-1 text-xs font-medium transition-colors",
+                (p.direction === null && allTime) || (p.direction === "past" && !allTime && p.days === (
+                  Math.round((new Date(dateTo).getTime() - new Date(dateFrom).getTime()) / (24*60*60*1000))
+                ))
+                  ? "border-purple-500 text-purple-300 bg-purple-500/10"
+                  : "border-neutral-700 text-neutral-400 hover:border-purple-500 hover:text-purple-300"
+              )}
+            >
+              {p.label}
+            </button>
+          ))}
+          <div className="flex items-center gap-2 ml-auto">
+            {!allTime && (
+              <>
+                <input type="date" value={dateFrom} onChange={(e) => { setDateFrom(e.target.value); setAllTime(false); }}
+                  className="rounded-lg border border-neutral-700 bg-neutral-800 px-2 py-1.5 text-xs text-white focus:border-purple-500 focus:outline-none" />
+                <span className="text-xs text-neutral-500">→</span>
+                <input type="date" value={dateTo} onChange={(e) => { setDateTo(e.target.value); setAllTime(false); }}
+                  className="rounded-lg border border-neutral-700 bg-neutral-800 px-2 py-1.5 text-xs text-white focus:border-purple-500 focus:outline-none" />
+              </>
+            )}
+            <button onClick={handleExport} disabled={exporting}
+              className="flex items-center gap-1.5 rounded-lg border border-neutral-700 bg-neutral-800 px-3 py-1.5 text-xs font-medium text-neutral-300 hover:border-purple-500 hover:text-purple-300 disabled:opacity-50 transition-colors">
+              {exporting ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Play className="h-3.5 w-3.5" />}
+              Export CSV
+            </button>
+          </div>
+        </div>
+
+        <div className="flex items-center gap-2 flex-wrap">
+          {/* Payment filter */}
+          <div className="flex items-center rounded-lg border border-neutral-700 overflow-hidden text-xs">
+            {([
+              { key: "all", label: "All payments" },
+              { key: "pending", label: "Unpaid" },
+              { key: "proof_submitted", label: "Proof" },
+              { key: "paid", label: "Paid" },
+            ] as const).map((p) => (
+              <button key={p.key} onClick={() => setPaymentFilter(p.key)}
+                className={cn("px-3 py-1.5 font-medium transition-colors border-r border-neutral-700 last:border-r-0",
+                  paymentFilter === p.key ? "bg-purple-600 text-white" : "bg-neutral-800 text-neutral-400 hover:text-white"
+                )}>
+                {p.label}
+              </button>
+            ))}
+          </div>
+
+          {/* Pass type filter */}
+          {passTypes.length > 0 && (
+            <select value={passTypeFilter} onChange={(e) => setPassTypeFilter(e.target.value)}
+              className="rounded-lg border border-neutral-700 bg-neutral-800 px-3 py-1.5 text-xs text-white focus:border-purple-500 focus:outline-none">
+              <option value="all">All programs</option>
+              {passTypes.map((pt) => <option key={pt.id} value={pt.id}>{pt.name}</option>)}
+            </select>
+          )}
+
+          {/* Search */}
+          <div className="flex items-center gap-2 flex-1 min-w-[200px] rounded-lg border border-neutral-700 bg-neutral-800 px-3">
+            <Search className="h-3.5 w-3.5 text-neutral-500 shrink-0" />
+            <input type="text" placeholder="Search player name or phone…" value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              className="flex-1 bg-transparent py-2 text-sm text-white placeholder:text-neutral-500 focus:outline-none" />
+            {search && <button onClick={() => setSearch("")} className="text-neutral-500 hover:text-white"><X className="h-3.5 w-3.5" /></button>}
+          </div>
+        </div>
+      </div>
+
+      {/* Summary chips */}
+      {(unpaidCount > 0 || proofCount > 0) && (
+        <div className="flex items-center gap-2">
+          {unpaidCount > 0 && (
+            <button onClick={() => setPaymentFilter("pending")}
+              className="flex items-center gap-1.5 rounded-full bg-amber-600/15 border border-amber-600/30 px-3 py-1 text-xs font-medium text-amber-400 hover:bg-amber-600/25 transition-colors">
+              <DollarSign className="h-3 w-3" /> {unpaidCount} unpaid on this page
+            </button>
+          )}
+          {proofCount > 0 && (
+            <button onClick={() => setPaymentFilter("proof_submitted")}
+              className="flex items-center gap-1.5 rounded-full bg-orange-600/15 border border-orange-600/30 px-3 py-1 text-xs font-medium text-orange-400 hover:bg-orange-600/25 transition-colors">
+              <Search className="h-3 w-3" /> {proofCount} proof{proofCount !== 1 ? "s" : ""} to review
+            </button>
+          )}
+        </div>
+      )}
+
+      {/* Table */}
+      <div className="rounded-xl border border-neutral-800 overflow-hidden">
+        {loading ? (
+          <div className="flex items-center justify-center py-16">
+            <Loader2 className="h-6 w-6 animate-spin text-neutral-500" />
+          </div>
+        ) : rows.length === 0 ? (
+          <div className="py-16 text-center">
+            <Play className="h-10 w-10 text-neutral-600 mx-auto mb-3" />
+            <p className="text-neutral-400 text-sm">No program enrollments found</p>
+          </div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm border-collapse">
+              <thead>
+                <tr className="border-b border-neutral-800 bg-neutral-900/80">
+                  <th className="text-left px-4 py-3 text-xs font-medium text-neutral-500 whitespace-nowrap">Player</th>
+                  <th className="text-left px-4 py-3 text-xs font-medium text-neutral-500 whitespace-nowrap">Program</th>
+                  <th className="text-left px-4 py-3 text-xs font-medium text-neutral-500 whitespace-nowrap">Run</th>
+                  <th className="text-left px-4 py-3 text-xs font-medium text-neutral-500 whitespace-nowrap">Enrolled</th>
+                  <th className="text-left px-4 py-3 text-xs font-medium text-neutral-500 whitespace-nowrap">Progress</th>
+                  <th className="text-left px-4 py-3 text-xs font-medium text-neutral-500 whitespace-nowrap">Status</th>
+                  <th className="text-left px-4 py-3 text-xs font-medium text-neutral-500 whitespace-nowrap">Payment</th>
+                  <th className="text-right px-4 py-3 text-xs font-medium text-neutral-500 whitespace-nowrap">Amount</th>
+                  <th className="px-4 py-3 text-xs font-medium text-neutral-500 whitespace-nowrap">Ref</th>
+                </tr>
+              </thead>
+              <tbody>
+                {rows.map((row) => {
+                  const isPaid = row.paymentStatus === "paid";
+                  const isProof = row.paymentStatus === "proof_submitted";
+                  const isPending = !row.paymentStatus || row.paymentStatus === "pending";
+                  const hasPayment = !!row.latestPayment;
+                  return (
+                    <tr key={row.id} className="border-b border-neutral-800/50 hover:bg-neutral-800/30 transition-colors">
+                      {/* Player */}
+                      <td className="px-4 py-3">
+                        <a href={`/admin/courtpass-players?playerId=${row.player.id}`}
+                          onClick={(e) => e.stopPropagation()}
+                          className="font-medium text-white hover:text-purple-400 hover:underline transition-colors">
+                          {row.player.name}
+                        </a>
+                        <p className="text-xs text-neutral-500">{row.player.phone}</p>
+                      </td>
+                      {/* Program */}
+                      <td className="px-4 py-3">
+                        <p className="text-neutral-300 text-xs whitespace-nowrap">{row.passType.name}</p>
+                      </td>
+                      {/* Run */}
+                      <td className="px-4 py-3 text-neutral-400 text-xs whitespace-nowrap">
+                        {row.programRun?.name ?? "—"}
+                      </td>
+                      {/* Enrolled date */}
+                      <td className="px-4 py-3 text-neutral-400 text-xs whitespace-nowrap">
+                        {fmtDate(row.createdAt)}
+                      </td>
+                      {/* Progress */}
+                      <td className="px-4 py-3 text-neutral-400 text-xs whitespace-nowrap">
+                        {row.sessionsUsed} / {row.passType.sessionsIncluded}
+                      </td>
+                      {/* Pass status */}
+                      <td className="px-4 py-3 whitespace-nowrap">
+                        <span className={cn("rounded px-2 py-0.5 text-xs font-medium", PROG_PASS_STATUS_COLORS[row.status] ?? "bg-neutral-700 text-neutral-400")}>
+                          {row.status.charAt(0).toUpperCase() + row.status.slice(1)}
+                        </span>
+                      </td>
+                      {/* Payment */}
+                      <td className="px-4 py-3 whitespace-nowrap">
+                        {hasPayment ? (
+                          <button
+                            onClick={(e) => { e.stopPropagation(); openPaymentModal(row); }}
+                            className="flex flex-row flex-wrap items-center gap-1 group"
+                            title="Manage payment"
+                          >
+                            <span className={cn("rounded px-2 py-0.5 text-xs font-medium group-hover:ring-1 group-hover:ring-white/20 transition-all",
+                              PROG_PAYMENT_COLORS[row.paymentStatus ?? "pending"] ?? "bg-neutral-700/30 text-neutral-400"
+                            )}>
+                              {PROG_PAYMENT_LABELS[row.paymentStatus ?? "pending"] ?? "Unpaid"}
+                            </span>
+                            {isPaid && row.latestPayment?.paymentMethod && (
+                              <PaymentMethodBadge method={row.latestPayment.paymentMethod} size="md" />
+                            )}
+                          </button>
+                        ) : (
+                          <span className="text-xs text-neutral-600">—</span>
+                        )}
+                        {row.latestPayment?.paymentRef && (
+                          <p className="text-[10px] text-neutral-500 mt-0.5 font-mono">{row.latestPayment.paymentRef}</p>
+                        )}
+                      </td>
+                      {/* Amount */}
+                      <td className="px-4 py-3 text-right text-neutral-300 whitespace-nowrap">
+                        {row.latestPayment ? fmtPrice(row.latestPayment.amountValue) : "—"}
+                      </td>
+                      {/* Payment ref */}
+                      <td className="px-4 py-3 whitespace-nowrap">
+                        {row.latestPayment?.paymentRef && (
+                          <span className="text-[10px] font-mono text-neutral-500">{row.latestPayment.paymentRef}</span>
+                        )}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+
+      {/* Pagination */}
+      {totalPages > 1 && (
+        <div className="flex items-center justify-between text-sm">
+          <span className="text-neutral-500">{total} total enrollments</span>
+          <div className="flex items-center gap-2">
+            <button onClick={() => setPage((p) => Math.max(1, p - 1))} disabled={page <= 1}
+              className="rounded-lg p-2 text-neutral-400 hover:bg-neutral-800 hover:text-white disabled:opacity-30">
+              <ChevronLeft className="h-4 w-4" />
+            </button>
+            <span className="text-neutral-400">Page {page} of {totalPages}</span>
+            <button onClick={() => setPage((p) => Math.min(totalPages, p + 1))} disabled={page >= totalPages}
+              className="rounded-lg p-2 text-neutral-400 hover:bg-neutral-800 hover:text-white disabled:opacity-30">
+              <ChevronRight className="h-4 w-4" />
+            </button>
+          </div>
+        </div>
+      )}
+      {totalPages <= 1 && total > 0 && (
+        <p className="text-xs text-neutral-500 text-right">{total} enrollment{total !== 1 ? "s" : ""}</p>
+      )}
+
+      {paymentActionTarget && (
+        <PaymentActionModal
+          target={paymentActionTarget}
+          onClose={() => setPaymentActionTarget(null)}
+          onUpdated={async () => { setPaymentActionTarget(null); await fetchRows(); }}
+        />
+      )}
     </div>
   );
 }

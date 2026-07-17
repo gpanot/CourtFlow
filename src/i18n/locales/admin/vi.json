@@ -213,6 +213,7 @@
      "lessonPayment": "Thanh toán buổi tập",
      "bookingPayment": "Thanh toán đặt sân",
      "openPlayPayment": "Thanh toán chơi tự do",
+     "programPayment": "Thanh toán thẻ chương trình",
      "updatePaymentDetails": "Cập nhật chi tiết thanh toán",
      "cancelBookingAction": "Huỷ đặt sân",
      "approvePaymentQuestion": "Xác nhận thanh toán này?",
@@ -1749,6 +1750,7 @@
   },
   "programPasses": {
     "title": "Thẻ Chương Trình",
+    "tabAllPrograms": "Tất cả chương trình",
     "tabPasses": "Thẻ Chương Trình",
     "tabPassTypes": "Loại Thẻ",
     "tabRuns": "Đợt Chương Trình",
