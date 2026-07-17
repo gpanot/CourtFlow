@@ -76,6 +76,8 @@ export async function GET(request: NextRequest) {
       openBillMonthAccruedRows,
       openBillMonthCollectedRows,
       openBillOverdueRows,
+      unpaidProgramPasses,
+      recentProgramPasses,
     ] = await Promise.all([
       // Today's cash bookings (confirmed + completed, excluding open_bill deferred payments)
       prisma.booking.findMany({
@@ -289,6 +291,30 @@ export async function GET(request: NextRequest) {
         },
         select: { totalAmount: true, dueDate: true },
       }),
+      // Program pass payments: UNPAID (pending player payments for enrolled runs)
+      prisma.programPassPayment.findMany({
+        where: {
+          status: "UNPAID",
+          programPass: { venueId: { in: venueIds } },
+        },
+        select: { amountValue: true },
+      }),
+      // Recent program pass enrollments (latest 8)
+      prisma.programPass.findMany({
+        where: { venueId: { in: venueIds } },
+        include: {
+          player: { select: { name: true, phone: true, avatar: true, avatarPhotoPath: true, facePhotoPath: true } },
+          passType: { select: { name: true } },
+          programRun: { select: { name: true } },
+          payments: {
+            orderBy: { createdAt: "desc" },
+            take: 1,
+            select: { id: true, status: true, amountValue: true, paymentMethod: true, proofUrl: true, paymentRef: true, createdAt: true },
+          },
+        },
+        orderBy: { createdAt: "desc" },
+        take: 8,
+      }),
     ]);
 
     const todayBookingRevenue = todayBookings.reduce((s, b) => s + b.priceValue, 0);
@@ -472,6 +498,24 @@ export async function GET(request: NextRequest) {
           isGroup: b.isGroup,
         }));
       })(),
+      programs: {
+        unpaidCount: unpaidProgramPasses.length,
+        unpaidAmount: unpaidProgramPasses.reduce((s, p) => s + p.amountValue, 0),
+      },
+      recentProgramPasses: recentProgramPasses.map((pp) => ({
+        id: pp.id,
+        venueId: pp.venueId,
+        playerId: pp.playerId,
+        playerName: pp.player.name,
+        playerPhone: pp.player.phone,
+        playerAvatar: pp.player.avatar,
+        playerPhoto: pp.player.avatarPhotoPath || pp.player.facePhotoPath || null,
+        passTypeName: pp.passType.name,
+        runName: pp.programRun?.name ?? null,
+        status: pp.status,
+        latestPayment: pp.payments[0] ?? null,
+        createdAt: pp.createdAt,
+      })),
       recentLessons: recentLessons.map((l) => ({
         id: l.id,
         venueId: l.venueId,

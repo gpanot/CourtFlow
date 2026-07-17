@@ -137,7 +137,8 @@ export default function ProgramDetailPage() {
 
   return (
     <>
-      <div className="min-h-dvh pb-32" style={{ paddingTop: "env(safe-area-inset-top, 0px)" }}>
+      {/* pb accounts for: CTA bar (~68px) + bottom nav (~56px) = 124px, rounded up */}
+      <div className="min-h-dvh pb-36" style={{ paddingTop: "env(safe-area-inset-top, 0px)" }}>
         {/* Back button */}
         <div className="px-4 py-3 flex items-center gap-2">
           <button onClick={() => router.back()} className="text-[var(--cm-accent)] text-sm font-medium">
@@ -266,10 +267,10 @@ export default function ProgramDetailPage() {
         </div>
       </div>
 
-      {/* Fixed bottom CTA */}
+      {/* Fixed bottom CTA — sits above the BottomNav bar (~3.5rem) */}
       <div
-        className="fixed bottom-0 left-0 right-0 bg-[var(--cm-bg)]/95 backdrop-blur border-t border-[var(--cm-border)] px-4 pt-3"
-        style={{ paddingBottom: "max(env(safe-area-inset-bottom, 0px), 16px)" }}
+        className="fixed left-0 right-0 bg-[var(--cm-bg)]/95 backdrop-blur border-t border-[var(--cm-border)] px-4 pt-3 pb-3 z-40"
+        style={{ bottom: "calc(3.5rem + env(safe-area-inset-bottom, 0px))" }}
       >
         <div className="flex items-center justify-between mb-2">
           <div>

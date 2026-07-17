@@ -186,6 +186,29 @@ function displayPaymentStatus(status: string | null): string {
   return status ?? "pending";
 }
 
+interface RecentProgramPass {
+  id: string;
+  venueId: string;
+  playerId: string;
+  playerName: string;
+  playerPhone: string;
+  playerAvatar: string;
+  playerPhoto: string | null;
+  passTypeName: string;
+  runName: string | null;
+  status: string;
+  latestPayment: {
+    id: string;
+    status: string;
+    amountValue: number;
+    paymentMethod: string | null;
+    proofUrl: string | null;
+    paymentRef: string | null;
+    createdAt: string;
+  } | null;
+  createdAt: string;
+}
+
 interface DashboardData {
   revenue: {
     todayBookings: number;
@@ -240,6 +263,11 @@ interface DashboardData {
   recentLessons: RecentLesson[];
   recentOpenPlay?: RecentOpenPlay[];
   openPlayToday?: OpenPlayTodayGroup[];
+  programs?: {
+    unpaidCount: number;
+    unpaidAmount: number;
+  };
+  recentProgramPasses?: RecentProgramPass[];
 }
 
 function fmtPrice(amount: number): string {
@@ -563,6 +591,16 @@ export default function AdminOverview() {
               onClick={() => router.push("/admin/coaching?tab=list&paymentFilter=pending")}
             />
           )}
+          {(data.programs?.unpaidCount ?? 0) > 0 && (
+            <AlertBanner
+              icon={Play}
+              color="text-indigo-400"
+              bg="bg-indigo-500/10 border-indigo-500/20"
+              text={t("overview.unpaidPrograms", { count: data.programs!.unpaidCount, amount: fmtPrice(data.programs!.unpaidAmount) })}
+              action={t("overview.view")}
+              onClick={() => router.push("/admin/program-passes")}
+            />
+          )}
           {data.memberships.expiringThisWeek > 0 && (
             <AlertBanner
               icon={Clock}
@@ -799,6 +837,111 @@ export default function AdminOverview() {
           )}
         </div>
       </section>
+
+      {/* Recent Program Passes */}
+      {(data.recentProgramPasses ?? []).length > 0 && (
+        <section className="rounded-xl border border-neutral-800 bg-neutral-900 overflow-hidden">
+          <div className="flex items-center justify-between border-b border-neutral-800 px-4 py-3">
+            <h3 className="flex items-center gap-2 text-sm font-semibold">
+              <Play className="h-4 w-4 text-indigo-400" />
+              {t("overview.recentPrograms")}
+            </h3>
+            <button
+              onClick={() => router.push("/admin/program-passes")}
+              className="flex items-center gap-1 text-xs text-neutral-500 hover:text-white transition-colors"
+            >
+              {t("overview.viewAll")} <ArrowRight className="h-3 w-3" />
+            </button>
+          </div>
+
+          {/* Desktop table */}
+          <div className="hidden md:block">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-neutral-800 text-xs text-neutral-500">
+                  <th className="px-4 py-2.5 text-left font-medium">{t("overview.player")}</th>
+                  <th className="px-4 py-2.5 text-left font-medium">{t("overview.detail")}</th>
+                  <th className="px-4 py-2.5 text-left font-medium">{t("overview.received")}</th>
+                  <th className="px-4 py-2.5 text-left font-medium">{t("overview.payment")}</th>
+                  <th className="px-4 py-2.5 text-right font-medium">{t("overview.price")}</th>
+                </tr>
+              </thead>
+              <tbody>
+                {(data.recentProgramPasses ?? []).map((pp) => (
+                  <tr key={pp.id} className="border-b border-neutral-800/50 last:border-0 hover:bg-neutral-800/30 transition-colors">
+                    <td className="px-4 py-2.5">
+                      <button
+                        onClick={() => router.push(`/admin/courtpass-players?playerId=${pp.playerId}`)}
+                        className="flex items-center gap-2 hover:opacity-75 transition-opacity text-left"
+                      >
+                        <PlayerAvatarImg photo={pp.playerPhoto} avatar={pp.playerAvatar} size="sm" />
+                        <span className="font-medium hover:underline">{pp.playerName}</span>
+                      </button>
+                    </td>
+                    <td className="px-4 py-2.5">
+                      <span className="block text-sm text-neutral-200 leading-snug">{pp.passTypeName}</span>
+                      {pp.runName && <span className="block text-xs text-neutral-500 leading-snug">{pp.runName}</span>}
+                    </td>
+                    <td className="px-4 py-2.5">
+                      <span className="block text-[11px] text-neutral-500 leading-snug">{fmtReceivedTime(pp.createdAt)}</span>
+                      <span className="block text-[11px] text-neutral-600 leading-snug">{fmtReceivedDate(pp.createdAt)}</span>
+                    </td>
+                    <td className="px-4 py-2.5">
+                      {pp.latestPayment && (
+                        <PaymentStatusBadge status={
+                          pp.latestPayment.status === "UNPAID" ? (pp.latestPayment.proofUrl ? "proof_submitted" : "pending") :
+                          pp.latestPayment.status === "PAID" ? "paid" : "pending"
+                        } />
+                      )}
+                    </td>
+                    <td className="px-4 py-2.5 text-right font-medium">
+                      {pp.latestPayment ? fmtPrice(pp.latestPayment.amountValue) : "—"}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+
+          {/* Mobile cards */}
+          <div className="divide-y divide-neutral-800/50 md:hidden">
+            {(data.recentProgramPasses ?? []).map((pp) => (
+              <div key={pp.id} className="px-4 py-3">
+                <div className="flex items-center justify-between mb-1">
+                  <button
+                    onClick={() => router.push(`/admin/courtpass-players?playerId=${pp.playerId}`)}
+                    className="flex items-center gap-2 hover:opacity-75 transition-opacity text-left"
+                  >
+                    <PlayerAvatarImg photo={pp.playerPhoto} avatar={pp.playerAvatar} size="sm" />
+                    <span className="text-sm font-medium hover:underline">{pp.playerName}</span>
+                  </button>
+                  <div className="flex items-center gap-1.5">
+                    <span className="inline-block rounded-full px-2 py-0.5 text-[10px] font-medium bg-indigo-600/20 text-indigo-400">
+                      {t("overview.typeProgram")}
+                    </span>
+                    {pp.latestPayment && (
+                      <PaymentStatusBadge status={
+                        pp.latestPayment.status === "UNPAID" ? (pp.latestPayment.proofUrl ? "proof_submitted" : "pending") :
+                        pp.latestPayment.status === "PAID" ? "paid" : "pending"
+                      } />
+                    )}
+                  </div>
+                </div>
+                <div className="flex items-start justify-between gap-2 mt-0.5">
+                  <div className="text-xs text-neutral-400 leading-snug">
+                    <span className="block">{pp.passTypeName}</span>
+                    {pp.runName && <span className="block text-neutral-600">{pp.runName}</span>}
+                  </div>
+                  <div className="text-xs text-right shrink-0">
+                    <span className="block text-neutral-500">{fmtReceivedTime(pp.createdAt)}</span>
+                    {pp.latestPayment && <span className="block font-medium text-neutral-300">{fmtPrice(pp.latestPayment.amountValue)}</span>}
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </section>
+      )}
 
       {/* Open Play Detail Modal — session player list */}
       {openPlayDetailGroup && (
