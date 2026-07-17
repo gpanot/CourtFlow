@@ -5,6 +5,7 @@ import type { InvoiceData } from "@/components/pdf/InvoicePDF";
 import {
   invoicePdfResponse,
   loadBookingInvoiceData,
+  loadProgramPassInvoiceData,
   renderInvoicePdfBuffer,
   VENUE_WITH_ORG_SELECT,
 } from "@/lib/invoice-pdf-data";
@@ -38,7 +39,7 @@ export async function GET(
 
     const { type, id } = await params;
 
-    if (!["booking", "openplay", "lesson"].includes(type)) {
+    if (!["booking", "openplay", "lesson", "program"].includes(type)) {
       return new Response("Invalid invoice type", { status: 400 });
     }
 
@@ -91,6 +92,12 @@ export async function GET(
         venuePhone: reg.venue.contactPhone,
         ...orgLegalFields(reg.venue),
       };
+    } else if (type === "program") {
+      const programData = await loadProgramPassInvoiceData(id);
+      if (!programData) {
+        return new Response("Invoice not yet generated for this program payment", { status: 404 });
+      }
+      data = programData;
     } else {
       const lesson = await prisma.coachLesson.findUnique({
         where: { id },

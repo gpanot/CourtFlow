@@ -5,7 +5,7 @@ import { FileDown, Loader2 } from "lucide-react";
 import { downloadFile } from "@/lib/api-client";
 import { cn } from "@/lib/cn";
 
-type InvoiceType = "booking" | "openplay" | "lesson";
+type InvoiceType = "booking" | "openplay" | "lesson" | "program";
 
 interface InvoiceDownloadButtonProps {
   type: InvoiceType;

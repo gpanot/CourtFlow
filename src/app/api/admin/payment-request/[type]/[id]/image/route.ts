@@ -8,7 +8,7 @@ import { renderPaymentRequestPng } from "@/lib/payment-request-image";
 
 export const dynamic = "force-dynamic";
 
-const VALID_TYPES: PaymentRequestType[] = ["booking", "lesson", "openplay"];
+const VALID_TYPES: PaymentRequestType[] = ["booking", "lesson", "openplay", "program"];
 
 export async function GET(
   request: NextRequest,
@@ -20,7 +20,7 @@ export async function GET(
     const { type, id } = await params;
 
     if (!VALID_TYPES.includes(type as PaymentRequestType)) {
-      return new Response("Invalid type — must be booking, lesson, or openplay", {
+      return new Response("Invalid type — must be booking, lesson, openplay, or program", {
         status: 400,
       });
     }

@@ -2,6 +2,7 @@ import { NextRequest } from "next/server";
 import { prisma } from "@/lib/db";
 import { json, error, parseBody, notFound } from "@/lib/api-helpers";
 import { requireSuperAdmin } from "@/lib/auth";
+import { allocateInvoiceNumber } from "@/lib/invoice-number";
 
 export const dynamic = "force-dynamic";
 
@@ -25,12 +26,15 @@ export async function PATCH(
     if (!payment) return notFound("Payment not found");
 
     if (body.action === "approve") {
+      const invoiceNumber = payment.invoiceNumber ?? await allocateInvoiceNumber(payment.programPass.venueId, "PRG");
       const updated = await prisma.programPassPayment.update({
         where: { id },
         data: {
           status: "PAID",
           paidAt: new Date(),
           paymentMethod: body.paymentMethod ?? payment.paymentMethod ?? "cash",
+          invoiceNumber,
+          invoicedAt: payment.invoicedAt ?? new Date(),
         },
       });
       return json(updated);

@@ -1317,9 +1317,9 @@ model ProgramPassType {
   description      String?
   imageUrl         String?         @map("image_url")
   classInstances   ClassInstance[]
-  coaches          ProgramPassTypeCoach[]
   programPasses    ProgramPass[]
   programRuns      ProgramRun[]
+  coaches          ProgramPassTypeCoach[]
 
   @@map("program_pass_types")
 }
@@ -1369,21 +1369,23 @@ model ClassCheckIn {
 
 /// Monthly/cycle payment record for a ProgramPass.
 model ProgramPassPayment {
-  id            String                 @id @default(cuid())
-  programPassId String                 @map("class_pass_id")
-  periodStart   DateTime               @map("period_start")
-  periodEnd     DateTime               @map("period_end")
-  amountValue   Int                    @map("amount_value")
-  status        ClassPassPaymentStatus @default(UNPAID)
-  paymentMethod String?                @map("payment_method")
-  paidAt        DateTime?              @map("paid_at")
-  proofUrl      String?                @map("proof_url")
-  note          String?
-  voidReason    String?                @map("void_reason")
-  createdAt     DateTime               @default(now()) @map("created_at")
-  updatedAt     DateTime               @updatedAt @map("updated_at")
-  paymentRef    String?                @unique @map("payment_ref")
-  programPass   ProgramPass            @relation(fields: [programPassId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  id             String                 @id @default(cuid())
+  programPassId  String                 @map("class_pass_id")
+  periodStart    DateTime               @map("period_start")
+  periodEnd      DateTime               @map("period_end")
+  amountValue    Int                    @map("amount_value")
+  status         ClassPassPaymentStatus @default(UNPAID)
+  paymentMethod  String?                @map("payment_method")
+  paidAt         DateTime?              @map("paid_at")
+  proofUrl       String?                @map("proof_url")
+  note           String?
+  voidReason     String?                @map("void_reason")
+  createdAt      DateTime               @default(now()) @map("created_at")
+  updatedAt      DateTime               @updatedAt @map("updated_at")
+  paymentRef     String?                @unique @map("payment_ref")
+  invoiceNumber  String?                @unique @map("invoice_number")
+  invoicedAt     DateTime?              @map("invoiced_at")
+  programPass    ProgramPass            @relation(fields: [programPassId], references: [id], onDelete: Cascade, onUpdate: NoAction)
 
   @@map("class_pass_payments")
 }

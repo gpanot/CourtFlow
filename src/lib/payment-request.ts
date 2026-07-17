@@ -11,7 +11,7 @@ import { prisma } from "./db";
 import { generatePaymentRef } from "@/modules/courtpay/lib/payment-reference";
 import { toDateKey } from "./date";
 
-export type PaymentRequestType = "booking" | "lesson" | "openplay";
+export type PaymentRequestType = "booking" | "lesson" | "openplay" | "program";
 
 export interface PaymentRequestData {
   type: PaymentRequestType;
@@ -85,16 +85,29 @@ export async function ensurePaymentRef(
     return ref;
   }
 
-  // openplay
-  const reg = await prisma.openPlayRegistration.findUnique({
+  if (type === "openplay") {
+    const reg = await prisma.openPlayRegistration.findUnique({
+      where: { id },
+      select: { paymentRef: true },
+    });
+    if (!reg) throw Object.assign(new Error("Open-play registration not found"), { status: 404 });
+    if (reg.paymentRef) return reg.paymentRef;
+
+    const ref = await generatePaymentRef("open-play");
+    await prisma.openPlayRegistration.update({ where: { id }, data: { paymentRef: ref } });
+    return ref;
+  }
+
+  // program (id = ProgramPassPayment.id)
+  const payment = await prisma.programPassPayment.findUnique({
     where: { id },
     select: { paymentRef: true },
   });
-  if (!reg) throw Object.assign(new Error("Open-play registration not found"), { status: 404 });
-  if (reg.paymentRef) return reg.paymentRef;
+  if (!payment) throw Object.assign(new Error("Program pass payment not found"), { status: 404 });
+  if (payment.paymentRef) return payment.paymentRef;
 
-  const ref = await generatePaymentRef("open-play");
-  await prisma.openPlayRegistration.update({ where: { id }, data: { paymentRef: ref } });
+  const ref = await generatePaymentRef("program-pass");
+  await prisma.programPassPayment.update({ where: { id }, data: { paymentRef: ref } });
   return ref;
 }
 
@@ -111,6 +124,10 @@ export async function loadPaymentRequestData(
   type: PaymentRequestType,
   id: string,
 ): Promise<PaymentRequestData> {
+  if (type === "program") {
+    return loadProgramPaymentRequestData(id);
+  }
+
   if (type === "booking") {
     const booking = await prisma.booking.findUnique({
       where: { id },
@@ -217,5 +234,45 @@ export async function loadPaymentRequestData(
     bankBin: reg.venue.bankName ?? null,
     bankAccount: reg.venue.bankAccount ?? null,
     bankOwnerName: reg.venue.bankOwnerName ?? null,
+  };
+}
+
+// Separate exported helper for program pass payment requests (id = ProgramPassPayment.id)
+export async function loadProgramPaymentRequestData(
+  paymentId: string,
+): Promise<PaymentRequestData> {
+  const payment = await prisma.programPassPayment.findUnique({
+    where: { id: paymentId },
+    include: {
+      programPass: {
+        include: {
+          player: { select: { name: true } },
+          passType: { select: { name: true } },
+          programRun: { select: { name: true } },
+          venue: { select: VENUE_BANK_SELECT },
+        },
+      },
+    },
+  });
+  if (!payment) throw Object.assign(new Error("Program pass payment not found"), { status: 404 });
+
+  const paymentRef = await ensurePaymentRef("program", paymentId);
+
+  const pass = payment.programPass;
+  const description = `Program – ${pass.passType.name}${pass.programRun ? ` · ${pass.programRun.name}` : ""}`;
+
+  return {
+    type: "program" as PaymentRequestType,
+    paymentRef,
+    description,
+    dateKey: toDateKey(payment.periodStart),
+    startTime: payment.periodStart,
+    endTime: payment.periodEnd,
+    amountValue: payment.amountValue,
+    playerName: pass.player.name,
+    venueName: pass.venue.name,
+    bankBin: pass.venue.bankName ?? null,
+    bankAccount: pass.venue.bankAccount ?? null,
+    bankOwnerName: pass.venue.bankOwnerName ?? null,
   };
 }

@@ -534,7 +534,9 @@ CREATE TABLE public.class_pass_payments (
     void_reason text,
     created_at timestamp(3) without time zone DEFAULT CURRENT_TIMESTAMP NOT NULL,
     updated_at timestamp(3) without time zone NOT NULL,
-    payment_ref text
+    payment_ref text,
+    invoice_number text,
+    invoiced_at timestamp(3) without time zone
 );
 
 
@@ -2010,6 +2012,14 @@ ALTER TABLE ONLY public.class_instances
 
 
 --
+-- Name: class_pass_payments class_pass_payments_invoice_number_key; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.class_pass_payments
+    ADD CONSTRAINT class_pass_payments_invoice_number_key UNIQUE (invoice_number);
+
+
+--
 -- Name: class_pass_payments class_pass_payments_payment_ref_key; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -3027,6 +3037,13 @@ CREATE INDEX idx_class_instances_court_block_id ON public.class_instances USING 
 --
 
 CREATE INDEX idx_class_instances_program_run_id ON public.class_instances USING btree (program_run_id);
+
+
+--
+-- Name: idx_class_pass_payments_invoice_number; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_class_pass_payments_invoice_number ON public.class_pass_payments USING btree (invoice_number) WHERE (invoice_number IS NOT NULL);
 
 
 --
@@ -4731,4 +4748,5 @@ INSERT INTO public.schema_migrations (version) VALUES
     ('20260717001209'),
     ('20260717002208'),
     ('20260717013051'),
-    ('20260717083921');
+    ('20260717083921'),
+    ('20260717101821');

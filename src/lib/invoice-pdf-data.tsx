@@ -89,6 +89,52 @@ export async function loadBookingInvoiceData(bookingId: string): Promise<Invoice
   };
 }
 
+export async function loadProgramPassInvoiceData(paymentId: string): Promise<InvoiceData | null> {
+  const payment = await prisma.programPassPayment.findUnique({
+    where: { id: paymentId },
+    include: {
+      programPass: {
+        include: {
+          player: { select: { name: true, phone: true } },
+          passType: { select: { name: true } },
+          programRun: { select: { name: true } },
+          venue: { select: VENUE_WITH_ORG_SELECT },
+        },
+      },
+    },
+  });
+
+  if (!payment) return null;
+  if (!payment.invoiceNumber || !payment.invoicedAt) return null;
+
+  const pass = payment.programPass;
+  const description = `Program – ${pass.passType.name}${pass.programRun ? ` · ${pass.programRun.name}` : ""}`;
+
+  return {
+    invoiceNumber: payment.invoiceNumber,
+    invoicedAt: payment.invoicedAt.toISOString(),
+    type: "lesson",
+    description,
+    date: payment.periodStart.toISOString(),
+    startTime: payment.periodStart.toISOString(),
+    endTime: payment.periodEnd.toISOString(),
+    quantity: 1,
+    priceValue: payment.amountValue,
+    playerName: pass.player.name,
+    playerPhone: pass.player.phone,
+    paymentMethod: payment.paymentMethod,
+    paymentRef: payment.paymentRef ?? null,
+    venueName: pass.venue.name,
+    venueLocation: pass.venue.location,
+    venueLogoUrl: pass.venue.logoUrl,
+    venueBankAccount: pass.venue.bankAccount,
+    venueBankName: pass.venue.bankName,
+    venueBankOwnerName: pass.venue.bankOwnerName,
+    venuePhone: pass.venue.contactPhone,
+    ...orgLegalFields(pass.venue),
+  };
+}
+
 export async function renderInvoicePdfBuffer(data: InvoiceData): Promise<Buffer> {
   const element = React.createElement(InvoicePDF, { data });
   // eslint-disable-next-line @typescript-eslint/no-explicit-any

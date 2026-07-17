@@ -70,6 +70,7 @@ export async function GET(request: NextRequest) {
                 paidAt: true,
                 proofUrl: true,
                 paymentRef: true,
+                invoiceNumber: true,
                 note: true,
                 createdAt: true,
                 periodStart: true,

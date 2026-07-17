@@ -376,12 +376,15 @@ async function handleProgramPassPayment(
   const venueSettings = (venue?.settings ?? {}) as Record<string, unknown>;
   if (!venueSettings.autoPaymentEnabled || !venueSettings.sepayEnabled) return { matched: false };
 
+  const invoiceNumber = payment.invoiceNumber ?? await allocateInvoiceNumber(venueId, "PRG");
   await prisma.programPassPayment.update({
     where: { id: payment.id },
     data: {
       status: "PAID",
       paidAt: new Date(),
       paymentMethod: "vietqr",
+      invoiceNumber,
+      invoicedAt: payment.invoicedAt ?? new Date(),
     },
   });
 

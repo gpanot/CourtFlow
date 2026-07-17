@@ -5,7 +5,7 @@ import { ImageDown, Loader2 } from "lucide-react";
 import { downloadFile } from "@/lib/api-client";
 import { cn } from "@/lib/cn";
 
-type PaymentRequestType = "booking" | "lesson" | "openplay";
+type PaymentRequestType = "booking" | "lesson" | "openplay" | "program";
 
 interface PaymentRequestButtonProps {
   type: PaymentRequestType;

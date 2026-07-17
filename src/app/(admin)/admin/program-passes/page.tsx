@@ -40,6 +40,8 @@ import {
   PaymentActionModal,
   type PaymentActionTarget,
 } from "@/components/admin/PaymentActionModal";
+import { PaymentRequestButton } from "@/components/admin/PaymentRequestButton";
+import { InvoiceDownloadButton } from "@/components/admin/InvoiceDownloadButton";
 import { useSessionStore } from "@/stores/session-store";
 
 export const dynamic = "force-dynamic";
@@ -2729,6 +2731,7 @@ interface AllProgramRow {
     paidAt: string | null;
     proofUrl: string | null;
     paymentRef: string | null;
+    invoiceNumber: string | null;
     note: string | null;
     createdAt: string;
     periodStart: string;
@@ -3019,6 +3022,8 @@ function AllProgramsTab({
                   <th className="text-left px-4 py-3 text-xs font-medium text-neutral-500 whitespace-nowrap">Payment</th>
                   <th className="text-right px-4 py-3 text-xs font-medium text-neutral-500 whitespace-nowrap">Amount</th>
                   <th className="px-4 py-3 text-xs font-medium text-neutral-500 whitespace-nowrap">Ref</th>
+                  <th className="px-4 py-3 text-xs font-medium text-neutral-500 whitespace-nowrap">Receipt</th>
+                  <th className="px-4 py-3 text-xs font-medium text-neutral-500 whitespace-nowrap">Invoice</th>
                 </tr>
               </thead>
               <tbody>
@@ -3092,6 +3097,30 @@ function AllProgramsTab({
                       <td className="px-4 py-3 whitespace-nowrap">
                         {row.latestPayment?.paymentRef && (
                           <span className="text-[10px] font-mono text-neutral-500">{row.latestPayment.paymentRef}</span>
+                        )}
+                      </td>
+                      {/* Receipt (payment request image) */}
+                      <td className="px-4 py-3 whitespace-nowrap">
+                        {row.latestPayment ? (
+                          <PaymentRequestButton
+                            type="program"
+                            entityId={row.latestPayment.id}
+                            paymentRef={row.latestPayment.paymentRef}
+                          />
+                        ) : (
+                          <span className="text-xs text-neutral-600">—</span>
+                        )}
+                      </td>
+                      {/* Invoice PDF */}
+                      <td className="px-4 py-3 whitespace-nowrap">
+                        {row.latestPayment?.invoiceNumber ? (
+                          <InvoiceDownloadButton
+                            type="program"
+                            entityId={row.latestPayment.id}
+                            invoiceNumber={row.latestPayment.invoiceNumber}
+                          />
+                        ) : (
+                          <span className="text-xs text-neutral-600">—</span>
                         )}
                       </td>
                     </tr>
