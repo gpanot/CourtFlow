@@ -1687,7 +1687,8 @@ CREATE TABLE public.program_runs (
     note text,
     created_by text,
     created_at timestamp with time zone DEFAULT now() NOT NULL,
-    updated_at timestamp with time zone DEFAULT now() NOT NULL
+    updated_at timestamp with time zone DEFAULT now() NOT NULL,
+    court_ids text[] DEFAULT '{}'::text[] NOT NULL
 );
 
 
@@ -6215,4 +6216,5 @@ INSERT INTO public.schema_migrations (version) VALUES
     ('20260713000106'),
     ('20260713032737'),
     ('20260716094008'),
+    ('20260716103355'),
     ('20260716120000');

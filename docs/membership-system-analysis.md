@@ -1,654 +1,1247 @@
-# CourtFlow — Program Passes & Memberships: Complete Technical & Product Analysis
+# CourtFlow — Memberships: Complete Technical & Product Analysis
 
-**Date:** July 16, 2026  
-**Purpose:** Full system snapshot for product and technical analysis. Covers current state, data model, API surface, UI, domain logic, business rules, and known gaps.
+**Date:** July 17, 2026
+**Purpose:** Comprehensive snapshot of the venue Membership system for product and technical analysis. It documents current behavior, data model, APIs, admin UI, player access, payment handling, reporting integrations, and known gaps.
 
----
-
-## 1. What Is This Feature?
-
-**Program Passes** (internally also referred to as "Memberships" in the admin sidebar) is CourtFlow's recurring-access and structured-program system for venue players. It has two distinct modes that share the same underlying data model:
-
-1. **Subscription / Credit Pass** — a player gets N sessions per billing cycle (monthly or fixed duration). Staff activates the pass, tracks check-ins, and the pass auto-expires at cycle end. Functionally similar to a gym membership.
-
-2. **Cohort / Program Run** _(Phase 1 — recently shipped)_ — a structured program with fixed class dates, a court, a coach, and a hard enrollment cap. A "Program Run" is one scheduled cohort of a Pass Type (e.g., "Cobra Lv1 — Batch July 2026"). Class dates block the court calendar and prevent double-booking the coach.
-
-Both modes are managed from the same admin screen (`/admin/program-passes`) and share the same core entities (`ProgramPassType`, `ProgramPass`, `ClassInstance`).
+> **Scope clarification:** Memberships and Program Passes are separate CourtFlow products. This document covers `/admin/memberships`. The class-credit and cohort system at `/admin/program-passes` is documented in [`program passes-system-analysis.md`](program%20passes-system-analysis.md).
 
 ---
 
-## 2. Database Schema
+## 1. Executive Summary
 
-### 2.1 Entity Overview
+Memberships is CourtFlow's venue-level recurring subscription system.
 
-```
-ProgramPassType (program_pass_types)
-  └── has many ProgramRun (program_runs)            ← NEW — Phase 1
-  └── has many ClassInstance (class_instances)
-  └── has many ProgramPass (class_passes)
-  └── has many ProgramPassTypeCoach (program_pass_type_coaches)
+A venue defines up to four active membership tiers. Each tier has:
 
-ProgramRun (program_runs)                            ← NEW — Phase 1
-  └── has many ClassInstance
-  └── has many ProgramPass (enrollments)
-  └── has many ProgramRunCoach (program_run_coaches)
-  └── has many ProgramRunWaitlistEntry (program_run_waitlist)  ← schema only
-  └── has many CourtBlock (via program_run_id FK)
+- A monthly price
+- A limited or unlimited session allowance
+- Optional display badge
+- A list of descriptive perks
 
-CourtBlock (court_blocks)
-  └── has many CourtBlockCoach (program_run_court_block_coaches)  ← NEW
-  └── has many ClassInstance (via court_block_id)
+Staff can activate one membership for a player at a venue, record monthly payments, change the player's tier, edit usage, suspend or cancel the membership, and review payment history.
 
-ClassInstance (class_instances)
-  └── has many ClassCheckIn (class_check_ins)
-  └── belongs to CourtBlock                          ← NEW — Phase 1
-  └── belongs to ProgramRun                          ← NEW — Phase 1
+The current cycle is a rolling **30-day cycle**, not a calendar month. Activating a membership creates an unpaid payment record for the first 30-day period.
 
-ProgramPass (class_passes)
-  └── has many ClassCheckIn
-  └── has many ProgramPassPayment (class_pass_payments)
-  └── belongs to ProgramRun (optional)               ← NEW — Phase 1
+The system is separate from Program Passes:
 
-ClassCheckIn (class_check_ins)
-  └── unique(programPassId, classInstanceId)
-```
-
-### 2.2 Table Details
-
-#### `program_pass_types`
-
-| Column | Type | Notes |
-|---|---|---|
-| `id` | TEXT (cuid) | PK |
-| `venue_id` | TEXT | FK → venues |
-| `name` | TEXT | e.g. "Cobra Lv1 — Bronze Package" |
-| `price` | INT | In VND (Vietnamese Dong) |
-| `sessions_included` | INT | Default 12 |
-| `cycle_length_days` | INT | Legacy/informational, 30 default |
-| `linked_coach_id` | TEXT? | Nullable FK → staff_members (legacy single-coach field) |
-| `is_active` | BOOL | Soft delete flag |
-| `pass_mode` | TEXT | Enum-like: `monthly`, `days_30`, `days_45`, `days_60`, `days_90`, `custom` |
-| `is_one_time` | BOOL | If true, pass does not renew |
-| `description` | TEXT? | NEW — long-form program description |
-| `image_url` | TEXT? | NEW — path to WebP image served from `/uploads/program-passes/` |
-| `created_at` | TIMESTAMPTZ | |
-| `updated_at` | TIMESTAMPTZ | |
-
-**Indexes:** `(venue_id, is_active)`, `(linked_coach_id)`
-
-#### `program_runs` ← NEW Phase 1
-
-| Column | Type | Notes |
-|---|---|---|
-| `id` | TEXT (uuid) | PK |
-| `pass_type_id` | TEXT | FK → program_pass_types |
-| `venue_id` | TEXT | FK → venues |
-| `name` | TEXT | Human name for this cohort run |
-| `status` | TEXT | `upcoming` / `in_progress` / `completed` / `cancelled` |
-| `start_date` | DATE | Calendar date of first class (local date, stored as DATE) |
-| `recurrence_start_hour` | INT | Hour of day (local) the class starts, e.g. 8 = 8:00 AM |
-| `recurrence_duration_min` | INT | Duration in minutes, e.g. 90 |
-| `recurrence_count` | INT? | Total number of occurrences (mutually exclusive with recurrence_end_date) |
-| `recurrence_end_date` | DATE? | Last possible date (alternative to count) |
-| `max_capacity` | INT | Enrollment cap, default 20 |
-| `court_id` | TEXT? | FK → courts, nullable |
-| `note` | TEXT? | Staff notes |
-| `created_by` | TEXT? | Staff member ID |
-| `created_at` / `updated_at` | TIMESTAMPTZ | |
-
-**Key design decision:** Day-of-week is **not stored** — it's derived at runtime from `start_date` via `new Date(startDate + 'T12:00:00+07:00').getDay()`. All classes repeat weekly on the same day.
-
-**Indexes:** `(pass_type_id)`, `(venue_id, status)`
-
-#### `class_passes` (model name: ProgramPass)
-
-| Column | Type | Notes |
-|---|---|---|
-| `id` | TEXT (cuid) | PK |
-| `player_id` | TEXT | FK → players |
-| `venue_id` | TEXT | FK → venues |
-| `pass_type_id` | TEXT | FK → program_pass_types |
-| `program_run_id` | TEXT? | FK → program_runs — NEW, links pass to a cohort |
-| `status` | ENUM | `active`, `paused`, `expired`, `cancelled` |
-| `activated_at` | TIMESTAMPTZ | When staff activated it |
-| `deferred_start_date` | TIMESTAMPTZ? | Resume date when paused |
-| `cycle_start` | TIMESTAMPTZ | Start of current billing cycle |
-| `cycle_end` | TIMESTAMPTZ | End of current billing cycle |
-| `sessions_used` | INT | Count of check-ins this cycle |
-
-**Indexes:** `(player_id, venue_id)`, `(pass_type_id)`, `(venue_id, status)`, `(program_run_id)`
-
-#### `class_instances` (model name: ClassInstance)
-
-| Column | Type | Notes |
-|---|---|---|
-| `id` | TEXT (cuid) | PK |
-| `venue_id` | TEXT | FK → venues |
-| `coach_id` | TEXT | FK → staff_members (required — first run coach or created_by) |
-| `pass_type_id` | TEXT | FK → program_pass_types |
-| `program_run_id` | TEXT? | FK → program_runs — NEW |
-| `court_block_id` | TEXT? | FK → court_blocks — NEW, replaces old `court_id` |
-| `start_at` | TIMESTAMPTZ | Class start (local time) |
-| `end_at` | TIMESTAMPTZ | Class end |
-| `max_players` | INT | Capacity |
-| `created_at` / `updated_at` | TIMESTAMPTZ | |
-
-**Legacy note:** `court_id` column was dropped in Phase 1 migration. Court info is now accessed via `courtBlock.courtIds[]`.
-
-#### `class_check_ins` (model name: ClassCheckIn)
-
-| Column | Type | Notes |
-|---|---|---|
-| `id` | TEXT (cuid) | PK |
-| `class_pass_id` | TEXT | FK → class_passes |
-| `class_instance_id` | TEXT | FK → class_instances |
-| `checked_in_at` | TIMESTAMPTZ | Default now() |
-
-**Unique constraint:** `(class_pass_id, class_instance_id)` — prevents double check-in at DB level.
-
-#### `class_pass_payments` (model name: ProgramPassPayment)
-
-| Column | Type | Notes |
-|---|---|---|
-| `id` | TEXT (cuid) | PK |
-| `class_pass_id` | TEXT | FK → class_passes |
-| `period_start` | TIMESTAMPTZ | |
-| `period_end` | TIMESTAMPTZ | |
-| `amount_value` | INT | VND |
-| `status` | ENUM | `PAID`, `UNPAID`, `VOID` |
-| `payment_method` | TEXT? | `cash`, `bank_transfer`, `other` |
-| `paid_at` | TIMESTAMPTZ? | |
-| `proof_url` | TEXT? | Uploaded payment proof |
-| `note` | TEXT? | Free text (used for free/comp passes) |
-| `void_reason` | TEXT? | |
-
-#### `program_pass_type_coaches` — Many-to-many: PassType ↔ Coach
-
-| Column | Type |
-|---|---|
-| `id` | TEXT (uuid) |
-| `pass_type_id` | TEXT |
-| `coach_id` | TEXT |
-| `created_at` | TIMESTAMPTZ |
-
-**Unique:** `(pass_type_id, coach_id)`
-
-#### `program_run_coaches` — Many-to-many: ProgramRun ↔ Coach (default run coaches)
-
-| Column | Type |
-|---|---|
-| `run_id` | TEXT PK part |
-| `coach_id` | TEXT PK part |
-
-Composite PK `(run_id, coach_id)`. These are the **default coaches** for a run, automatically copied to `program_run_court_block_coaches` when the schedule is generated.
-
-#### `program_run_court_block_coaches` — Many-to-many: CourtBlock ↔ Coach
-
-| Column | Type |
-|---|---|
-| `court_block_id` | TEXT PK part |
-| `coach_id` | TEXT PK part |
-
-**Single source of truth** for coach-to-block assignment. Coach conflict detection queries this table.
-
-#### `program_run_waitlist` — Schema-only, Phase 2
-
-| Column | Type | Notes |
-|---|---|---|
-| `id` | TEXT | PK |
-| `run_id` | TEXT | FK → program_runs |
-| `player_id` | TEXT | FK → players |
-| `status` | TEXT | Default `waiting` |
-| `promoted_at` | TIMESTAMPTZ? | |
-| `note` | TEXT? | |
-
-**Unique:** `(run_id, player_id)`. Table exists but no promotion logic is implemented yet.
-
-#### `court_blocks` — Extended with Phase 1 columns
-
-| New Column | Type | Notes |
-|---|---|---|
-| `program_run_id` | TEXT? | FK → program_runs ON DELETE SET NULL |
-
-`CourtBlockType` enum extended with `program_class` value. All 7 values block a court cell uniformly in the availability check (`getAvailableSlots()` in `src/lib/booking.ts`) — no special-casing needed.
+- Membership uses `MembershipTier`, `Membership`, and `MembershipPayment`.
+- Program Passes use `ProgramPassType`, `ProgramPass`, `ProgramRun`, `ClassInstance`, and their own payment/check-in records.
+- A player can have both a Membership and one or more Program Passes.
+- Membership payment and usage records never update Program Pass records, and vice versa.
 
 ---
 
-## 3. Pass Modes
+## 2. Product Purpose
 
-| Mode | Description | Cycle Calculation |
-|---|---|---|
-| `monthly` | Calendar-month billing. Cycle aligns to 1st of month. | `cycleEnd` = last ms of same calendar month |
-| `days_30` | Rolling 30-day window from activation. | `cycleStart + 30 days - 1` at 23:59:59 |
-| `days_45` | Rolling 45 days. | Same pattern |
-| `days_60` | Rolling 60 days. | Same pattern |
-| `days_90` | Rolling 90 days. | Same pattern |
-| `custom` | Staff picks exact start and end dates at activation. | Caller provides explicit `cycleEnd` |
+Memberships is intended to represent general recurring access to a venue, particularly open-play participation.
 
-Cycle computation lives in `src/lib/program-pass.ts → computeCycleEnd()`. Always uses local-time methods (never UTC) per venue timezone rules.
+Typical examples:
 
----
+- Bronze Membership — 4 sessions per 30 days
+- Silver Membership — 8 sessions per 30 days
+- Unlimited Membership — unlimited sessions for 30 days
+- VIP Membership — unlimited sessions plus manually described perks
 
-## 4. Pass Statuses
+The feature currently supports staff-managed subscriptions. It is not a complete self-service subscription commerce system:
 
-| Status | Meaning | Transitions |
-|---|---|---|
-| `active` | Pass is usable. Check-in allowed. | → paused, → cancelled |
-| `paused` | Temporarily frozen. `deferredStartDate` set. | → active (resume), → cancelled |
-| `expired` | Cycle end has passed. No further check-ins. | Terminal |
-| `cancelled` | Manually cancelled by staff. | Terminal |
+- Staff activates memberships.
+- Staff records or reverts payments.
+- Players can read their membership through an authenticated API.
+- No player-facing purchase or checkout route exists.
+- No automatic card charge or payment gateway subscription exists.
 
 ---
 
-## 5. Program Run Statuses
+## 3. Core Concepts
 
-| Status | Meaning |
-|---|---|
-| `upcoming` | Future cohort, not started. Enrollment is open. |
-| `in_progress` | Currently running (manual status change by staff today — no auto-transition yet). |
-| `completed` | All classes delivered. |
-| `cancelled` | Run cancelled. Enrolled players' passes are freed (no automated refund). |
+### 3.1 Membership Tier
 
-Status transitions are manual today. Auto-transition based on class dates is a Phase 2 item.
+A reusable venue-specific subscription product.
 
----
+It defines:
 
-## 6. API Routes
-
-### Program Pass Types
-
-| Method | Path | Auth | Description |
-|---|---|---|---|
-| `GET` | `/api/admin/program-passes/types?venueId=` | SuperAdmin | List all active pass types for a venue, with coach associations and active pass count |
-| `POST` | `/api/admin/program-passes/types` | SuperAdmin | Create new pass type. Body: `{venueId, name, price, sessionsIncluded, passMode, isOneTime, description?, coachIds[]}` |
-| `PATCH` | `/api/admin/program-passes/types/[id]` | SuperAdmin | Update name, price, sessions, passMode, isOneTime, description, coachIds (full replace) |
-| `DELETE` | `/api/admin/program-passes/types/[id]` | SuperAdmin | Soft-delete (sets `isActive = false`). Blocks if any active passes exist. |
-| `POST` | `/api/admin/program-passes/types/[id]/image` | SuperAdmin | Upload program image (PNG/JPEG/WebP, max 5 MB). Resizes to 800×800 inside, converts to WebP via `sharp`. Stores at `/uploads/program-passes/{id}.webp`. |
-
-### Program Passes (Subscriptions / Enrollments)
-
-| Method | Path | Auth | Description |
-|---|---|---|---|
-| `GET` | `/api/admin/program-passes?venueId=&passTypeId=&status=` | SuperAdmin | List passes with player, passType, latest payment. Returns KPI block (monthly collected, unpaid count, overdue count). |
-| `POST` | `/api/admin/program-passes/activate` | SuperAdmin | Activate a new pass for a player. Body: `{playerId, venueId, passTypeId, cycleStart, cycleEnd?, paymentMethod?, amountValue?, isFree?, note?}` |
-| `PATCH` | `/api/admin/program-passes/[id]` | SuperAdmin | Update pass status: pause (with `deferredStartDate`), resume (clear deferral), cancel |
-| `DELETE` | `/api/admin/program-passes/[id]` | SuperAdmin | Hard delete pass + cascade check-ins + payments |
-| `POST` | `/api/admin/program-passes/check-in` | SuperAdmin | Check player into a class instance. Body: `{programPassId, classInstanceId}`. Runs in serializable transaction. |
-| `GET` | `/api/admin/program-passes/class-instances?venueId=&date=YYYY-MM-DD` | SuperAdmin | List class instances at a venue on a given date (for check-in modal) |
-
-### Program Runs ← NEW Phase 1
-
-| Method | Path | Auth | Description |
-|---|---|---|---|
-| `GET` | `/api/admin/program-runs?venueId=&passTypeId=` | SuperAdmin | List runs with pass type, court, coaches, enrollment and instance counts |
-| `POST` | `/api/admin/program-runs` | SuperAdmin | Create a run (no schedule generated yet). Body: `{venueId, passTypeId, name, startDate, recurrenceStartHour, recurrenceDurationMin, recurrenceCount?, recurrenceEndDate?, maxCapacity, courtId?, note?, coachIds[]}` |
-| `PATCH` | `/api/admin/program-runs/[id]` | SuperAdmin | Edit name, status, maxCapacity (enforces enrolled guard), note, coachIds |
-| `POST` | `/api/admin/program-runs/[id]/generate` | SuperAdmin | Generate CourtBlocks + ClassInstances for the run. Idempotent guard: returns 409 if schedule already exists. |
-| `GET` | `/api/admin/program-runs/[id]/instances` | SuperAdmin | List all ClassInstances for a run, including CourtBlock date/time and per-block coaches |
-| `PATCH` | `/api/admin/program-runs/[id]/instances/[instanceId]` | SuperAdmin | Reschedule a single instance (does not affect siblings) |
-
----
-
-## 7. Domain Logic (`src/lib/program-run.ts`)
-
-### `generateRunSchedule(runId, tx?)`
-
-Generates all `CourtBlock` + `ClassInstance` rows for a run in a single serializable transaction.
-
-**Algorithm:**
-1. Load run + coaches from DB.
-2. **Idempotency check:** if any `ClassInstance` already exists for this run, return the existing count/blockIds without creating duplicates.
-3. Parse `start_date` as a local-midnight Date using `T00:00:00+07:00`.
-4. Loop until `recurrenceCount` is reached OR `currentDate > recurrenceEndDate`:
-   - Compute start/end timestamps using `setHours(recurrenceStartHour, …)` (local, not UTC).
-   - Create one `CourtBlock` of type `program_class`, with `programRunId`, `courtIds`, `date` (noon-local for Prisma DATE safety), `startTime`, `endTime`.
-   - Copy run-level coaches → `CourtBlockCoach` rows for that block.
-   - Create one `ClassInstance` linked to the CourtBlock.
-   - Advance `currentDate` by 7 days via `setDate(getDate() + 7)`.
-5. Return `{ instanceCount, blockIds }`.
-
-**Timezone rules strictly followed:**
-- Date arithmetic: `setDate(getDate() + n)` (local)
-- Hour arithmetic: `setHours(h, m, 0, 0)` (local)
-- Prisma DATE writes: `new Date('YYYY-MM-DDT12:00:00+07:00')` (noon local to avoid UTC midnight drift)
-
-### `checkProgramBlockConflict(coachId, date, startTime, endTime)`
-
-Soft conflict check: does a coach have a `program_class` CourtBlock overlapping the given window?
-
-- Queries `court_blocks WHERE type='program_class' AND date=date AND startTime<endTime AND endTime>startTime` joined to `program_run_court_block_coaches WHERE coach_id=coachId`.
-- Returns `{ hasConflict: boolean, blockInfo? }` — **does NOT throw / reject**.
-- Called from the admin coach-lesson API route. If a conflict exists, a `{ warning: { code: "COACH_PROGRAM_CONFLICT", blockInfo } }` is appended to the 201 response. Staff sees a yellow banner but the lesson is still created.
-
-### `enrollInRun(params)`
-
-Enrolls a player in a ProgramRun. Serializable transaction:
-1. Load run — validate status is `upcoming` or `in_progress`.
-2. Live COUNT of current enrollments (never stored counter).
-3. Reject if `enrolledCount >= maxCapacity` → `ProgramRunError("RUN_FULL")`.
-4. Dedup check — reject if player already enrolled → `ALREADY_ENROLLED`.
-5. Create `ProgramPass` with `programRunId`.
-6. Create `ProgramPassPayment` if `amountValue > 0`.
-
-### `updateRunCapacity(runId, newMax)`
-
-Rejects (typed error `CAPACITY_BELOW_ENROLLED`) if `newMax < live enrolled count`. Otherwise updates `program_runs.max_capacity`.
-
-### `rescheduleInstance(instanceId, newDateKey, newStartTime, newEndTime)`
-
-Updates both `ClassInstance` (timestamps) and its linked `CourtBlock` (date + timestamps) atomically. No effect on sibling instances in the same run.
-
----
-
-## 8. Domain Logic (`src/lib/program-pass.ts`)
-
-### `checkInToClassInstance(programPassId, classInstanceId)`
-
-Full serializable transaction with 6 sequential checks before creating a check-in:
-
-1. Load pass — throw `PASS_NOT_FOUND` if missing.
-2. Verify `pass.status === 'active'` — throw `PASS_NOT_ACTIVE` if paused/expired/cancelled.
-3. Verify `sessionsUsed < sessionsIncluded` — throw `SESSIONS_EXHAUSTED` if capped.
-4. Load class instance — throw `INSTANCE_NOT_FOUND` if missing.
-5. Count existing check-ins — throw `CLASS_FULL` if `checkedInCount >= maxPlayers` (Phase 2 waitlist hook point).
-6. Dedup check — `findUnique` on `(programPassId, classInstanceId)` — throw `ALREADY_CHECKED_IN` if exists.
-7. Create `ClassCheckIn` row.
-8. Increment `ProgramPass.sessionsUsed`.
-
-**Retry logic:** On `P2034` (serialization failure), retries once. Second failure → `TRANSACTION_CONFLICT` (409). On `P2002` (unique constraint violation from race) → maps to `ALREADY_CHECKED_IN`.
-
-### `computeCycleEnd(cycleStart, passMode)`
-
-Pure function. Calculates cycle end using local-time methods only:
-- `monthly`: last millisecond of the same calendar month.
-- `days_N`: cycleStart + N days - 1, at 23:59:59.999.
-
----
-
-## 9. KPI Calculations
-
-The pass list endpoint returns a `kpi` block computed per-request:
-
-| KPI | Query |
-|---|---|
-| `collected` | SUM of `class_pass_payments.amount_value WHERE status='PAID' AND paid_at` in current calendar month |
-| `unpaidCount` | COUNT of UNPAID payments where `period_end >= now` (not yet overdue) |
-| `overdueCount` | COUNT of UNPAID payments where `period_end < now` AND pass type is NOT one-time |
-
-One-time passes are excluded from overdue count because an expired one-time pass is not an actionable financial item.
-
----
-
-## 10. Admin UI (`src/app/(admin)/admin/program-passes/page.tsx`)
-
-### Tab Structure
-
-The page has **3 tabs**:
-
-#### Tab 1: Program Passes
-
-The main member roster. Shows all active/paused/expired/cancelled passes.
-
-**KPI row:** 3 stat cards — Collected this month (green), Unpaid count (amber), Overdue count (red).
-
-**Filters:** Pass Type dropdown, Status dropdown.
-
-**Table columns:** Player, Pass Type, Status badge, Usage (X/N sessions, amber if capped), Cycle ends, Actions.
-
-**Actions per row (context-sensitive):**
-- Active + not capped → Check-in icon, Pause icon, Delete icon
-- Active + capped → Lock icon (no check-in available)
-- Paused → Resume icon, Cancel icon
-- Expired/Cancelled → No actions
-
-**Activate button** → triggers ActivateModal (2-step wizard).
-
-#### Tab 2: Pass Types
-
-Card grid showing all active pass types for the selected venue.
-
-**Card contents:**
-- Image thumbnail (if `imageUrl` set)
 - Name
-- Price (formatted VND) + pass mode label (`/mo`, `/30 days`, etc.)
-- Session count badge, pass mode badge, one-time badge
-- Coach name tags
-- Description excerpt (2-line clamp)
-- Active pass count
-- Edit (pencil) → PassTypeFormModal, Delete (trash) → soft-delete after confirmation
+- Price
+- Session allowance
+- Badge visibility
+- Descriptive perks
+- Display order
+- Active/inactive state
 
-**Add Pass Type button** → PassTypeFormModal for creation.
+### 3.2 Membership
 
-#### Tab 3: Program Runs ← NEW Phase 1
+One player's subscription at one venue.
 
-Currently shows Run cards with: name, passType badge, status badge, capacity gauge, date range, coaches, court.
+It defines:
 
-**Actions:**
-- "Generate Schedule" (only if `instanceCount === 0`) → POST `.../generate`
-- "Edit" → Edit Run modal (name, capacity, coaches, status)
-- Expand row → shows instance list with date, time, coaches, check-in count, Reschedule
+- Selected tier
+- Status
+- Activation date
+- Next renewal date
+- Sessions used in the current cycle
 
-**Create Run modal** (2-step):
-- Step 1: PassType, name, court, capacity, coaches
-- Step 2: recurrence config (hour, duration, count or end date), date preview
+The database enforces one Membership per `(playerId, venueId)`.
 
-**Note:** The Program Runs tab UI is listed as `in_progress` in the build plan — the backend is fully functional but some UI elements may still be incomplete.
+### 3.3 Membership Payment
 
----
+A payment obligation or receipt for one Membership period.
 
-## 11. Modals
+It defines:
 
-### PassTypeFormModal
+- Period start and end
+- Amount
+- Payment status
+- Payment date and method
+- Optional proof image URL
+- Optional note
 
-Full CRUD for a pass type. Fields:
-- Name (text)
-- Duration/mode (select: monthly / 30d / 45d / 60d / 90d / custom)
-- Price (VND, formatted number input)
-- Sessions included (number)
-- One-time checkbox
-- Description (textarea, optional)
-- Image picker (PNG/JPEG/WebP, uploaded via POST `/image`, converted to WebP 800×800 via sharp)
-- Coaches (multi-select checkboxes)
+### 3.4 Membership Contact Configuration
 
-### ActivateModal (2-step wizard)
+Each venue can store:
 
-**Step 1: Player search** — debounced search (300ms) against `GET /api/admin/players?search=`. Shows avatar/name/phone. Player must be selected before proceeding.
+- Membership WhatsApp contact
+- Membership contact email
 
-**Step 2: Pass details:**
-- Pass Type selector (shows price + mode)
-- Cycle start (month picker for `monthly` mode, date picker for `days_N`, date pair for `custom`)
-- Free/complimentary checkbox (skips payment record)
-- Payment method (Cash / Bank Transfer / Other) if not free
-- Free reason note if complimentary
-
-On submit: `POST /api/admin/program-passes/activate`.
-
-### CheckInModal
-
-Loads today's class instances for the venue (`GET /api/admin/program-passes/class-instances?date=today`). Displays clickable session cards (pass type, time, coach, current check-in count). On confirm: `POST /api/admin/program-passes/check-in`.
-
-### PauseModal
-
-Staff picks a resume date (default: 1st of next month). PATCH with `{ status: "paused", deferredStartDate }`.
-
-### DeletePassModal
-
-Double-confirmation (2-step) before hard delete. Shows pass summary and warns the action is irreversible.
+These values are stored inside `Venue.settings.membershipConfig`, not in a dedicated table.
 
 ---
 
-## 12. Auth
+## 4. High-Level Data Flow
 
-All program pass routes require `requireSuperAdmin` — they verify a valid staff JWT with `superAdmin: true` (or equivalent admin role). Player-facing enrollment has no routes yet (Phase 2).
+```text
+Venue
+ ├── MembershipTier
+ │    ├── name
+ │    ├── priceValue
+ │    ├── sessionsIncluded (null = unlimited)
+ │    ├── perks
+ │    └── Membership
+ │         ├── Player
+ │         ├── status
+ │         ├── renewalDate
+ │         ├── sessionsUsed
+ │         └── MembershipPayment[]
+ │
+ └── settings.membershipConfig
+      ├── contactWhatsApp
+      └── contactEmail
+```
+
+Activation flow:
+
+```text
+Staff selects Player + Tier
+        ↓
+POST /api/admin/memberships/activate
+        ↓
+Upsert Membership as active
+Reset sessionsUsed to 0
+Set renewalDate to now + 30 days
+        ↓
+Create UNPAID MembershipPayment
+for now → renewalDate
+```
 
 ---
 
-## 13. Image Upload Pipeline
+## 5. Database Schema
 
-1. `POST /api/admin/program-passes/types/[id]/image` (multipart/form-data)
-2. Validates MIME type (PNG/JPEG/WebP) and file size (≤ 5 MB)
-3. Reads raw buffer from FormData
-4. Passes through `sharp`: resize to 800×800 inside (preserves aspect ratio), encode as WebP quality 80
-5. Writes to `/uploads/program-passes/{id}.webp` (creates dir if missing)
-6. Updates `program_pass_types.image_url` to `/uploads/program-passes/{id}.webp`
-7. Returns `{ imageUrl }`
+### 5.1 `membership_tiers`
 
-The client previews the file immediately via `URL.createObjectURL(file)` before upload.
+Prisma model: `MembershipTier`
 
----
+| Column | Type | Meaning |
+|---|---|---|
+| `id` | TEXT / cuid | Primary key |
+| `venue_id` | TEXT | Venue owning the tier |
+| `sort_order` | INT | Display order within the venue |
+| `name` | TEXT | Tier name |
+| `price_value` | INT | Price in the application's smallest configured currency unit; UI treats it as VND |
+| `sessions_included` | INT nullable | Session allowance; `NULL` means unlimited |
+| `show_badge` | BOOLEAN | Whether UI should visually highlight membership status |
+| `is_active` | BOOLEAN | Whether tier is available for new activation |
+| `perks` | JSON | Array of descriptive perk strings |
+| `created_at` | TIMESTAMP | Creation time |
 
-## 14. Court Conflict Integration
+Relations:
 
-**How program classes block the court:**
+- Belongs to one `Venue`
+- Has many `Membership` records
 
-When `generateRunSchedule` runs, it creates one `CourtBlock` of type `program_class` per occurrence. This type is part of the `CourtBlockType` Postgres enum. The existing `getAvailableSlots()` function in `src/lib/booking.ts` treats all 7 `CourtBlockType` values uniformly — they all occupy a court cell. No special-casing was needed for `program_class`.
+Constraints:
 
-**Effect:** Any existing court-booking code that calls `getAvailableSlots()` will correctly show program class time slots as unavailable for regular bookings.
+- Unique `(venue_id, sort_order)`
+- Application limit of four active tiers per venue
 
-**Coach conflict (soft-warning):**
+Important behavior:
 
-When staff books a private lesson for a coach via `POST /api/admin/coach-lessons`, the route now additionally calls `checkProgramBlockConflict()`. If the coach is assigned to a `program_class` CourtBlock overlapping the lesson time, the response includes:
+- Deleting a tier is a soft deactivation (`isActive = false`).
+- A tier cannot be deactivated while it has active memberships.
+- Suspended, expired, or cancelled memberships do not block tier deactivation.
+
+### 5.2 `memberships`
+
+Prisma model: `Membership`
+
+| Column | Type | Meaning |
+|---|---|---|
+| `id` | TEXT / cuid | Primary key |
+| `player_id` | TEXT | Player owning the membership |
+| `venue_id` | TEXT | Venue where it applies |
+| `tier_id` | TEXT | Selected MembershipTier |
+| `status` | MembershipStatus | `active`, `suspended`, `expired`, or `cancelled` |
+| `activated_at` | TIMESTAMP | Most recent activation/reactivation time |
+| `renewal_date` | TIMESTAMP | End of current rolling 30-day cycle |
+| `sessions_used` | INT | Usage counter for the current cycle |
+| `created_at` | TIMESTAMP | First creation time |
+| `updated_at` | TIMESTAMP | Last update time |
+
+Relations:
+
+- Belongs to one `Player`
+- Belongs to one `Venue`
+- Belongs to one `MembershipTier`
+- Has many `MembershipPayment` records
+
+Constraints and indexes:
+
+- Unique `(player_id, venue_id)`
+- Index on `venue_id`
+- Index on `tier_id`
+
+The unique constraint means:
+
+- A player can have only one Membership record at a given venue.
+- Reactivation updates that existing row rather than creating a second Membership.
+- A player can have separate Memberships at different venues.
+
+### 5.3 `membership_payments`
+
+Prisma model: `MembershipPayment`
+
+| Column | Type | Meaning |
+|---|---|---|
+| `id` | TEXT / cuid | Primary key |
+| `membership_id` | TEXT | Parent Membership |
+| `period_start` | TIMESTAMP | Beginning of covered period |
+| `period_end` | TIMESTAMP | End of covered period |
+| `amount_value` | INT | Expected or paid amount |
+| `status` | MembershipPaymentStatus | `UNPAID`, `PAID`, or `OVERDUE` |
+| `paid_at` | TIMESTAMP nullable | When payment was recorded |
+| `payment_method` | TEXT nullable | Payment method such as cash or bank transfer |
+| `note` | TEXT nullable | Staff-entered note |
+| `proof_url` | TEXT nullable | URL of payment proof |
+| `created_at` | TIMESTAMP | Record creation time |
+
+Indexes:
+
+- `membership_id`
+- `status`
+
+There is no database uniqueness constraint preventing duplicate payment periods.
+
+### 5.4 Venue Settings JSON
+
+Membership contact details live in the venue's general JSON settings:
+
 ```json
 {
-  "lesson": { ... },
-  "warning": {
-    "code": "COACH_PROGRAM_CONFLICT",
-    "blockInfo": { "programRunId": "...", "title": "Cobra Lv1 July", "date": "...", "startTime": "...", "endTime": "..." }
+  "membershipConfig": {
+    "contactWhatsApp": null,
+    "contactEmail": null
   }
 }
 ```
-The lesson is **still created** (no hard block). The admin UI (`StaffBookingModal`) shows a yellow `AlertTriangle` banner if the response contains `warning`. Staff acknowledges and proceeds.
 
-**Player-facing booking** keeps the existing hard-reject behavior (program coach blocks appear as unavailable slots, not a soft warning).
+Defaults are defined in `src/lib/booking.ts`.
 
 ---
 
-## 15. Timezone Handling
+## 6. Status Models
 
-All date/time logic follows the workspace rule: **server runs in `Asia/Saigon` (UTC+7)**, all local time methods used.
+### 6.1 Membership Status
 
-| Pattern | Code | When Used |
+| Status | Meaning | Current UI behavior |
 |---|---|---|
-| Prisma DATE write | `new Date('YYYY-MM-DDT12:00:00+07:00')` | `start_date`, `recurrence_end_date`, `date` on CourtBlock |
-| Local midnight (arithmetic) | `new Date('YYYY-MM-DDT00:00:00+07:00')` | Schedule iteration start |
-| Weekly advance | `setDate(getDate() + 7)` | `generateRunSchedule` loop |
-| Class time | `setHours(h, m, 0, 0)` | StartTime/endTime on CourtBlock and ClassInstance |
-| Cycle end (monthly) | `new Date(y, m+1, 0, 23, 59, 59, 999)` | `computeCycleEnd` |
+| `active` | Membership is considered usable | Can edit usage, change tier, suspend, or cancel |
+| `suspended` | Temporarily disabled | Can reactivate |
+| `expired` | Renewal has lapsed | Displayed, but no direct admin reactivation action in the table |
+| `cancelled` | Staff cancelled membership | Displayed as terminal in the membership table |
 
-**Rationale for noon pattern on Prisma DATE writes:** Prisma serializes `Date` objects as `.toISOString()` (UTC). On a UTC+7 server, local midnight = `17:00 UTC previous day`. Storing noon local (`05:00 UTC`) keeps the correct calendar date in Postgres's `DATE` cast regardless of timezone.
+Activation or reactivation always:
 
----
+- Sets status to `active`
+- Replaces the tier with the selected tier
+- Sets `activatedAt` to now
+- Sets `renewalDate` to now + 30 days
+- Resets `sessionsUsed` to zero
+- Creates a new unpaid payment
 
-## 16. Known Gaps & Phase 2 Backlog
+### 6.2 Payment Status
 
-### Not Built Yet (Phase 2)
-
-| Feature | Notes |
+| Status | Meaning |
 |---|---|
-| **Player-facing CourtPass enrollment** | No player UI, no enrollment API for the mobile/PWA player portal. Players cannot currently see or buy program runs. |
-| **Waitlist promotion logic** | Table exists (`program_run_waitlist`). No auto-promotion when capacity raises or enrollment cancels. No player-facing "join waitlist" button. |
-| **Auto status transitions** | Run status (`upcoming` → `in_progress` → `completed`) must be changed manually by staff today. No scheduled job. |
-| **Recurring run auto-renewal** | No mechanism to auto-create the next cohort when one ends. |
-| **Refund / credit automation** | All refunds for cancelled runs or rescheduled classes are manual staff actions (calling/messaging the player). No automated payment reversal. |
-| **Per-session attendance status** | `sessionsUsed` + check-in log is the only tracking. No explicit `attended / no_show / excused` status on ClassInstance. |
-| **Program analytics dashboard** | No fill-rate, coach utilization, or revenue-by-program reporting. |
-| **Mobile app parity** | Program Runs and enrollment flow are not implemented in the React Native app (`mobile/src/`). |
-| **PWA program listing page** | No player-facing page listing active program runs at a venue. |
+| `UNPAID` | Payment has not been recorded as paid |
+| `PAID` | Staff recorded payment |
+| `OVERDUE` | Period ended while still unpaid |
 
-### Technical Debt (deferred)
+The list API also derives an effective `OVERDUE` status at read time when:
 
-| Item | Notes |
-|---|---|
-| `class_passes` table name | Should be `program_passes` for clarity. Flagged, not blocking. |
-| `class_instances` table name | Should be `program_class_instances`. Same situation. |
-| `ClassInstance.coachId` column | Required field, populated with `coaches[0].coachId` or `createdBy` as a sentinel when no coach. Multi-coach reality is now in `program_run_court_block_coaches`, making this column redundant. |
-| Program Runs tab UI | Backend complete, UI `in_progress` per plan — Create/Edit Run modals and instance expandable list still being built. |
-
-### Business Rules Not Enforced by Code
-
-| Rule | Status |
-|---|---|
-| Lowering capacity below enrolled count | ✅ Enforced (`updateRunCapacity` throws `CAPACITY_BELOW_ENROLLED`) |
-| Double check-in prevention | ✅ Enforced at both app and DB level |
-| Deactivating a pass type with active passes | ✅ Blocked by API (returns 400 with count) |
-| Enrolling in a cancelled/completed run | ✅ Blocked by `enrollInRun` status check |
-| Coach double-booking for program + lesson | ⚠️ Soft warning only (staff can override) |
-| Refunds on cancellation | ❌ Manual process, no code enforcement |
-| Session cap reset on cycle renewal | ❌ No automatic renewal logic exists — `sessionsUsed` is not reset automatically; pass expiry and renewal is a manual staff action |
-
----
-
-## 17. File Map
-
+```text
+stored status = UNPAID
+AND periodEnd < now
 ```
+
+Therefore an overdue payment may still be stored as `UNPAID` while displayed as `OVERDUE`.
+
+---
+
+## 7. Billing and Renewal Behavior
+
+### 7.1 Cycle Length
+
+The cycle is hardcoded in two places as:
+
+```ts
+const CYCLE_DAYS = 30;
+```
+
+It is a rolling 30-day period:
+
+```text
+renewalDate = activation time + 30 local calendar days
+```
+
+It is not aligned to:
+
+- The first or last day of a calendar month
+- A venue billing day
+- The player's original day-of-month after manual reactivation
+
+### 7.2 Initial Payment
+
+Activation creates:
+
+```text
+periodStart = now
+periodEnd = renewalDate
+amountValue = selected tier price
+status = UNPAID
+```
+
+Membership activation does not require payment first. The Membership becomes active immediately even though its payment is unpaid.
+
+### 7.3 Cycle Reset
+
+`checkAndResetCycle()` in `src/lib/membership.ts` is designed to:
+
+1. Return without changes if `renewalDate > now`.
+2. Starting from the previous renewal date, add 30 days repeatedly until the date is in the future.
+3. Reset `sessionsUsed` to zero.
+4. Update `renewalDate`.
+5. Create an unpaid MembershipPayment if one does not exist for the previous renewal date.
+
+This function is lazy: it runs when `checkSessionLimit()` runs.
+
+Current direct call chain:
+
+```text
+GET /api/membership/mine
+  → checkSessionLimit()
+    → checkAndResetCycle()
+```
+
+### 7.4 Expiration Helper
+
+`expireMemberships()` is designed to:
+
+1. Mark past-due unpaid payments as `OVERDUE`.
+2. Mark active memberships whose renewal date is in the past as `expired`.
+
+However, no caller or scheduled route was found in the current codebase. It is described as intended for a cron job but is not currently wired to one.
+
+### 7.5 Payment Is Not Access Control
+
+Current code does not suspend or expire a Membership merely because its payment is unpaid or overdue.
+
+Payment state and Membership state are independent:
+
+- An active Membership can have an unpaid or overdue payment.
+- Marking a payment paid does not change Membership status.
+- Reverting a payment to unpaid does not suspend the Membership.
+
+---
+
+## 8. Session Allowance Logic
+
+### 8.1 Limited vs Unlimited
+
+`sessionsIncluded` controls the allowance:
+
+- Number: limited tier
+- `null`: unlimited tier
+
+`checkSessionLimit(playerId, venueId)` returns:
+
+```ts
+{
+  allowed: boolean;
+  used: number;
+  limit: number | null;
+  isUnlimited: boolean;
+}
+```
+
+Behavior:
+
+- No Membership: allowed, treated as unlimited by the helper
+- Non-active Membership: allowed, treated as unlimited by the helper
+- Active unlimited Membership: allowed
+- Active limited Membership: allowed only while `sessionsUsed < sessionsIncluded`
+
+The “allowed when no active membership” behavior means this helper is not a membership entitlement check. It only enforces a limit when an active limited Membership exists.
+
+### 8.2 Increment Helper
+
+`incrementSessionCount(playerId, venueId)`:
+
+1. Loads the venue Membership.
+2. No-ops if it does not exist or is not active.
+3. Lazily resets the cycle if needed.
+4. Increments `sessionsUsed`.
+
+Its comment says it should be called when a player joins open play.
+
+### 8.3 Actual Integration Status
+
+No calls to `incrementSessionCount()` were found outside `src/lib/membership.ts`.
+
+No booking, queue, open-play registration, or check-in endpoint currently calls either:
+
+- `incrementSessionCount()`
+- `checkSessionLimit()`
+
+The only current caller of `checkSessionLimit()` is the player `GET /api/membership/mine` read endpoint.
+
+Therefore, as currently wired:
+
+- Session usage is not automatically incremented by open-play participation.
+- The configured session limit does not block registration or check-in.
+- Staff can manually edit `sessionsUsed` from `/admin/memberships`.
+- Analytics report whatever value is currently stored, which may be manually maintained.
+
+This is the largest functional gap between the intended Membership behavior and the currently enforced behavior.
+
+---
+
+## 9. Admin API
+
+All Membership admin routes use `requireAdminAccess`, not the stricter Program Pass `requireSuperAdmin` guard.
+
+### 9.1 Membership Tiers
+
+#### `GET /api/admin/membership-tiers?venueId=`
+
+Returns all tiers for a venue, including inactive tiers.
+
+Includes:
+
+- Active membership count per tier
+- Sorted by `sortOrder`
+
+#### `POST /api/admin/membership-tiers`
+
+Creates a tier.
+
+Body:
+
+```json
+{
+  "venueId": "venue-id",
+  "name": "Gold",
+  "priceValue": 1500000,
+  "sessionsIncluded": 12,
+  "showBadge": true,
+  "perks": ["10% coffee discount"]
+}
+```
+
+Rules:
+
+- Maximum four active tiers per venue
+- `sessionsIncluded` defaults to `null` when omitted
+- New sort order is current maximum + 1
+
+#### `PATCH /api/admin/membership-tiers/[id]`
+
+Can update:
+
+- Name
+- Price
+- Session allowance
+- Badge setting
+- Perks
+- Sort order
+
+#### `DELETE /api/admin/membership-tiers/[id]`
+
+Soft-deactivates the tier.
+
+Returns a 400 error if active memberships still use the tier.
+
+### 9.2 Membership Records
+
+#### `GET /api/admin/memberships`
+
+Required:
+
+- `venueId`
+
+Optional filters:
+
+- `tierId`
+- `status`
+- `paymentStatus`
+
+Returns:
+
+- Membership list
+- Player information
+- Tier information
+- Latest payment
+- Effective current payment status
+- Payment summary
+
+The payment filter is applied in application memory after querying Memberships.
+
+#### `POST /api/admin/memberships/activate`
+
+Body:
+
+```json
+{
+  "playerId": "player-id",
+  "venueId": "venue-id",
+  "tierId": "tier-id"
+}
+```
+
+Validates:
+
+- Tier exists, is active, and belongs to the venue
+- Player exists
+
+Then upserts by `(playerId, venueId)`.
+
+Create and update paths both:
+
+- Set selected tier
+- Set status active
+- Set activation time to now
+- Set renewal to now + 30 days
+- Reset usage to zero
+
+It then creates a new unpaid payment.
+
+#### `PATCH /api/admin/memberships/[id]`
+
+Supports:
+
+- `status: suspended | cancelled`
+- `sessionsUsed`
+- `tierId`
+
+Tier change behavior:
+
+- New tier must be active and belong to the same venue.
+- The Membership changes tier immediately.
+- If the latest payment is not paid, its amount is changed to the new tier price.
+- A note is added identifying the old and new tiers.
+- Paid current-period payments are not adjusted.
+- There is no proration.
+
+### 9.3 Membership Payments
+
+#### `GET /api/admin/membership-payments`
+
+Requires either:
+
+- `membershipId`
+- `venueId`
+
+Optional:
+
+- `status`
+
+Returns payments with parent Membership, Player, and Tier details.
+
+#### `PATCH /api/admin/membership-payments/[id]`
+
+Supports:
+
+- Mark paid
+- Revert to unpaid
+- Change amount
+- Set method
+- Set paid date
+- Set note
+- Set proof URL
+
+Marking paid:
+
+- Sets `status = PAID`
+- Uses supplied `paidAt` or current time
+- Stores payment method, note, and proof
+
+Reverting:
+
+- Sets `status = UNPAID`
+- Clears `paidAt`
+- Clears `paymentMethod`
+- Does not automatically clear note or proof
+
+### 9.4 Venue Membership Configuration
+
+#### `PUT /api/admin/venues/[id]/membership-config`
+
+Updates:
+
+```json
+{
+  "contactWhatsApp": "+84...",
+  "contactEmail": "memberships@venue.com"
+}
+```
+
+The route:
+
+- Requires admin access
+- Enforces venue scope
+- Merges defaults, current config, and request body
+- Writes the result back to `Venue.settings`
+
+---
+
+## 10. Player API
+
+### 10.1 `GET /api/membership/tiers?venueId=`
+
+Requires player authentication.
+
+Returns active tiers with:
+
+- ID
+- Name
+- Price
+- Session allowance
+- Badge visibility
+- Sort order
+
+It does not currently return the tier `perks` field.
+
+### 10.2 `GET /api/membership/mine?venueId=`
+
+Requires player authentication.
+
+Looks up the Membership using the authenticated player ID and venue ID.
+
+Returns:
+
+```json
+{
+  "membership": {},
+  "sessionLimit": {
+    "allowed": true,
+    "used": 2,
+    "limit": 8,
+    "isUnlimited": false
+  }
+}
+```
+
+If no Membership exists:
+
+```json
+{
+  "membership": null,
+  "sessionLimit": null
+}
+```
+
+Current implementation detail:
+
+- It loads `membership`.
+- Then it calls `checkSessionLimit()`, which may update the Membership cycle.
+- The originally loaded Membership object is still returned.
+
+If the cycle resets during this call, `sessionLimit` can represent the updated state while the returned `membership.renewalDate` and `membership.sessionsUsed` remain stale for that response.
+
+### 10.3 Missing Player Actions
+
+No player routes currently exist for:
+
+- Purchasing a Membership
+- Activating a Membership
+- Paying a Membership invoice
+- Cancelling a Membership
+- Changing tier
+- Updating payment method
+
+The player API surface is read-only.
+
+No direct web or React Native consumer of `/api/membership/mine` or `/api/membership/tiers` was found in `src/` during this audit.
+
+---
+
+## 11. Admin UI
+
+Main page:
+
+```text
+/admin/memberships
+```
+
+Implementation:
+
+```text
+src/app/(admin)/admin/memberships/page.tsx
+```
+
+The page uses:
+
+- Admin venue picker
+- Admin i18n translations
+- Shared `PaymentConfirmModal`
+- Responsive tier cards and member table
+
+### 11.1 Tabs
+
+#### Memberships
+
+Contains:
+
+- Payment summary
+- Tier management
+- Membership list
+- Activation flow
+- Payment history
+
+#### General Settings
+
+Contains:
+
+- Membership WhatsApp contact
+- Membership email contact
+
+### 11.2 Payment Summary
+
+Four cards/actions:
+
+- Collected this month
+- Unpaid count and amount
+- Overdue count
+- Toggle to show unpaid memberships only
+
+### 11.3 Tier Management
+
+Displays active tiers as cards.
+
+Each card shows:
+
+- Optional crown badge
+- Name
+- Price `/mo`
+- Limited or unlimited sessions
+- Perk list
+- Active member count
+- Edit action
+- Deactivate action
+
+Creation is hidden when four active tiers exist.
+
+Tier form fields:
+
+- Name
+- Price
+- Sessions per month (`blank = unlimited`)
+- Show badge
+- Perks
+
+Perks can be:
+
+- Selected from perks already used by other tiers
+- Added as a new free-text perk
+
+### 11.4 Membership List
+
+Filters:
+
+- Tier
+- Membership status
+- Payment status
+
+Columns:
+
+- Player
+- Tier
+- Status
+- Usage
+- Payment
+- Renewal
+- Actions
+
+Usage is directly editable inline.
+
+Actions for active memberships:
+
+- View payment history
+- Change tier
+- Suspend
+- Cancel
+
+Action for suspended memberships:
+
+- Reactivate
+
+### 11.5 Activation Modal
+
+Staff:
+
+1. Searches for a player by name or phone.
+2. Selects an active tier.
+3. Activates the Membership.
+
+There is no payment collection step in the activation modal. Activation creates an unpaid payment, which staff handles afterward.
+
+### 11.6 Change Tier Modal
+
+Shows:
+
+- Current tier
+- New tier selector
+- Upgrade/downgrade price difference
+- Message that payment will be adjusted
+
+Only the latest unpaid payment is actually adjusted. There is no proration or automatic collection/refund.
+
+### 11.7 Payment Modal and History
+
+The shared payment modal supports:
+
+- Mark paid
+- Amount
+- Payment method
+- Paid date
+- Note
+- Proof URL
+- Revert paid payment to unpaid
+
+The payment history drawer lists all periods newest first.
+
+---
+
+## 12. Reporting and Cross-Feature Integrations
+
+### 12.1 Admin Dashboard
+
+`/api/admin/dashboard` reports:
+
+- Active Membership count
+- Unpaid Membership payment count and amount
+- Overdue Membership payment count and amount
+- Membership revenue collected this month
+- Memberships renewing within seven days
+
+Membership revenue contributes to the dashboard's monthly cash total.
+
+### 12.2 Venue Analytics
+
+`/api/admin/venue-analytics` reports:
+
+- Active Memberships
+- Suspended Memberships
+- Cancelled + expired Memberships
+- New Memberships in selected period
+- Estimated Membership MRR
+- Tier breakdown
+- Sessions used
+- Sessions included
+- Unlimited Membership count
+
+Important:
+
+- MRR is computed from active tier prices, not actual paid payment records.
+- Usage analytics depend on `sessionsUsed`, which is not currently incremented automatically.
+
+### 12.3 CourtPass Player Administration
+
+Memberships are used in the CourtPass player administration APIs to:
+
+- Include players associated with a venue
+- Display Membership name and status
+- Calculate pending Membership balance
+- Show Membership details and available tiers
+- Combine Membership payments with booking payments
+- Prevent deletion while active Memberships exist
+
+### 12.4 CourtPay Staff Player List
+
+The staff/boss player API uses active Membership rows to mark CourtPass players as having a subscription-like entitlement.
+
+This is separate from the CourtPay `PlayerSubscription` model used for CourtPay-native players.
+
+### 12.5 Player Deletion
+
+Admin player deletion:
+
+- Blocks deletion when active Memberships exist
+- Requires cancellation first
+- Explicitly deletes Membership payments before deleting Membership rows
+
+The broader CourtPass-player deletion transaction also deletes Membership payments and Memberships before deleting the Player.
+
+---
+
+## 13. KPI Calculations
+
+### Membership Page Summary
+
+The `/api/admin/memberships` summary queries payments whose `periodStart` is in the current calendar month.
+
+It calculates:
+
+| KPI | Calculation |
+|---|---|
+| `totalCollected` | Sum of `amountValue` for `PAID` records |
+| `unpaidCount` | Number of stored `UNPAID` records |
+| `unpaidAmount` | Sum of `UNPAID` amounts |
+| `overdueCount` | Past-due `UNPAID` records plus records stored as `OVERDUE` |
+
+Potential difference from dashboard metrics:
+
+- Membership page uses `periodStart` for “this month.”
+- Admin dashboard uses `paidAt` for collected-this-month revenue.
+
+A payment for an older period paid this month can appear in dashboard revenue but not in the Membership page's current-period collection total.
+
+---
+
+## 14. Authentication and Venue Scope
+
+Admin Membership routes use:
+
+```ts
+requireAdminAccess(request.headers)
+```
+
+This is broader than Program Pass routes, which commonly use `requireSuperAdmin`.
+
+Player Membership routes use:
+
+```ts
+requireAuth(request.headers)
+```
+
+Venue configuration update additionally calls:
+
+```ts
+assertVenueAccess(auth, venueId)
+```
+
+Not every individual Membership route visibly rechecks that the requested record belongs to an authorized venue; the system relies partly on the behavior of `requireAdminAccess` and the IDs supplied by the client.
+
+---
+
+## 15. What Is Enforced Today
+
+### Enforced
+
+- Maximum four active tiers per venue
+- One Membership per player per venue
+- Tier must be active and belong to the venue during activation
+- Player must exist during activation
+- Tier cannot be deactivated while active members use it
+- Tier changes remain within the Membership's venue
+- Negative manually entered usage is clamped to zero
+- Membership activation resets usage and starts a new 30-day period
+- Payment history is retained across reactivation
+
+### Not Enforced
+
+- Payment before activation
+- Suspension for unpaid or overdue payment
+- Automatic Membership expiration through a wired scheduler
+- Automatic session increment on participation
+- Session-limit blocking during open play, booking, queue entry, or check-in
+- Perk entitlement or discount application
+- Calendar-month billing
+- Automatic recurring payment collection
+- Proration on tier change
+- Duplicate payment-period prevention at database level
+
+---
+
+## 16. Known Product and Technical Gaps
+
+### P0 — Core correctness gaps
+
+#### Usage is not wired to participation
+
+`incrementSessionCount()` exists but has no caller. Limited Memberships are therefore not enforced automatically.
+
+Recommended direction:
+
+- Identify the authoritative “consumed a session” event.
+- Call `checkSessionLimit()` before acceptance.
+- Increment usage in the same transaction as registration/check-in.
+- Make the operation idempotent so retries cannot double-charge a session.
+
+#### Expiration is not scheduled
+
+`expireMemberships()` exists but has no cron or route caller.
+
+Recommended direction:
+
+- Decide whether Memberships auto-renew while unpaid or expire at renewal.
+- Remove the current ambiguity between lazy renewal and expiration.
+- Add one authoritative scheduled lifecycle process.
+
+#### Renewal logic and expiration logic conflict conceptually
+
+- `checkAndResetCycle()` automatically advances an overdue active Membership.
+- `expireMemberships()` would expire that same Membership.
+
+Whichever function runs first determines the outcome.
+
+A product decision is required:
+
+1. Auto-renew and create debt, keeping access active.
+2. Expire/suspend until payment.
+3. Apply a grace period.
+
+### P1 — Commerce gaps
+
+- No player checkout
+- No online payment gateway subscription
+- No stored payment method
+- No auto-charge
+- No invoice delivery or reminders
+- No proration
+- No refund automation
+- No player cancellation or upgrade flow
+
+### P1 — Player experience gaps
+
+- Player APIs are read-only
+- No identified web/mobile Membership screen consuming those APIs
+- Public tier API omits perks
+- Contact configuration is stored but no player consumer was found
+
+### P1 — Access and entitlement gaps
+
+- Perks are display-only strings
+- No booking discount integration
+- No lesson discount integration
+- No priority-booking rules
+- No explicit entitlement model
+- No membership-only event/access check
+
+### P2 — Data and reporting gaps
+
+- MRR is estimated from active tier prices rather than collected revenue
+- Usage analytics may be stale or manually entered
+- Membership page and dashboard use different definitions of monthly collected revenue
+- No churn rate, retention cohort, failed renewal rate, or LTV reporting
+- No audit log for manual usage edits or status changes
+
+---
+
+## 17. Important Edge Cases
+
+### Reactivating a suspended Membership
+
+Reactivation calls the same activation endpoint:
+
+- Existing Membership row is reused
+- Activation date and renewal date are reset
+- Usage resets to zero
+- A new unpaid payment is created
+- Old payment history remains
+
+### Activating an already active Membership
+
+The endpoint does not reject this:
+
+- Current cycle is restarted
+- Usage resets
+- Another unpaid payment is created
+
+The admin UI normally exposes activation through player selection, so duplicate activation remains possible if staff selects an already active player.
+
+### Changing tier after payment
+
+If latest payment is already paid:
+
+- Membership changes tier immediately
+- Paid amount remains unchanged
+- No additional charge, credit, or proration is created
+
+### Deactivated tier with suspended members
+
+Because only active Memberships block deactivation:
+
+- A tier can be deactivated while suspended Memberships still reference it.
+- Reactivating through the normal activation endpoint requires selecting an active tier.
+
+### Long-overdue lazy reset
+
+`checkAndResetCycle()` advances through multiple 30-day periods but creates at most one payment using:
+
+- `periodStart = previousRenewal`
+- `periodEnd = final future renewal`
+- One tier-price amount
+
+This can represent multiple elapsed cycles with one payment amount.
+
+---
+
+## 18. Membership vs Program Pass
+
+| Area | Membership | Program Pass |
+|---|---|---|
+| Admin page | `/admin/memberships` | `/admin/program-passes` |
+| Product definition | `MembershipTier` | `ProgramPassType` |
+| Player entitlement | `Membership` | `ProgramPass` |
+| Payment table | `membership_payments` | `class_pass_payments` |
+| Primary purpose | General recurring venue access | Class credits and structured programs |
+| Cycle | Fixed rolling 30 days | Monthly, fixed-day, or custom |
+| Session consumption | Intended open-play usage; not currently wired | Explicit class check-in |
+| Scheduling | None | Program Runs and ClassInstances |
+| Court blocking | None | Generated Program Runs create CourtBlocks |
+| Coach assignment | None | Pass types, runs, and class blocks |
+| Capacity | Per-tier session allowance | Pass session cap plus run/class capacity |
+| Enrollment | Staff activation | Staff pass activation or run enrollment logic |
+| Database relationship | Separate | Separate |
+
+The two systems share:
+
+- Player
+- Venue
+- Admin UI conventions
+- Similar payment status concepts
+- A `sessionsUsed` counter concept
+
+They do not share:
+
+- Product records
+- Entitlement records
+- Payment records
+- Renewal logic
+- Attendance/check-in records
+- API routes
+- Domain libraries
+
+---
+
+## 19. File Map
+
+```text
 src/
   app/
-    (admin)/admin/program-passes/
-      page.tsx                          ← Main UI (3 tabs, all modals)
-    api/admin/program-passes/
-      route.ts                          ← GET (list + KPI)
-      activate/route.ts                 ← POST (activate pass)
-      check-in/route.ts                 ← POST (check-in)
-      class-instances/route.ts          ← GET (today's classes)
-      [id]/route.ts                     ← PATCH (pause/resume/cancel), DELETE
-      types/route.ts                    ← GET (list types), POST (create type)
-      types/[id]/route.ts               ← PATCH (edit type), DELETE (soft delete)
-      types/[id]/image/route.ts         ← POST (upload image)
-    api/admin/program-runs/             ← NEW Phase 1
-      route.ts                          ← GET (list runs), POST (create run)
-      [id]/route.ts                     ← PATCH (edit run)
-      [id]/generate/route.ts            ← POST (generate schedule)
-      [id]/instances/route.ts           ← GET (list instances)
-      [id]/instances/[instanceId]/route.ts ← PATCH (reschedule instance)
-  lib/
-    program-pass.ts                     ← checkInToClassInstance, computeCycleEnd
-    program-run.ts                      ← generateRunSchedule, checkProgramBlockConflict,
-                                           enrollInRun, updateRunCapacity, rescheduleInstance
-  components/admin/
-    StaffBookingModal.tsx               ← Coach-lesson soft-conflict warning UI
+    (admin)/admin/memberships/
+      page.tsx
 
-db/migrations/
-  20260716120000_program_run_cohort.sql ← Phase 1 migration (10 steps)
+    api/admin/
+      memberships/
+        route.ts
+        activate/route.ts
+        [id]/route.ts
+
+      membership-tiers/
+        route.ts
+        [id]/route.ts
+
+      membership-payments/
+        route.ts
+        [id]/route.ts
+
+      venues/[id]/membership-config/
+        route.ts
+
+    api/membership/
+      mine/route.ts
+      tiers/route.ts
+
+  lib/
+    membership.ts
+    booking.ts
+
+  components/admin/
+    PaymentConfirmModal.tsx
 
 prisma/
-  schema.prisma                         ← ProgramPassType, ProgramPass, ClassInstance,
-                                           ClassCheckIn, ProgramPassPayment,
-                                           ProgramPassTypeCoach, ProgramRun,
-                                           ProgramRunCoach, CourtBlockCoach,
-                                           ProgramRunWaitlistEntry
+  schema.prisma
+    MembershipTier
+    Membership
+    MembershipPayment
+    MembershipStatus
+    MembershipPaymentStatus
+```
 
-uploads/
-  program-passes/                       ← WebP images for pass types
+Related reporting and player-management integrations:
+
+```text
+src/app/api/admin/dashboard/route.ts
+src/app/api/admin/venue-analytics/route.ts
+src/app/api/admin/players/[playerId]/route.ts
+src/app/api/admin/courtpass-players/route.ts
+src/app/api/admin/courtpass-players/[playerId]/route.ts
+src/app/api/courtpay/staff/boss/players/route.ts
 ```
 
 ---
 
-## 18. Entity Relationship Summary (Simplified)
+## 20. Recommended Product Decisions
 
-```
-Venue
- ├── ProgramPassType (products/templates)
- │    ├── description: optional long text
- │    ├── imageUrl: optional WebP
- │    ├── passMode: monthly | days_30 | days_45 | days_60 | days_90 | custom
- │    ├── sessionsIncluded, price
- │    ├── coaches (many-to-many via ProgramPassTypeCoach)
- │    └── ProgramRun (cohort instances of this product)
- │         ├── status: upcoming | in_progress | completed | cancelled
- │         ├── start_date, recurrence config, maxCapacity, courtId
- │         ├── coaches (default coaches → copied to per-block coaches on generate)
- │         ├── ClassInstance (generated occurrences)
- │         │    └── CourtBlock (occupies court, blocks coach)
- │         │         └── CourtBlockCoach (per-block coach assignments)
- │         └── ProgramPass (enrollments)
- │              ├── sessionsUsed, status, cycleStart, cycleEnd
- │              ├── ProgramPassPayment (PAID | UNPAID | VOID)
- │              └── ClassCheckIn → ClassInstance
- │
- └── Player
-      └── ProgramPass (many, across venues)
-```
+Before extending Memberships, define these rules explicitly:
+
+1. Does an unpaid renewal keep access active, enter grace, suspend, or expire?
+2. What exact action consumes a session: open-play registration, physical check-in, queue join, or completed visit?
+3. Can one visit consume more than one session?
+4. Can staff override a reached session limit?
+5. Are tiers rolling 30-day products or calendar-month products?
+6. Do perks remain descriptive, or become enforceable discounts/entitlements?
+7. Can players purchase and manage Memberships themselves?
+8. How should upgrades and downgrades be prorated?
+9. Should Membership and CourtPay `PlayerSubscription` eventually converge?
+10. Which revenue definition is authoritative: payment period, payment date, or accrued MRR?
 
 ---
 
-*End of document. Generated from codebase read on July 16, 2026.*
+## 21. Concise Current-State Assessment
+
+The Membership system currently provides a strong admin-facing foundation:
+
+- Tier management
+- One Membership per player/venue
+- Manual activation and lifecycle controls
+- Manual payment tracking with proof
+- Payment history
+- Dashboard and venue analytics
+- Player-management integration
+
+It is not yet a fully enforced or automated subscription engine:
+
+- Session limits are not connected to participation.
+- Renewal and expiration behavior is ambiguous and unscheduled.
+- Payment does not control access.
+- Player commerce and self-service are absent.
+- Perks are informational only.
+
+The safest product framing today is:
+
+> Memberships is a staff-managed recurring entitlement and receivables ledger, with planned session-limit behavior that is not yet operationally enforced.
+
+---
+
+*End of document. Generated from the CourtFlow codebase on July 17, 2026.*

@@ -9,10 +9,11 @@ export async function GET(request: NextRequest) {
   try {
     requireSuperAdmin(request.headers);
     const venueId = request.nextUrl.searchParams.get("venueId");
+    const includeUnpublished = request.nextUrl.searchParams.get("includeUnpublished") === "1";
     if (!venueId) return error("venueId is required");
 
     const types = await prisma.programPassType.findMany({
-      where: { venueId, isActive: true },
+      where: { venueId, ...(includeUnpublished ? {} : { isActive: true }) },
       include: {
         coaches: {
           include: { coach: { select: { id: true, name: true } } },
@@ -41,6 +42,7 @@ export async function POST(request: NextRequest) {
       sessionsIncluded?: number;
       passMode?: string;
       isOneTime?: boolean;
+      isActive?: boolean;
       description?: string | null;
       level?: string | null;
       skillTags?: string[];
@@ -53,7 +55,7 @@ export async function POST(request: NextRequest) {
     if (!body.name?.trim()) return error("name is required");
     if (typeof body.price !== "number" || body.price < 0) return error("price must be a non-negative number");
 
-    const validModes = ["monthly", "days_30", "days_45", "days_60", "days_90"];
+    const validModes = ["monthly", "days_30", "days_45", "days_60", "days_90", "custom"];
     const passMode = body.passMode ?? "monthly";
     if (!validModes.includes(passMode)) return error(`passMode must be one of: ${validModes.join(", ")}`);
 
@@ -65,6 +67,7 @@ export async function POST(request: NextRequest) {
         sessionsIncluded: body.sessionsIncluded ?? 12,
         passMode,
         isOneTime: body.isOneTime ?? false,
+        isActive: body.isActive ?? true,
         description: body.description ?? null,
         level: body.level ?? null,
         skillTags: body.skillTags ?? [],

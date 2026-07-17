@@ -1,7 +1,7 @@
 import { NextRequest } from "next/server";
 import { prisma } from "@/lib/db";
 import { json, error, parseBody } from "@/lib/api-helpers";
-import { requireSuperAdmin, requireAdminAccess } from "@/lib/auth";
+import { requireAdminAccess } from "@/lib/auth";
 
 export const dynamic = "force-dynamic";
 
@@ -55,7 +55,7 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
-    const auth = requireSuperAdmin(request.headers);
+    const auth = await requireAdminAccess(request.headers);
     const body = await parseBody<{
       venueId: string;
       passTypeId: string;
@@ -66,7 +66,7 @@ export async function POST(request: NextRequest) {
       recurrenceCount?: number;
       recurrenceEndDate?: string; // "YYYY-MM-DD"
       maxCapacity: number;
-      courtId?: string;
+      courtIds?: string[];
       note?: string;
       coachIds?: string[];
     }>(request);
@@ -110,7 +110,7 @@ export async function POST(request: NextRequest) {
         recurrenceCount: body.recurrenceCount ?? null,
         recurrenceEndDate,
         maxCapacity: body.maxCapacity,
-        courtId: body.courtId ?? null,
+        courtIds: body.courtIds ?? [],
         note: body.note ?? null,
         createdBy: auth.id,
       },

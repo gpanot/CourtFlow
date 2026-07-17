@@ -1,7 +1,7 @@
 import { NextRequest } from "next/server";
 import { prisma } from "@/lib/db";
 import { json, error, parseBody } from "@/lib/api-helpers";
-import { requireSuperAdmin } from "@/lib/auth";
+import { requireAdminAccess } from "@/lib/auth";
 import { updateRunCapacity, ProgramRunError } from "@/lib/program-run";
 
 export const dynamic = "force-dynamic";
@@ -11,12 +11,13 @@ export async function PATCH(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    requireSuperAdmin(request.headers);
+    await requireAdminAccess(request.headers);
     const { id } = await params;
     const body = await parseBody<{
       name?: string;
       status?: string;
       maxCapacity?: number;
+      courtIds?: string[];
       note?: string;
       coachIds?: string[];
     }>(request);
@@ -42,6 +43,7 @@ export async function PATCH(
       data: {
         ...(body.name !== undefined && { name: body.name.trim() }),
         ...(body.status !== undefined && { status: body.status }),
+        ...(body.courtIds !== undefined && { courtIds: body.courtIds }),
         ...(body.note !== undefined && { note: body.note ?? null }),
       },
     });
