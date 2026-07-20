@@ -40,8 +40,6 @@ export async function POST(request: NextRequest) {
       name: string;
       price: number;
       sessionsIncluded?: number;
-      passMode?: string;
-      isOneTime?: boolean;
       isActive?: boolean;
       description?: string | null;
       level?: string | null;
@@ -55,18 +53,12 @@ export async function POST(request: NextRequest) {
     if (!body.name?.trim()) return error("name is required");
     if (typeof body.price !== "number" || body.price < 0) return error("price must be a non-negative number");
 
-    const validModes = ["monthly", "days_30", "days_45", "days_60", "days_90", "custom"];
-    const passMode = body.passMode ?? "monthly";
-    if (!validModes.includes(passMode)) return error(`passMode must be one of: ${validModes.join(", ")}`);
-
     const passType = await prisma.programPassType.create({
       data: {
         venueId: body.venueId,
         name: body.name.trim(),
         price: body.price,
         sessionsIncluded: body.sessionsIncluded ?? 12,
-        passMode,
-        isOneTime: body.isOneTime ?? false,
         isActive: body.isActive ?? true,
         description: body.description ?? null,
         level: body.level ?? null,

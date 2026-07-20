@@ -41,10 +41,13 @@ export async function PATCH(
     }
 
     if (body.action === "cancel") {
-      const updated = await prisma.programPassPayment.update({
-        where: { id },
-        data: { status: "VOID", voidReason: body.voidReason ?? "Cancelled by admin" },
-      });
+      // VOID is stored via raw update because it isn't in the ClassPassPaymentStatus enum
+      await prisma.$executeRaw`
+        UPDATE class_pass_payments
+        SET status = 'VOID', void_reason = ${body.voidReason ?? "Cancelled by admin"}
+        WHERE id = ${id}
+      `;
+      const updated = await prisma.programPassPayment.findUnique({ where: { id } });
       return json(updated);
     }
 

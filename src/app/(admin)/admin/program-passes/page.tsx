@@ -63,21 +63,6 @@ interface PassTypeCoach {
   coach: Coach;
 }
 
-// Allowed pass mode values
-const PASS_MODE_OPTIONS = [
-  { value: "monthly",  label: "Monthly (calendar month)" },
-  { value: "days_30",  label: "30 days" },
-  { value: "days_45",  label: "45 days" },
-  { value: "days_60",  label: "60 days" },
-  { value: "days_90",  label: "90 days" },
-  { value: "custom",   label: "Custom dates" },
-] as const;
-
-type PassMode = typeof PASS_MODE_OPTIONS[number]["value"];
-
-function passModeLabel(mode: string): string {
-  return PASS_MODE_OPTIONS.find((o) => o.value === mode)?.label ?? mode;
-}
 
 const fmtPrice = (v: number) => new Intl.NumberFormat("vi-VN").format(v);
 
@@ -87,8 +72,6 @@ interface PassType {
   name: string;
   price: number;
   sessionsIncluded: number;
-  passMode: PassMode;
-  isOneTime: boolean;
   isActive: boolean;
   description: string | null;
   imageUrl: string | null;
@@ -126,8 +109,6 @@ interface ProgramPass {
     name: string;
     price: number;
     sessionsIncluded: number;
-    passMode: PassMode;
-    isOneTime: boolean;
     coaches: PassTypeCoach[];
   };
   latestPayment: ProgramPassPayment | null;
@@ -485,7 +466,7 @@ export default function ProgramPassesPage() {
                   <th className="px-4 py-3 font-medium">Pass Type</th>
                   <th className="px-4 py-3 font-medium">Status</th>
                   <th className="px-4 py-3 font-medium">Usage</th>
-                  <th className="px-4 py-3 font-medium">Cycle ends</th>
+                  <th className="px-4 py-3 font-medium">Run ends</th>
                   <th className="px-4 py-3 font-medium">Actions</th>
                 </tr>
               </thead>
@@ -903,9 +884,7 @@ function PassTypeCard({
         {/* Price */}
         <p className="text-xl font-bold text-purple-400 leading-none">
           {fmtPrice(pt.price)}
-          <span className="ml-1.5 text-xs font-normal text-neutral-500">
-            {pt.passMode === "monthly" ? "/mo" : pt.passMode === "custom" ? "" : `/${passModeLabel(pt.passMode)}`}
-          </span>
+          <span className="ml-1.5 text-xs font-normal text-neutral-500">VND</span>
         </p>
 
         {/* Badges */}
@@ -918,14 +897,6 @@ function PassTypeCard({
           <span className="rounded-full bg-neutral-800 px-2.5 py-0.5 text-[11px] text-neutral-400">
             {pt.sessionsIncluded} {t("programPasses.sessions")}
           </span>
-          <span className="rounded-full bg-purple-900/40 px-2.5 py-0.5 text-[11px] text-purple-300">
-            {passModeLabel(pt.passMode)}
-          </span>
-          {pt.isOneTime && (
-            <span className="rounded-full bg-amber-900/40 px-2.5 py-0.5 text-[11px] text-amber-300">
-              One-time
-            </span>
-          )}
           {pt.level && (
             <span className="rounded-full bg-teal-900/40 px-2.5 py-0.5 text-[11px] text-teal-300 capitalize">
               {pt.level}
@@ -1118,8 +1089,6 @@ function PassTypeFormModal({
   const [name, setName] = useState(passType?.name ?? "");
   const [price, setPrice] = useState(passType?.price ?? 0);
   const [sessions, setSessions] = useState(passType?.sessionsIncluded ?? 12);
-  const [passMode, setPassMode] = useState<PassMode>(passType?.passMode ?? "monthly");
-  const [isOneTime, setIsOneTime] = useState(passType?.isOneTime ?? false);
   const [isPublished, setIsPublished] = useState(passType?.isActive ?? true);
 
   // ── Description fields ──
@@ -1201,8 +1170,7 @@ function PassTypeFormModal({
       let savedId: string;
       if (isEdit) {
         await api.patch(`/api/admin/program-passes/types/${passType.id}`, {
-          name: name.trim(), price, sessionsIncluded: sessions, passMode,
-          isOneTime, isActive: isPublished,
+          name: name.trim(), price, sessionsIncluded: sessions, isActive: isPublished,
           description: description.trim() || null,
           coachIds: selectedCoachIds,
           ...curriculumPayload(),
@@ -1210,8 +1178,7 @@ function PassTypeFormModal({
         savedId = passType.id;
       } else {
         const res = await api.post<{ id: string }>("/api/admin/program-passes/types", {
-          venueId, name: name.trim(), price, sessionsIncluded: sessions, passMode,
-          isOneTime, isActive: isPublished,
+          venueId, name: name.trim(), price, sessionsIncluded: sessions, isActive: isPublished,
           description: description.trim() || null,
           coachIds: selectedCoachIds,
           ...curriculumPayload(),
@@ -1317,24 +1284,9 @@ function PassTypeFormModal({
                   autoFocus
                 />
               </div>
-              <div>
-                <label className="text-xs text-neutral-400 mb-1 block">{t("programPasses.durationMode")}</label>
-                <select value={passMode} onChange={(e) => setPassMode(e.target.value as PassMode)} className={inputCls}>
-                  {PASS_MODE_OPTIONS.map((o) => (
-                    <option key={o.value} value={o.value}>{o.label}</option>
-                  ))}
-                </select>
-              </div>
-              {passMode === "custom" && (
-                <p className="rounded-lg bg-purple-950/30 border border-purple-800/40 px-3 py-2 text-[11px] text-purple-300">
-                  Custom-date passes: staff will pick the exact start and end dates at activation time.
-                </p>
-              )}
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="text-xs text-neutral-400 mb-1 block">
-                    {passMode === "monthly" ? t("programPasses.pricePerMonth") : passMode === "custom" ? t("programPasses.priceCustom") : t("programPasses.price", { mode: passModeLabel(passMode) })}
-                  </label>
+                  <label className="text-xs text-neutral-400 mb-1 block">{t("programPasses.priceVnd")}</label>
                   <AmountInput value={price} onChange={setPrice} placeholder="e.g. 1,200,000" className={inputCls} />
                 </div>
                 <div>
@@ -1346,14 +1298,6 @@ function PassTypeFormModal({
                   />
                 </div>
               </div>
-              <label className="flex items-center gap-2.5 cursor-pointer select-none">
-                <input
-                  type="checkbox" checked={isOneTime}
-                  onChange={(e) => setIsOneTime(e.target.checked)}
-                  className="h-4 w-4 rounded border-neutral-600 accent-amber-500"
-                />
-                <span className="text-sm text-neutral-400">{t("programPasses.oneTimePass")}</span>
-              </label>
 
               {/* Published toggle — always visible */}
               <div className="flex items-center justify-between rounded-xl border border-neutral-800 bg-neutral-800/40 px-4 py-3">
@@ -1656,35 +1600,6 @@ function ActivateModal({
 
   const selectedPassType = passTypes.find((pt) => pt.id === passTypeId);
 
-  const passMode: PassMode = (selectedPassType?.passMode ?? "monthly") as PassMode;
-  const isMonthly = passMode === "monthly";
-  const isCustom = passMode === "custom";
-
-  // Cycle start options: first of the current month through 6 months later (7 options),
-  // so staff can pre-sell a future program start (e.g. the August cycle).
-  const today = new Date();
-  const monthOptions = Array.from({ length: 7 }, (_, i) => {
-    const d = new Date(today.getFullYear(), today.getMonth() + i, 1);
-    return {
-      value: d.toLocaleDateString("sv-SE"), // YYYY-MM-01
-      label: d.toLocaleDateString("en-US", { month: "long", year: "numeric" }),
-    };
-  });
-  // Default for monthly: current month if on/before the 15th, else next month.
-  const defaultMonthStr = (() => {
-    const t = new Date();
-    const idx = t.getDate() <= 15 ? 0 : 1;
-    return new Date(t.getFullYear(), t.getMonth() + idx, 1).toLocaleDateString("sv-SE");
-  })();
-  const defaultDateStr = today.toLocaleDateString("sv-SE"); // today for days_N
-
-  // Initialise the cycle start picker based on the first pass type's mode.
-  const [cycleStartStr, setCycleStartStr] = useState(() => {
-    const firstMode = passTypes[0]?.passMode ?? "monthly";
-    return firstMode === "monthly" ? defaultMonthStr : defaultDateStr;
-  });
-  const [cycleEndStr, setCycleEndStr] = useState(defaultDateStr);
-
   useEffect(() => {
     if (playerSearch.length < 2) { setPlayerResults([]); return; }
     const t = setTimeout(async () => {
@@ -1700,10 +1615,6 @@ function ActivateModal({
 
   const activate = async () => {
     if (!selectedPlayer || !passTypeId) return;
-    if (isCustom && cycleEndStr <= cycleStartStr) {
-      alert("End date must be after the start date.");
-      return;
-    }
     setSaving(true);
     try {
       await api.post("/api/admin/program-passes/activate", {
@@ -1713,8 +1624,6 @@ function ActivateModal({
         paymentMethod: isFree ? undefined : paymentMethod,
         amountValue: selectedPassType?.price ?? 0,
         note: isFree ? freeNote : undefined,
-        cycleStart: cycleStartStr,
-        cycleEnd: isCustom ? cycleEndStr : undefined,
         isFree,
       });
       onActivated();
@@ -1805,77 +1714,18 @@ function ActivateModal({
               <label className="text-xs text-neutral-400 mb-1 block">Pass Type</label>
               <select
                 value={passTypeId}
-                onChange={(e) => {
-                  setPassTypeId(e.target.value);
-                  const pt = passTypes.find((p) => p.id === e.target.value);
-                  const newMode = pt?.passMode ?? "monthly";
-                  setCycleStartStr(newMode === "monthly" ? defaultMonthStr : defaultDateStr);
-                  setCycleEndStr(defaultDateStr);
-                }}
+                onChange={(e) => setPassTypeId(e.target.value)}
                 className={inputCls}
               >
-                {passTypes.map((pt) => {
-                  const modeLabel = pt.passMode === "monthly" ? "/mo" : pt.passMode === "custom" ? " · custom dates" : `/${passModeLabel(pt.passMode)}`;
-                  return (
-                    <option key={pt.id} value={pt.id}>
-                      {pt.name} — {new Intl.NumberFormat("vi-VN").format(pt.price)}{modeLabel}
-                      {pt.isOneTime ? " · one-time" : ""}
-                    </option>
-                  );
-                })}
+                {passTypes.map((pt) => (
+                  <option key={pt.id} value={pt.id}>
+                    {pt.name} — {new Intl.NumberFormat("vi-VN").format(pt.price)} VND
+                  </option>
+                ))}
               </select>
             </div>
 
-            {isCustom ? (
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="text-xs text-neutral-400 mb-1 block">{t("programPasses.activateCustomStart")}</label>
-                  <input
-                    type="date"
-                    value={cycleStartStr}
-                    onChange={(e) => setCycleStartStr(e.target.value)}
-                    className={inputCls}
-                  />
-                </div>
-                <div>
-                  <label className="text-xs text-neutral-400 mb-1 block">{t("programPasses.activateCustomEnd")}</label>
-                  <input
-                    type="date"
-                    value={cycleEndStr}
-                    min={cycleStartStr}
-                    onChange={(e) => setCycleEndStr(e.target.value)}
-                    className={inputCls}
-                  />
-                </div>
-              </div>
-            ) : (
-              <div>
-                <label className="text-xs text-neutral-400 mb-1 block">
-                  {isMonthly ? t("programPasses.activateStartDate") : t("programPasses.activateCustomStart")}
-                </label>
-                {isMonthly ? (
-                  <select value={cycleStartStr} onChange={(e) => setCycleStartStr(e.target.value)} className={inputCls}>
-                    {monthOptions.map((m) => (
-                      <option key={m.value} value={m.value}>{m.label}</option>
-                    ))}
-                  </select>
-                ) : (
-                  <input
-                    type="date"
-                    value={cycleStartStr}
-                    onChange={(e) => setCycleStartStr(e.target.value)}
-                    className={inputCls}
-                  />
-                )}
-                {!isMonthly && (
-                  <p className="mt-1 text-[11px] text-neutral-500">
-                    Pass will run for {passModeLabel(passMode)} from this date.
-                  </p>
-                )}
-              </div>
-            )}
-
-              <label className="flex items-center gap-2 cursor-pointer select-none">
+            <label className="flex items-center gap-2 cursor-pointer select-none">
               <input type="checkbox" checked={isFree} onChange={(e) => setIsFree(e.target.checked)} className="h-4 w-4 rounded border-neutral-600 accent-purple-500" />
               <span className="text-xs text-neutral-400">{t("programPasses.activateFree")}</span>
             </label>
@@ -1904,7 +1754,7 @@ function ActivateModal({
               </button>
               <button
                 onClick={activate}
-                disabled={saving || !passTypeId || (isCustom && (!cycleStartStr || !cycleEndStr))}
+                disabled={saving || !passTypeId}
                 className="flex-1 rounded-xl bg-green-600 py-3 font-semibold text-white hover:bg-green-500 disabled:opacity-40"
               >
                 {saving ? t("programPasses.activating") : t("programPasses.activateCreate")}
@@ -2072,7 +1922,7 @@ function DeletePassModal({
               <p className="text-sm text-white font-medium">{pass.player.name}</p>
               <p className="text-xs text-neutral-400">{pass.passType.name}</p>
               <p className="text-xs text-neutral-500">
-                {pass.sessionsUsed}/{pass.passType.sessionsIncluded} sessions used · cycle ends{" "}
+                {pass.sessionsUsed}/{pass.passType.sessionsIncluded} sessions used · run ends{" "}
                 {new Date(pass.cycleEnd).toLocaleDateString("en-US", { month: "short", day: "numeric" })}
               </p>
             </div>
@@ -2721,7 +2571,7 @@ interface AllProgramRow {
   sessionsUsed: number;
   createdAt: string;
   player: { id: string; name: string; phone: string; avatar: string };
-  passType: { id: string; name: string; price: number; sessionsIncluded: number; isOneTime: boolean };
+  passType: { id: string; name: string; price: number; sessionsIncluded: number };
   programRun: { id: string; name: string } | null;
   latestPayment: {
     id: string;

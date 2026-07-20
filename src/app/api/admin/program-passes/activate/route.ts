@@ -2,10 +2,16 @@ import { NextRequest } from "next/server";
 import { prisma } from "@/lib/db";
 import { json, error, parseBody } from "@/lib/api-helpers";
 import { requireSuperAdmin } from "@/lib/auth";
-import { computeCycleEnd } from "@/lib/program-pass";
 
 export const dynamic = "force-dynamic";
 
+/**
+ * POST /api/admin/program-passes/activate
+ *
+ * Admin-only: manually enroll a player in a program run.
+ * cycle boundaries are derived from the run's actual dates — no billing-cycle
+ * math is required since runs define the full date range.
+ */
 export async function POST(request: NextRequest) {
   try {
     requireSuperAdmin(request.headers);
@@ -13,18 +19,16 @@ export async function POST(request: NextRequest) {
       playerId: string;
       venueId: string;
       passTypeId: string;
+      programRunId?: string;
       paymentMethod?: string;
       amountValue?: number;
       note?: string;
-      cycleStart: string; // ISO date string, e.g. "2026-07-01" (for monthly) or "2026-07-13" (for days_N)
-      cycleEnd?: string;  // Optional override for custom-mode passes
       isFree?: boolean;
     }>(request);
 
     if (!body.playerId) return error("playerId is required");
     if (!body.venueId) return error("venueId is required");
     if (!body.passTypeId) return error("passTypeId is required");
-    if (!body.cycleStart) return error("cycleStart is required");
 
     const passType = await prisma.programPassType.findFirst({
       where: { id: body.passTypeId, venueId: body.venueId, isActive: true },
@@ -34,28 +38,39 @@ export async function POST(request: NextRequest) {
     const player = await prisma.player.findUnique({ where: { id: body.playerId } });
     if (!player) return error("Player not found", 404);
 
-    // For monthly passes: align to first of the month.
-    // For days_N passes: use the given date as-is (staff picks the exact start day).
-    // For custom passes: use the explicit cycleEnd provided by the caller.
-    const passMode = passType.passMode;
-
+    // Resolve cycle boundaries from the run (if provided) or use a wide default.
     let cycleStart: Date;
-    if (passMode === "monthly") {
-      cycleStart = new Date(body.cycleStart + "T12:00:00+07:00");
-      cycleStart.setDate(1);
-      cycleStart.setHours(0, 0, 0, 0);
-    } else {
-      cycleStart = new Date(body.cycleStart + "T00:00:00+07:00");
-      cycleStart.setHours(0, 0, 0, 0);
-    }
-
     let cycleEnd: Date;
-    if (passMode === "custom") {
-      if (!body.cycleEnd) return error("cycleEnd is required for custom-mode passes");
-      cycleEnd = new Date(body.cycleEnd + "T23:59:59+07:00");
-      if (cycleEnd <= cycleStart) return error("cycleEnd must be after cycleStart");
+
+    if (body.programRunId) {
+      const run = await prisma.programRun.findUnique({
+        where: { id: body.programRunId },
+        select: {
+          startDate: true,
+          classInstances: {
+            orderBy: { endAt: "desc" },
+            take: 1,
+            select: { endAt: true },
+          },
+        },
+      });
+      if (!run) return error("Program run not found", 404);
+
+      // Local-noon start to avoid Prisma @db.Date drift (Asia/Saigon = UTC+7).
+      const startKey = run.startDate.toISOString().slice(0, 10);
+      cycleStart = new Date(`${startKey}T12:00:00+07:00`);
+      cycleStart.setHours(0, 0, 0, 0);
+
+      const lastInstance = run.classInstances[0];
+      cycleEnd = lastInstance
+        ? new Date(lastInstance.endAt)
+        : (() => { const d = new Date(cycleStart); d.setFullYear(d.getFullYear() + 1); return d; })();
     } else {
-      cycleEnd = computeCycleEnd(cycleStart, passMode);
+      // No run — use today as start, +1 year as end (admin knows what they're doing).
+      cycleStart = new Date();
+      cycleStart.setHours(0, 0, 0, 0);
+      cycleEnd = new Date(cycleStart);
+      cycleEnd.setFullYear(cycleEnd.getFullYear() + 1);
     }
 
     const amountValue = body.isFree ? 0 : (body.amountValue ?? passType.price);
@@ -66,6 +81,7 @@ export async function POST(request: NextRequest) {
           playerId: body.playerId,
           venueId: body.venueId,
           passTypeId: body.passTypeId,
+          programRunId: body.programRunId ?? null,
           status: "active",
           cycleStart,
           cycleEnd,

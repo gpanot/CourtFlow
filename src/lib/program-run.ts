@@ -319,7 +319,18 @@ export async function enrollInRun(params: {
       async (tx) => {
         const run = await tx.programRun.findUnique({
           where: { id: runId },
-          select: { id: true, passTypeId: true, maxCapacity: true, status: true },
+          select: {
+            id: true,
+            passTypeId: true,
+            maxCapacity: true,
+            status: true,
+            startDate: true,
+            classInstances: {
+              orderBy: { endAt: "desc" },
+              take: 1,
+              select: { endAt: true },
+            },
+          },
         });
 
         if (!run) throw new ProgramRunError("Program run not found", "RUN_NOT_FOUND");
@@ -354,10 +365,18 @@ export async function enrollInRun(params: {
           );
         }
 
-        // Create the ProgramPass
         const now = new Date();
-        const cycleEnd = new Date(now);
-        cycleEnd.setFullYear(cycleEnd.getFullYear() + 1); // placeholder — exact cycle managed by run dates
+
+        // Use the run's actual date range as the pass cycle boundaries.
+        // cycleStart = run startDate (local noon to avoid Prisma DATE drift).
+        // cycleEnd   = last instance endAt, or startDate + 1 year as fallback.
+        const cycleStart = new Date(
+          `${dateTodateKey(run.startDate)}T12:00:00+07:00`
+        );
+        const lastInstance = run.classInstances[0];
+        const cycleEnd = lastInstance
+          ? new Date(lastInstance.endAt)
+          : (() => { const d = new Date(cycleStart); d.setFullYear(d.getFullYear() + 1); return d; })();
 
         const programPass = await tx.programPass.create({
           data: {
@@ -366,7 +385,7 @@ export async function enrollInRun(params: {
             passTypeId: run.passTypeId,
             programRunId: runId,
             status: "active",
-            cycleStart: now,
+            cycleStart,
             cycleEnd,
           },
         });
@@ -378,7 +397,7 @@ export async function enrollInRun(params: {
           const payment = await tx.programPassPayment.create({
             data: {
               programPassId: programPass.id,
-              periodStart: now,
+              periodStart: cycleStart,
               periodEnd: cycleEnd,
               amountValue,
               status: paymentStatus,

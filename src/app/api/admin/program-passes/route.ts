@@ -57,7 +57,7 @@ export async function GET(request: NextRequest) {
           where: passWhere,
           include: {
             player: { select: { id: true, name: true, phone: true, avatar: true } },
-            passType: { select: { id: true, name: true, price: true, sessionsIncluded: true, isOneTime: true } },
+            passType: { select: { id: true, name: true, price: true, sessionsIncluded: true } },
             programRun: { select: { id: true, name: true } },
             payments: {
               orderBy: { createdAt: "desc" },
@@ -123,18 +123,12 @@ export async function GET(request: NextRequest) {
       where: {
         venueId,
         ...(passTypeId && { passTypeId }),
-        ...(status && { status: status as "active" | "expired" | "cancelled" | "pending" }),
+        ...(status && { status: status as "active" | "expired" | "cancelled" }),
       },
       include: {
         player: { select: { id: true, name: true, phone: true, avatar: true } },
         passType: {
-          select: {
-            id: true,
-            name: true,
-            price: true,
-            sessionsIncluded: true,
-            passMode: true,
-            isOneTime: true,
+          include: {
             coaches: {
               include: { coach: { select: { id: true, name: true } } },
             },
@@ -189,10 +183,7 @@ export async function GET(request: NextRequest) {
       }),
       prisma.programPassPayment.count({
         where: {
-          programPass: {
-            venueId,
-            passType: { isOneTime: false },
-          },
+          programPass: { venueId },
           status: "UNPAID",
           periodEnd: { lt: now },
         },

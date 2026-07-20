@@ -285,13 +285,10 @@ export async function GET(request: NextRequest) {
           periodEnd: { gte: now },
         },
       }),
-      // Overdue (past due, excluding one-time passes)
+      // Overdue (past due)
       prisma.programPassPayment.count({
         where: {
-          programPass: {
-            venueId,
-            passType: { isOneTime: false },
-          },
+          programPass: { venueId },
           status: "UNPAID",
           periodEnd: { lt: now },
         },

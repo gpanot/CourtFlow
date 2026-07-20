@@ -77,6 +77,7 @@ model Venue {
   playerNotes           PlayerNote[]
   registeredPlayers     Player[]               @relation("PlayerRegistrationVenue")
   pricingGroups         PricingGroup[]
+  program_pass_types    ProgramPassType[]
   programRuns           ProgramRun[]
   promoCodes            PromoCode[]
   sessions              Session[]
@@ -126,15 +127,15 @@ model Player {
   /// Player-uploaded avatar photo, takes priority over facePhotoPath for display
   avatarPhotoPath       String?                    @map("avatar_photo_path")
   isWalkIn              Boolean                    @default(false) @map("is_walk_in")
+  reclubUserId          Int?                       @map("reclub_user_id")
   registrationAt        DateTime?                  @map("registration_at")
   registrationVenueId   String?                    @map("registration_venue_id")
-  reclubUserId          Int?                       @map("reclub_user_id")
-  email                 String?                    @map("email")
-  playerIdentityId      String?                    @map("player_identity_id")
   coachStaffId          String?                    @map("coach_staff_id")
+  email                 String?                    @unique @map("email")
+  password_hash         String?
+  playerIdentityId      String?                    @map("player_identity_id")
   /// Blurred + compressed copy of the first-registration check-in photo, generated async after registration for quality verification (served from /uploads/players/blurred/{id}.jpg)
   blurredFacePhotoPath  String?                    @map("blurred_face_photo_path")
-  password_hash         String?
   bookingGroups         BookingGroup[]
   bookings              Booking[]
   programPasses         ProgramPass[]
@@ -157,7 +158,7 @@ model Player {
   stickerPacks          PlayerStickerPack[]
   stickerPhotos         PlayerStickerPhoto[]
   stickerResults        PlayerStickerResult[]
-  coachStaff            StaffMember?               @relation("PlayerCoachLink", fields: [coachStaffId], references: [id])
+  coachStaff            StaffMember?               @relation("PlayerCoachLink", fields: [coachStaffId], references: [id], onUpdate: NoAction)
   playerIdentity        PlayerIdentity?            @relation(fields: [playerIdentityId], references: [id])
   registrationVenue     Venue?                     @relation("PlayerRegistrationVenue", fields: [registrationVenueId], references: [id])
   programRunWaitlist    ProgramRunWaitlistEntry[]
@@ -204,11 +205,13 @@ model StaffVenueAssignment {
   id        String      @id @default(cuid())
   staffId   String      @map("staff_id")
   venueId   String      @map("venue_id")
-  appAccess String[]    @default(["courtpay"]) @map("app_access")
+  appAccess String[]    @default(["courtflow"]) @map("app_access")
   staff     StaffMember @relation(fields: [staffId], references: [id], onDelete: Cascade)
   venue     Venue       @relation(fields: [venueId], references: [id], onDelete: Cascade)
 
   @@unique([staffId, venueId])
+  @@index([staffId])
+  @@index([venueId])
   @@map("staff_venue_assignments")
 }
 
@@ -228,12 +231,12 @@ model StaffMember {
   /// Default Reclub club (group) for session roster — staff-level, not per-venue.
   reclubGroupId             Int?                   @map("reclub_group_id")
   coachDupr                 String?                @map("coach_dupr")
-  coachFocusLevels          String[]               @default([]) @map("coach_focus_levels")
   coachGender               String?                @map("coach_gender")
-  coachGroupSizes           String[]               @default([]) @map("coach_group_sizes")
   coachLanguages            String[]               @default([]) @map("coach_languages")
   coachSpecialties          String[]               @default([]) @map("coach_specialties")
+  coachFocusLevels          String[]               @default([]) @map("coach_focus_levels")
   coachYearsExperience      String?                @map("coach_years_experience")
+  coachGroupSizes           String[]               @default([]) @map("coach_group_sizes")
   googleRefreshToken        String?                @map("google_refresh_token")
   googleCalendarId          String?                @map("google_calendar_id")
   calendarSyncEnabled       Boolean                @default(false) @map("calendar_sync_enabled")
@@ -250,6 +253,7 @@ model StaffMember {
   playerRankings            PlayerRanking[]
   linkedPlayers             Player[]               @relation("PlayerCoachLink")
   programPassTypeCoaches    ProgramPassTypeCoach[]
+  program_pass_types        ProgramPassType[]
   programRunCoaches         ProgramRunCoach[]
   courtBlockCoaches         CourtBlockCoach[]
   sessions                  Session[]
@@ -294,9 +298,9 @@ model Session {
   closedAt            DateTime?         @map("closed_at")
   status              SessionStatus     @default(open)
   gameTypeMix         Json?             @map("game_type_mix")
-  warmupMode          String            @default("manual") @map("warmup_mode")
   maxPlayers          Int?              @map("max_players")
   staffId             String?           @map("staff_id")
+  warmupMode          String            @default("manual") @map("warmup_mode")
   title               String?
   type                SessionType       @default(open_play)
   /// After the first real game starts, no new warm-up courts/assignments for this session.
@@ -433,9 +437,9 @@ model MembershipTier {
   priceValue              Int          @map("price_value")
   sessionsIncluded        Int?         @map("sessions_included")
   showBadge               Boolean      @default(false) @map("show_badge")
-  perks                   Json         @default("[]")
   isActive                Boolean      @default(true) @map("is_active")
   createdAt               DateTime     @default(now()) @map("created_at")
+  perks                   Json         @default("[]")
   structuredPerks         Json         @default("[]") @map("structured_perks")
   initiationFeeValue      Int          @default(0) @map("initiation_fee_value")
   minimumCommitmentCycles Int?         @map("minimum_commitment_cycles")
@@ -478,9 +482,9 @@ model MembershipPayment {
   status        MembershipPaymentStatus @default(UNPAID)
   paidAt        DateTime?               @map("paid_at")
   paymentMethod String?                 @map("payment_method")
-  proofUrl      String?                 @map("proof_url")
   note          String?
   createdAt     DateTime                @default(now()) @map("created_at")
+  proofUrl      String?                 @map("proof_url")
   paymentType   String                  @default("recurring") @map("payment_type")
   membership    Membership              @relation(fields: [membershipId], references: [id])
 
@@ -524,10 +528,10 @@ model Booking {
   coPlayerIds        String[]         @map("co_player_ids")
   createdAt          DateTime         @default(now()) @map("created_at")
   cancelledAt        DateTime?        @map("cancelled_at")
-  holdExpiresAt      DateTime?        @map("hold_expires_at")
-  paymentProofUrl    String?          @map("payment_proof_url")
-  paymentRef         String?          @unique @map("payment_ref")
   paymentStatus      String?          @map("payment_status")
+  paymentProofUrl    String?          @map("payment_proof_url")
+  holdExpiresAt      DateTime?        @map("hold_expires_at")
+  paymentRef         String?          @unique @map("payment_ref")
   rejectedAt         DateTime?        @map("rejected_at")
   rejectedBy         String?          @map("rejected_by")
   rejectionReason    String?          @map("rejection_reason")
@@ -600,19 +604,19 @@ model CoachLesson {
   status             CoachLessonStatus @default(confirmed)
   priceValue         Int               @map("price_value")
   note               String?
-  paymentStatus      String            @default("UNPAID") @map("payment_status")
-  paidAt             DateTime?         @map("paid_at")
-  paymentMethod      String?           @map("payment_method")
-  proofUrl           String?           @map("proof_url")
-  paymentNote        String?           @map("payment_note")
   createdAt          DateTime          @default(now()) @map("created_at")
   cancelledAt        DateTime?         @map("cancelled_at")
+  paidAt             DateTime?         @map("paid_at")
+  paymentMethod      String?           @map("payment_method")
+  paymentNote        String?           @map("payment_note")
+  proofUrl           String?           @map("proof_url")
+  paymentStatus      String            @default("UNPAID") @map("payment_status")
+  playerCount        Int?              @map("player_count")
   paymentRef         String?           @unique @map("payment_ref")
   rejectedAt         DateTime?         @map("rejected_at")
   rejectedBy         String?           @map("rejected_by")
   rejectionReason    String?           @map("rejection_reason")
   googleEventId      String?           @map("google_event_id")
-  playerCount        Int?              @map("player_count")
   invoiceNumber      String?           @unique @map("invoice_number")
   invoicedAt         DateTime?         @map("invoiced_at") @db.Timestamptz(6)
   cancellationReason String?           @map("cancellation_reason")
@@ -711,10 +715,10 @@ model PendingPayment {
   cancelledAt          DateTime?      @map("cancelled_at")
   /// Session check-in: number of people covered by this payment (1–4). Default 1.
   partyCount           Int            @default(1) @map("party_count")
-  /// Optional: this payment is covered by another payer's grouped payment.
-  groupPaidByPaymentId String?        @map("group_paid_by_payment_id")
   /// Snapshot of payer display name for stable UI label.
   groupPaidByName      String?        @map("group_paid_by_name")
+  /// Optional: this payment is covered by another payer's grouped payment.
+  groupPaidByPaymentId String?        @map("group_paid_by_payment_id")
   /// Device model/name of the staff phone that manually confirmed this payment (e.g. "iPhone 15 Pro").
   confirmedOnDevice    String?        @map("confirmed_on_device")
   checkInPlayer        CheckInPlayer? @relation(fields: [checkInPlayerId], references: [id])
@@ -725,6 +729,7 @@ model PendingPayment {
   @@index([venueId, status])
   @@index([sessionId])
   @@index([paymentRef])
+  @@index([groupPaidByPaymentId])
   @@map("pending_payments")
 }
 
@@ -816,7 +821,7 @@ model StaffPushToken {
   id         String      @id @default(cuid())
   staffId    String      @map("staff_id")
   /// Null for coach-only accounts that never select a venue.
-  venueId    String      @map("venue_id")
+  venueId    String?     @map("venue_id")
   token      String
   platform   String      @default("android")
   deviceId   String?     @map("device_id")
@@ -950,7 +955,7 @@ model ManualBillingInvoice {
   paidRef          String?   @map("paid_ref")
   notes            String?
   createdAt        DateTime  @default(now()) @map("created_at")
-  updatedAt        DateTime  @updatedAt @map("updated_at")
+  updatedAt        DateTime  @default(now()) @updatedAt @map("updated_at")
   /// Client-submitted payment proof fields
   proofUrl         String?   @map("proof_url")
   proofSubmittedAt DateTime? @map("proof_submitted_at")
@@ -1033,11 +1038,11 @@ model PlayerStickerPack {
 
 model StickerPaymentLog {
   id             String   @id @default(cuid())
+  payosOrderCode String   @unique @map("payos_order_code")
   paymentCode    String   @map("payment_code")
   transferAmount Int      @map("transfer_amount")
   content        String   @default("")
   processedAt    DateTime @default(now()) @map("processed_at")
-  payosOrderCode String   @unique @map("payos_order_code")
 
   @@map("sticker_payment_logs")
 }
@@ -1161,9 +1166,9 @@ model PlayerAccount {
   email             String?
   name              String?
   image             String?
-  createdAt         DateTime @default(now()) @map("created_at")
-  emailVerified     Boolean  @default(false) @map("email_verified")
   passwordHash      String?  @map("password_hash")
+  emailVerified     Boolean  @default(false) @map("email_verified")
+  createdAt         DateTime @default(now()) @map("created_at")
   country           String?
   player            Player   @relation(fields: [playerId], references: [id], onDelete: Cascade)
 
@@ -1219,11 +1224,11 @@ model OpenPlayRegistration {
   rejectedAt         DateTime? @map("rejected_at")
   rejectedBy         String?   @map("rejected_by")
   rejectionReason    String?   @map("rejection_reason")
+  expiredAt          DateTime? @map("expired_at") @db.Timestamptz(6)
   paymentMethod      String?   @map("payment_method")
   invoiceNumber      String?   @unique @map("invoice_number")
   invoicedAt         DateTime? @map("invoiced_at") @db.Timestamptz(6)
   cancellationReason String?   @map("cancellation_reason")
-  expiredAt          DateTime? @map("expired_at") @db.Timestamptz(6)
   player             Player    @relation(fields: [playerId], references: [id])
   venue              Venue     @relation(fields: [venueId], references: [id])
 
@@ -1271,7 +1276,7 @@ model CreditTransaction {
   amount    Int
   reason    String
   createdAt DateTime          @default(now()) @map("created_at")
-  credit    PlayerCoachCredit @relation(fields: [creditId], references: [id], onDelete: Cascade)
+  credit    PlayerCoachCredit @relation(fields: [creditId], references: [id], onDelete: Cascade, onUpdate: NoAction)
 
   @@index([creditId])
   @@map("credit_transactions")
@@ -1294,33 +1299,33 @@ model PlayerMagicToken {
   @@map("player_magic_tokens")
 }
 
-/// Defines a recurring program-pass product sold at a venue (e.g. "Beginner Group 12-session pass").
-/// cycleLengthDays is informational only — actual cycle boundaries are calendar-month-aligned in application code.
+/// Defines a program-pass product sold at a venue (e.g. "Beginner Group 12-session pass").
+/// Time boundaries are owned by ProgramRun, not ProgramPassType.
 model ProgramPassType {
-  id               String          @id @default(cuid())
-  venueId          String          @map("venue_id")
+  id               String                 @id @default(cuid())
+  venueId          String                 @map("venue_id")
   name             String
   price            Int
-  sessionsIncluded Int             @default(12) @map("sessions_included")
-  /// Informational only. Cycle renewal logic is calendar-month-aligned in application code.
-  cycleLengthDays  Int             @default(30) @map("cycle_length_days")
-  linkedCoachId    String?         @map("linked_coach_id")
-  isActive         Boolean         @default(true) @map("is_active")
-  createdAt        DateTime        @default(now()) @map("created_at")
-  updatedAt        DateTime        @updatedAt @map("updated_at")
-  passMode         String          @default("monthly") @map("pass_mode")
-  isOneTime        Boolean         @default(false) @map("is_one_time")
-  level            String?
-  skillTags        String[]        @map("skill_tags")
-  prerequisites    String?
-  ageRange         String?         @map("age_range")
+  sessionsIncluded Int                    @default(12) @map("sessions_included")
+  linkedCoachId    String?                @map("linked_coach_id")
+  isActive         Boolean                @default(true) @map("is_active")
+  createdAt        DateTime               @default(now()) @map("created_at")
+  updatedAt        DateTime               @updatedAt @map("updated_at")
   description      String?
-  imageUrl         String?         @map("image_url")
+  imageUrl         String?                @map("image_url")
+  level            String?
+  skillTags        String[]               @map("skill_tags")
+  prerequisites    String?
+  ageRange         String?                @map("age_range")
   classInstances   ClassInstance[]
   programPasses    ProgramPass[]
-  programRuns      ProgramRun[]
   coaches          ProgramPassTypeCoach[]
+  staff_members    StaffMember?           @relation(fields: [linkedCoachId], references: [id], map: "class_pass_tiers_linked_coach_id_fkey")
+  venues           Venue                  @relation(fields: [venueId], references: [id], map: "class_pass_tiers_venue_id_fkey")
+  programRuns      ProgramRun[]
 
+  @@index([linkedCoachId], map: "class_pass_tiers_linked_coach_id_idx")
+  @@index([venueId, isActive], map: "class_pass_tiers_venue_id_is_active_idx")
   @@map("program_pass_types")
 }
 
@@ -1335,20 +1340,21 @@ model ClassInstance {
   maxPlayers   Int             @map("max_players")
   createdAt    DateTime        @default(now()) @map("created_at")
   updatedAt    DateTime        @updatedAt @map("updated_at")
-  topic        String?
   programRunId String?         @map("program_run_id")
   courtBlockId String?         @map("court_block_id")
+  topic        String?
   checkIns     ClassCheckIn[]
-  coach        StaffMember     @relation(fields: [coachId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  coach        StaffMember     @relation(fields: [coachId], references: [id])
   courtBlock   CourtBlock?     @relation(fields: [courtBlockId], references: [id], onUpdate: NoAction)
-  passType     ProgramPassType @relation(fields: [passTypeId], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "class_instances_tier_id_fkey")
   programRun   ProgramRun?     @relation(fields: [programRunId], references: [id], onUpdate: NoAction)
-  venue        Venue           @relation(fields: [venueId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  passType     ProgramPassType @relation(fields: [passTypeId], references: [id], map: "class_instances_tier_id_fkey")
+  venue        Venue           @relation(fields: [venueId], references: [id])
 
   @@index([coachId, startAt])
   @@index([passTypeId], map: "class_instances_tier_id_idx")
   @@index([courtBlockId], map: "idx_class_instances_court_block_id")
   @@index([programRunId], map: "idx_class_instances_program_run_id")
+  @@index([venueId, startAt])
   @@map("class_instances")
 }
 
@@ -1359,8 +1365,8 @@ model ClassCheckIn {
   programPassId   String        @map("class_pass_id")
   classInstanceId String        @map("class_instance_id")
   checkedInAt     DateTime      @default(now()) @map("checked_in_at")
-  classInstance   ClassInstance @relation(fields: [classInstanceId], references: [id], onDelete: Cascade, onUpdate: NoAction)
-  programPass     ProgramPass   @relation(fields: [programPassId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  classInstance   ClassInstance @relation(fields: [classInstanceId], references: [id], onDelete: Cascade)
+  programPass     ProgramPass   @relation(fields: [programPassId], references: [id], onDelete: Cascade)
 
   @@unique([programPassId, classInstanceId])
   @@index([classInstanceId])
@@ -1369,24 +1375,26 @@ model ClassCheckIn {
 
 /// Monthly/cycle payment record for a ProgramPass.
 model ProgramPassPayment {
-  id             String                 @id @default(cuid())
-  programPassId  String                 @map("class_pass_id")
-  periodStart    DateTime               @map("period_start")
-  periodEnd      DateTime               @map("period_end")
-  amountValue    Int                    @map("amount_value")
-  status         ClassPassPaymentStatus @default(UNPAID)
-  paymentMethod  String?                @map("payment_method")
-  paidAt         DateTime?              @map("paid_at")
-  proofUrl       String?                @map("proof_url")
-  note           String?
-  voidReason     String?                @map("void_reason")
-  createdAt      DateTime               @default(now()) @map("created_at")
-  updatedAt      DateTime               @updatedAt @map("updated_at")
-  paymentRef     String?                @unique @map("payment_ref")
-  invoiceNumber  String?                @unique @map("invoice_number")
-  invoicedAt     DateTime?              @map("invoiced_at")
-  programPass    ProgramPass            @relation(fields: [programPassId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  id            String                 @id @default(cuid())
+  programPassId String                 @map("class_pass_id")
+  periodStart   DateTime               @map("period_start")
+  periodEnd     DateTime               @map("period_end")
+  amountValue   Int                    @map("amount_value")
+  status        ClassPassPaymentStatus @default(UNPAID)
+  paymentMethod String?                @map("payment_method")
+  paidAt        DateTime?              @map("paid_at")
+  proofUrl      String?                @map("proof_url")
+  note          String?
+  voidReason    String?                @map("void_reason")
+  createdAt     DateTime               @default(now()) @map("created_at")
+  updatedAt     DateTime               @updatedAt @map("updated_at")
+  paymentRef    String?                @unique @map("payment_ref")
+  invoiceNumber String?                @unique @map("invoice_number")
+  invoicedAt    DateTime?              @map("invoiced_at")
+  programPass   ProgramPass            @relation(fields: [programPassId], references: [id], onDelete: Cascade)
 
+  @@index([programPassId])
+  @@index([status])
   @@map("class_pass_payments")
 }
 
@@ -1407,14 +1415,15 @@ model ProgramPass {
   programRunId      String?              @map("program_run_id")
   checkIns          ClassCheckIn[]
   payments          ProgramPassPayment[]
-  passType          ProgramPassType      @relation(fields: [passTypeId], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "class_passes_tier_id_fkey")
-  player            Player               @relation(fields: [playerId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  player            Player               @relation(fields: [playerId], references: [id])
   programRun        ProgramRun?          @relation(fields: [programRunId], references: [id], onUpdate: NoAction)
-  venue             Venue                @relation(fields: [venueId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  passType          ProgramPassType      @relation(fields: [passTypeId], references: [id], map: "class_passes_tier_id_fkey")
+  venue             Venue                @relation(fields: [venueId], references: [id])
 
   @@index([passTypeId], map: "class_passes_tier_id_idx")
   @@index([programRunId], map: "idx_class_passes_program_run_id")
-  @@index([playerId])
+  @@index([playerId, venueId])
+  @@index([venueId, status])
   @@map("class_passes")
 }
 
@@ -1743,11 +1752,11 @@ model ProgramRun {
   recurrenceEndDate     DateTime?                 @map("recurrence_end_date") @db.Date
   maxCapacity           Int                       @default(20) @map("max_capacity")
   courtId               String?                   @map("court_id")
-  courtIds              String[]                  @default([]) @map("court_ids")
   note                  String?
   createdBy             String?                   @map("created_by")
   createdAt             DateTime                  @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt             DateTime                  @default(now()) @map("updated_at") @db.Timestamptz(6)
+  courtIds              String[]                  @default([]) @map("court_ids")
   classInstances        ClassInstance[]
   programPasses         ProgramPass[]
   courtBlocks           CourtBlock[]
@@ -1888,14 +1897,14 @@ enum CoachLessonStatus {
 enum ClassPassPaymentStatus {
   UNPAID
   PAID
-  VOID
+  OVERDUE
 }
 
 enum ClassPassStatus {
   active
+  paused
   expired
   cancelled
-  pending
 }
 
 enum PromoAppliesTo {

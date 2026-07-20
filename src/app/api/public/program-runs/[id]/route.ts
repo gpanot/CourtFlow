@@ -29,7 +29,6 @@ export async function GET(
             name: true,
             imageUrl: true,
             price: true,
-            passMode: true,
             sessionsIncluded: true,
             level: true,
             ageRange: true,
