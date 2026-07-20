@@ -72,6 +72,7 @@ interface TierFormState {
   name: string;
   price: string;
   sessionsIncluded: string;
+  showSessionsRow: boolean;
   showBadge: boolean;
   perks: string[];
   structuredPerks: Perk[];
@@ -84,6 +85,7 @@ const DEFAULT_TIER_FORM: TierFormState = {
   name: "",
   price: "",
   sessionsIncluded: "",
+  showSessionsRow: true,
   showBadge: false,
   perks: [],
   structuredPerks: [],
@@ -278,6 +280,25 @@ export default function MembershipsPage() {
     } catch (e) { alert((e as Error).message); }
   };
 
+  /** Permanently remove a free-text perk note from every tier at this venue. */
+  const deleteVenuePerk = async (perk: string) => {
+    if (!confirm(`Permanently delete "${perk}" from all tiers?`)) return;
+    const affected = tiers.filter((t) => ((t.perks as string[]) || []).includes(perk));
+    try {
+      await Promise.all(
+        affected.map((t) =>
+          api.patch(`/api/admin/membership-tiers/${t.id}`, {
+            perks: ((t.perks as string[]) || []).filter((p) => p !== perk),
+          })
+        )
+      );
+      // Also strip from any open create/edit form
+      setTierForm((f) => ({ ...f, perks: f.perks.filter((p) => p !== perk) }));
+      setEditTierForm((f) => ({ ...f, perks: f.perks.filter((p) => p !== perk) }));
+      await fetchTiers();
+    } catch (e) { alert((e as Error).message); }
+  };
+
   const activateMembership = async () => {
     if (!selectedPlayer || !activateTierId) return;
     try {
@@ -402,7 +423,13 @@ export default function MembershipsPage() {
   };
 
   const activeTiers = tiers.filter((t) => t.isActive);
-  const allPerks = [...new Set(tiers.flatMap((t) => (t.perks as string[]) || []))];
+  // Free-text suggestions only — exclude auto-generated strings from structured perks
+  const structuredLegacyFromAllTiers = new Set(
+    tiers.flatMap((t) => ((t.structuredPerks as Perk[]) || []).map(perkToLegacyString))
+  );
+  const allPerks = [...new Set(tiers.flatMap((t) => (t.perks as string[]) || []))].filter(
+    (p) => !structuredLegacyFromAllTiers.has(p)
+  );
   const fmtPrice = (value: number) => new Intl.NumberFormat("vi-VN").format(value);
   const fmtDate = (d: string) => new Date(d).toLocaleDateString("en-US", { month: "short", day: "numeric" });
   const selectedVenueSettings = venues.find((v) => v.id === selectedVenueId)?.settings;
@@ -509,6 +536,7 @@ export default function MembershipsPage() {
             onCancel={() => { setShowCreateTier(false); setTierForm(DEFAULT_TIER_FORM); }}
             title={t("memberships.newTierTitle")}
             allPerks={allPerks}
+            onDeleteVenuePerk={deleteVenuePerk}
           />
         )}
 
@@ -524,6 +552,7 @@ export default function MembershipsPage() {
                 onCancel={() => setEditingTierId(null)}
                 title={t("memberships.editTierTitle")}
                 allPerks={allPerks}
+                onDeleteVenuePerk={deleteVenuePerk}
               />
             ) : (
               <TierCard
@@ -537,6 +566,7 @@ export default function MembershipsPage() {
                     name: tier.name,
                     price: tier.priceValue.toLocaleString("en-US"),
                     sessionsIncluded: tier.sessionsIncluded === null ? "" : String(tier.sessionsIncluded),
+                    showSessionsRow: tier.sessionsIncluded !== null,
                     showBadge: tier.showBadge,
                     perks: (tier.perks as string[]) || [],
                     structuredPerks: (tier.structuredPerks as Perk[]) || [],
@@ -567,6 +597,7 @@ export default function MembershipsPage() {
                     onCancel={() => setEditingTierId(null)}
                     title={t("memberships.editTierTitle")}
                     allPerks={allPerks}
+                    onDeleteVenuePerk={deleteVenuePerk}
                   />
                 ) : (
                   <TierCard
@@ -581,6 +612,7 @@ export default function MembershipsPage() {
                         name: tier.name,
                         price: tier.priceValue.toLocaleString("en-US"),
                         sessionsIncluded: tier.sessionsIncluded === null ? "" : String(tier.sessionsIncluded),
+                        showSessionsRow: tier.sessionsIncluded !== null,
                         showBadge: tier.showBadge,
                         perks: (tier.perks as string[]) || [],
                         structuredPerks: (tier.structuredPerks as Perk[]) || [],
@@ -1106,6 +1138,7 @@ function TierFormCard({
   onCancel,
   title,
   allPerks,
+  onDeleteVenuePerk,
 }: {
   form: TierFormState;
   setForm: (f: TierFormState) => void;
@@ -1113,6 +1146,7 @@ function TierFormCard({
   onCancel: () => void;
   title: string;
   allPerks: string[];
+  onDeleteVenuePerk: (perk: string) => void;
 }) {
   const { t } = useTranslation("translation", { i18n: adminI18n });
   const [newPerk, setNewPerk] = useState("");
@@ -1133,11 +1167,23 @@ function TierFormCard({
     setNewPerk("");
   };
 
+  const removeFreeTextPerk = (perk: string) => {
+    setForm({ ...form, perks: form.perks.filter((p) => p !== perk) });
+  };
+
+  // Auto-generated strings from structured perks — hide them from the free-text list
+  const structuredLegacyStrings = new Set(form.structuredPerks.map(perkToLegacyString));
+  const freeTextPerks = form.perks.filter((p) => !structuredLegacyStrings.has(p));
+  // Venue-wide suggestions not already on this tier (excluding structured auto-strings)
+  const perkSuggestions = allPerks.filter(
+    (p) => !form.perks.includes(p) && !structuredLegacyStrings.has(p)
+  );
+
   // Unified perk rows shown in the builder:
   // { type: SESSIONS_INCLUDED_SENTINEL, value: <n> }  → writes to form.sessionsIncluded
   // { type: PerkType.*, value: <n> }                  → writes to form.structuredPerks
   const perkRows: Array<{ type: string; value: number }> = [
-    ...(form.sessionsIncluded !== "" ? [{ type: SESSIONS_INCLUDED_SENTINEL, value: parseInt(form.sessionsIncluded, 10) || 0 }] : []),
+    ...(form.showSessionsRow ? [{ type: SESSIONS_INCLUDED_SENTINEL, value: parseInt(form.sessionsIncluded, 10) || 0 }] : []),
     ...form.structuredPerks,
   ];
 
@@ -1146,8 +1192,8 @@ function TierFormCard({
     const firstUnused = PERK_TYPE_OPTIONS.find((o) => !usedTypes.has(o.value));
     if (!firstUnused) return; // all types already in use
     if (firstUnused.value === SESSIONS_INCLUDED_SENTINEL) {
-      // Next unused is sessions — add to sessionsIncluded instead of structuredPerks
-      setForm({ ...form, sessionsIncluded: "" });
+      // Next unused is sessions — show the sessions row (value stays "" = unlimited until user types)
+      setForm({ ...form, showSessionsRow: true });
     } else {
       setForm({
         ...form,
@@ -1159,22 +1205,24 @@ function TierFormCard({
   const updatePerkRow = (rowIndex: number, field: "type" | "value", rawValue: string) => {
     const row = perkRows[rowIndex];
     const isSessionsRow = row.type === SESSIONS_INCLUDED_SENTINEL;
-    const spOffset = form.sessionsIncluded !== "" ? 1 : 0;
+    const spOffset = form.showSessionsRow ? 1 : 0;
 
     if (field === "type") {
       const newType = rawValue;
       if (isSessionsRow && newType !== SESSIONS_INCLUDED_SENTINEL) {
-        // Sessions row → switching to a real perk: clear sessionsIncluded, add perk
+        // Sessions row → switching to a real perk: hide sessions row, add perk
         setForm({
           ...form,
+          showSessionsRow: false,
           sessionsIncluded: "",
           structuredPerks: [{ type: newType as PerkType, value: 10 }, ...form.structuredPerks],
         });
       } else if (!isSessionsRow && newType === SESSIONS_INCLUDED_SENTINEL) {
-        // Real perk row → switching to sessions: remove from structuredPerks, set sessionsIncluded
+        // Real perk row → switching to sessions: remove from structuredPerks, show sessions row
         const spIdx = rowIndex - spOffset;
         setForm({
           ...form,
+          showSessionsRow: true,
           sessionsIncluded: String(perkRows[rowIndex].value || ""),
           structuredPerks: form.structuredPerks.filter((_, i) => i !== spIdx),
         });
@@ -1204,14 +1252,13 @@ function TierFormCard({
   const removePerkRow = (rowIndex: number) => {
     const row = perkRows[rowIndex];
     if (row.type === SESSIONS_INCLUDED_SENTINEL) {
-      setForm({ ...form, sessionsIncluded: "" });
+      setForm({ ...form, showSessionsRow: false, sessionsIncluded: "" });
     } else {
-      const spIdx = rowIndex - (form.sessionsIncluded !== "" ? 1 : 0);
+      const spIdx = rowIndex - (form.showSessionsRow ? 1 : 0);
       setForm({ ...form, structuredPerks: form.structuredPerks.filter((_, i) => i !== spIdx) });
     }
   };
 
-  const combined = [...new Set([...allPerks, ...form.perks])];
   const inputCls = "w-full rounded-lg border border-neutral-700 bg-neutral-800 px-3 py-2 text-sm text-white placeholder:text-neutral-500 focus:border-purple-500 focus:outline-none";
   const smallInputCls = "w-full rounded-lg border border-neutral-700 bg-neutral-800 px-2.5 py-1.5 text-xs text-white placeholder:text-neutral-500 focus:border-purple-500 focus:outline-none";
 
@@ -1257,13 +1304,6 @@ function TierFormCard({
         </div>
       </div>
 
-      {/* Badge toggle */}
-      <label className="flex items-center gap-2 cursor-pointer select-none">
-        <input type="checkbox" checked={form.showBadge} onChange={(e) => setForm({ ...form, showBadge: e.target.checked })}
-          className="h-4 w-4 rounded border-neutral-600 bg-neutral-800 accent-purple-500" />
-        <span className="text-xs text-neutral-400">{t("memberships.showBadge")}</span>
-      </label>
-
       {/* Unified perk rows builder (sessions + enforced discounts) */}
       <div className="space-y-2">
         <div className="flex items-center justify-between">
@@ -1280,7 +1320,7 @@ function TierFormCard({
         {perkRows.map((perk, i) => {
           const isSessionsRow = perk.type === SESSIONS_INCLUDED_SENTINEL;
           const maxVal = perk.type === PerkType.ADVANCE_BOOKING_WINDOW_DAYS ? 90 : isSessionsRow ? 9999 : 100;
-          // Only show perk types that are not already used by another row (current row's own type always included)
+          // Only show perk types not already used by another row (current row's type always visible)
           const usedTypes = new Set(perkRows.map((r) => r.type));
           const opts = PERK_TYPE_OPTIONS.filter(
             (o) => o.value === perk.type || !usedTypes.has(o.value)
@@ -1314,14 +1354,47 @@ function TierFormCard({
       {/* Legacy free-text perks */}
       <div className="space-y-2">
         <label className="text-xs text-neutral-500">{t("memberships.perks")} (free-text notes)</label>
-        {combined.length > 0 && (
+        {freeTextPerks.length > 0 && (
           <div className="space-y-1">
-            {combined.map((perk) => (
-              <label key={perk} className="flex items-center gap-2 cursor-pointer select-none">
-                <input type="checkbox" checked={form.perks.includes(perk)} onChange={() => togglePerk(perk)}
-                  className="h-3.5 w-3.5 rounded border-neutral-600 bg-neutral-800 accent-purple-500" />
-                <span className="text-xs text-neutral-300">{perk}</span>
-              </label>
+            {freeTextPerks.map((perk) => (
+              <div key={perk} className="flex items-center gap-2">
+                <span className="flex-1 text-xs text-neutral-300">{perk}</span>
+                <button
+                  type="button"
+                  onClick={() => removeFreeTextPerk(perk)}
+                  title="Remove note"
+                  className="rounded p-1 text-neutral-600 hover:text-red-400 hover:bg-red-900/20 transition-colors"
+                >
+                  <Trash2 className="h-3.5 w-3.5" />
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
+        {perkSuggestions.length > 0 && (
+          <div className="flex flex-wrap gap-1">
+            {perkSuggestions.map((perk) => (
+              <span
+                key={perk}
+                className="inline-flex items-center gap-1 rounded-full border border-neutral-700 pl-2 pr-1 py-0.5 text-[10px] text-neutral-500"
+              >
+                <button
+                  type="button"
+                  onClick={() => togglePerk(perk)}
+                  className="hover:text-purple-300 transition-colors"
+                  title="Add to this tier"
+                >
+                  + {perk}
+                </button>
+                <button
+                  type="button"
+                  onClick={(e) => { e.stopPropagation(); onDeleteVenuePerk(perk); }}
+                  title="Delete from all tiers"
+                  className="rounded-full p-0.5 hover:bg-red-900/40 hover:text-red-400 transition-colors"
+                >
+                  <X className="h-2.5 w-2.5" />
+                </button>
+              </span>
             ))}
           </div>
         )}
