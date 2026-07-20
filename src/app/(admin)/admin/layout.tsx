@@ -44,6 +44,7 @@ const navSections: NavSection[] = [
       { href: "/admin/bookings", label: "nav.bookings", icon: CalendarDays, requiresAccess: "courtpass_staff" },
       { href: "/admin/coaching", label: "nav.coaching", icon: GraduationCap, requiresAccess: "courtpass_staff" },
       { href: "/admin/program-passes", label: "nav.programPasses", icon: Ticket, superadminOnly: true },
+      { href: "/admin/memberships", label: "nav.memberships", icon: Crown, requiresAccess: "courtpass_staff" },
     ],
   },
   {
@@ -51,7 +52,6 @@ const navSections: NavSection[] = [
     items: [
       { href: "/admin/marketing-campaigns", label: "nav.marketingCampaigns", icon: Megaphone, requiresAccess: "courtpass_staff" },
       { href: "/admin/courtpass-players", label: "nav.courtpassPlayers", icon: UserCircle, requiresAccess: "courtpass_staff" },
-      { href: "/admin/memberships", label: "nav.memberships", icon: Crown, requiresAccess: "courtpass_staff" },
     ],
   },
   {
