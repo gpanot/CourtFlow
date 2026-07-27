@@ -1,5 +1,5 @@
 import { NextRequest } from "next/server";
-import { requireStaff, signToken } from "@/lib/auth";
+import { requireAuthWithVersion, signToken } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 import { json, error } from "@/lib/api-helpers";
 import { staffAssignmentsToVenues } from "@/lib/staff-app-access";
@@ -17,7 +17,10 @@ export const dynamic = "force-dynamic";
  */
 export async function POST(request: NextRequest) {
   try {
-    const payload = requireStaff(request.headers);
+    const payload = await requireAuthWithVersion(request.headers);
+    if (payload.role !== "staff" && payload.role !== "manager" && payload.role !== "superadmin") {
+      return error("Staff access required", 403);
+    }
 
     const staff = await prisma.staffMember.findUnique({
       where: { id: payload.id },
@@ -37,6 +40,7 @@ export async function POST(request: NextRequest) {
       id: staff.id,
       role: staff.role,
       venueId: firstVenueId,
+      tv: staff.tokenVersion,
     });
 
     return json({

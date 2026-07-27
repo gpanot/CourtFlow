@@ -96,6 +96,7 @@ export async function POST(request: NextRequest) {
           include: { venue: { select: { id: true, name: true } } },
         },
       },
+      // tokenVersion is a scalar field — included automatically via findUnique
     });
 
     if (!staff) {
@@ -121,6 +122,7 @@ export async function POST(request: NextRequest) {
       id: staff.id,
       role: staff.role,
       venueId: firstVenueId,
+      tv: staff.tokenVersion,
     });
 
     return json({

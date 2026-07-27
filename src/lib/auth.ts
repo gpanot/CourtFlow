@@ -10,6 +10,8 @@ export interface JwtPayload {
   id: string;
   role: "player" | "staff" | "manager" | "superadmin";
   venueId?: string;
+  /** Incremented on force-logout — token is rejected if it doesn't match the DB value. */
+  tv?: number;
 }
 
 export function signToken(payload: JwtPayload): string {
@@ -22,6 +24,25 @@ export function verifyToken(token: string): JwtPayload | null {
   } catch {
     return null;
   }
+}
+
+/**
+ * Verifies the JWT and checks that the token version matches the DB record.
+ * Returns null (rejected) if the token is invalid or the version is stale.
+ */
+export async function verifyTokenWithVersion(token: string): Promise<JwtPayload | null> {
+  const payload = verifyToken(token);
+  if (!payload) return null;
+  // Tokens issued before tokenVersion was introduced have tv === undefined.
+  // Treat them as version 0 — valid until explicitly force-logged-out.
+  const tokenVersion = payload.tv ?? 0;
+  const staff = await prisma.staffMember.findUnique({
+    where: { id: payload.id },
+    select: { tokenVersion: true },
+  });
+  if (!staff) return null;
+  if (staff.tokenVersion !== tokenVersion) return null;
+  return payload;
 }
 
 export function hashPassword(password: string): string {
@@ -102,6 +123,18 @@ export function requireAuth(headers: Headers): JwtPayload {
   const token = extractToken(headers);
   if (!token) throw new Error("Missing authorization token");
   const payload = verifyToken(token);
+  if (!payload) throw new Error("Invalid or expired token");
+  return payload;
+}
+
+/**
+ * Async version of requireAuth that also checks tokenVersion against the DB.
+ * Use this on sensitive endpoints where force-logout must take effect immediately.
+ */
+export async function requireAuthWithVersion(headers: Headers): Promise<JwtPayload> {
+  const token = extractToken(headers);
+  if (!token) throw new Error("Missing authorization token");
+  const payload = await verifyTokenWithVersion(token);
   if (!payload) throw new Error("Invalid or expired token");
   return payload;
 }

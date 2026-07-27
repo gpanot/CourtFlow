@@ -1,5 +1,5 @@
 import { NextRequest } from "next/server";
-import { requireStaff } from "@/lib/auth";
+import { requireAuthWithVersion } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 import { json, error } from "@/lib/api-helpers";
 import { staffAssignmentsToVenues } from "@/lib/staff-app-access";
@@ -8,7 +8,10 @@ export const dynamic = "force-dynamic";
 /** Current staff member name and phone (Bearer staff/superadmin JWT). */
 export async function GET(request: NextRequest) {
   try {
-    const payload = requireStaff(request.headers);
+    const payload = await requireAuthWithVersion(request.headers);
+    if (payload.role !== "staff" && payload.role !== "manager" && payload.role !== "superadmin") {
+      return error("Staff access required", 403);
+    }
     const staff = await prisma.staffMember.findUnique({
       where: { id: payload.id },
       select: {
