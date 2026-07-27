@@ -12,7 +12,7 @@ export async function POST(request: NextRequest) {
   try {
     requireSuperAdmin(request.headers);
 
-    const formData = await request.formData();
+    const formData = await request.formData() as unknown as FormData;
     const file = formData.get("file") as File | null;
 
     if (!file) {

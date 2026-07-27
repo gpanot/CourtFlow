@@ -114,9 +114,9 @@ export function SelfCheckInScanner({ venueId }: SelfCheckInScannerProps) {
   const { unlockChime, playSuccessChime } = useSuccessChime();
   const { on } = useSocket();
   const cameraRef = useRef<CameraCaptureHandle>(null);
-  const resetTimerRef = useRef<NodeJS.Timeout | null>(null);
-  const inactivityTimerRef = useRef<NodeJS.Timeout | null>(null);
-  const paymentTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const resetTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const inactivityTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const paymentTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const stepRef = useRef<KioskStep>("home");
 
   const [step, setStep] = useState<KioskStep>("home");
@@ -142,7 +142,7 @@ export function SelfCheckInScanner({ venueId }: SelfCheckInScannerProps) {
   const [regLoading, setRegLoading] = useState(false);
   const [regPhoneInlineWarning, setRegPhoneInlineWarning] = useState(false);
   const [regPhoneDuplicateModal, setRegPhoneDuplicateModal] = useState(false);
-  const phoneCheckDebounceRef = useRef<NodeJS.Timeout | null>(null);
+  const phoneCheckDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const [payment, setPayment] = useState<PaymentData | null>(null);
   const [paymentLoading, setPaymentLoading] = useState(false);

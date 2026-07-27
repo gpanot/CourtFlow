@@ -112,8 +112,8 @@ export function CourtPayKiosk({ venueId }: CourtPayKioskProps) {
   const { unlockChime, playSuccessChime } = useSuccessChime();
   const { on } = useSocket();
   const cameraRef = useRef<CameraCaptureHandle>(null);
-  const resetTimerRef = useRef<NodeJS.Timeout | null>(null);
-  const paymentTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const resetTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const paymentTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const stepRef = useRef<KioskStep>("home");
   const blurredRegImageRef = useRef<string | null>(null);
   const blurRegInProgressRef = useRef(false);

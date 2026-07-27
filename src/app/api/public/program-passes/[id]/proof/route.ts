@@ -41,7 +41,7 @@ export async function POST(
     let proofUrl: string;
 
     if (contentType.includes("multipart/form-data")) {
-      const formData = await request.formData();
+      const formData = await request.formData() as unknown as FormData;
       const file = formData.get("proof") as File | null;
       if (!file || file.size === 0) return error("No proof image provided", 400);
 

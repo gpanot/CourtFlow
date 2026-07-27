@@ -1,0 +1,53 @@
+{
+  "expo": {
+    "name": "CourtPass",
+    "slug": "courtpass",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "automatic",
+    "scheme": "courtpass",
+    "splash": {
+      "image": "./assets/splash.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#052e16"
+    },
+    "ios": {
+      "supportsTablet": false,
+      "bundleIdentifier": "com.thecourtflow.courtpass",
+      "infoPlist": {
+        "NSAppTransportSecurity": {
+          "NSAllowsLocalNetworking": true
+        }
+      }
+    },
+    "android": {
+      "usesCleartextTraffic": true,
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#052e16"
+      },
+      "edgeToEdgeEnabled": true,
+      "package": "com.thecourtflow.courtpass",
+      "googleServicesFile": "./google-services.json"
+    },
+    "extra": {
+      "eas": {
+        "projectId": "6ec51ca5-bb1b-4306-80ef-9cb8bf14bee1"
+      }
+    },
+    "plugins": [
+      "expo-dev-client",
+      "expo-secure-store",
+      "expo-web-browser",
+      [
+        "expo-notifications",
+        {
+          "icon": "./assets/icon.png",
+          "color": "#052e16",
+          "defaultChannel": "courtpass_default"
+        }
+      ]
+    ]
+  }
+}

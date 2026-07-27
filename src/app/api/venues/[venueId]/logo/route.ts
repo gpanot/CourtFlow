@@ -32,7 +32,7 @@ export async function POST(
 
     await assertVenueOwnership(auth, venueId);
 
-    const formData = await request.formData();
+    const formData = await request.formData() as unknown as FormData;
     const file = formData.get("logo") as File | null;
     if (!file) return error("No file provided", 400);
     if (!ALLOWED_TYPES.includes(file.type)) return error("Invalid file type. Use PNG, JPEG, WebP, or SVG.", 400);

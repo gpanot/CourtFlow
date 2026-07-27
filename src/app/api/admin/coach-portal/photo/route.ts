@@ -21,7 +21,7 @@ export async function POST(request: NextRequest) {
   const coach = await prisma.staffMember.findUnique({ where: { id: auth.id, isCoach: true }, select: { id: true } });
   if (!coach) return error("Coach not found", 404);
 
-  const formData = await request.formData();
+  const formData = await request.formData() as unknown as FormData;
   const file = formData.get("photo") as File | null;
   if (!file) return error("No photo file provided", 400);
 

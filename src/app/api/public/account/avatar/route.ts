@@ -14,7 +14,7 @@ export async function POST(request: NextRequest) {
   try {
     const { playerId } = await requirePortalAuth(request);
 
-    const formData = await request.formData();
+    const formData = await request.formData() as unknown as FormData;
     const file = formData.get("avatar") as File | null;
     if (!file || file.size === 0) return error("No avatar file provided", 400);
 

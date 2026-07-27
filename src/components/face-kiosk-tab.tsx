@@ -121,9 +121,9 @@ export function FaceKioskTab({ venueId, hasSession = true }: FaceKioskTabProps) 
   const { on } = useSocket();
 
   const cameraRef = useRef<CameraCaptureHandle>(null);
-  const cooldownRef = useRef<NodeJS.Timeout | null>(null);
-  const processingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
-  const paymentTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const cooldownRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const processingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const paymentTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [state, setState] = useState<KioskState>("idle");
   const [error, setError] = useState<string>("");
   const [resultData, setResultData] = useState<{

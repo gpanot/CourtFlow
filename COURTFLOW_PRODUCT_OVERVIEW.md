@@ -1,20 +1,21 @@
 # CourtFlow — Product Overview
 
-**Version 3.1 · June 11, 2026**
+**Version 4.0 · July 21, 2026**
 **Tagline:** The all-in-one court management platform for pickleball venues.
 
 ---
 
 ## What is CourtFlow?
 
-CourtFlow started as a real-time rotation system for 200+ player open-play sessions. It has evolved into a **complete court management and payment platform** that handles everything a pickleball venue needs — from live session management and automated matchmaking to court bookings, memberships, staff payroll, coaching, on-site check-in payments, and automated bank reconciliation.
+CourtFlow started as a real-time rotation system for 200+ player open-play sessions. It has evolved into a **complete court management and payment platform** that handles everything a pickleball venue needs — from live session management and automated matchmaking to court bookings, memberships, staff payroll, coaching, on-site check-in payments, automated bank reconciliation, and structured training programs with class pass management.
 
-The platform has **two distinct products** that share the same backend:
+The platform now has **three distinct products** that share the same backend:
 
 | Product | Form Factor | Primary Use |
 |---------|-------------|-------------|
 | **CourtFlow** | Web app (PWA) | Court operations, rotation, admin, analytics |
 | **CourtPay** | Mobile app (iOS / Android) | On-site check-in and payment collection |
+| **CourtPass** | Mobile app (iOS / Android) | Player-facing program enrollment and class pass management |
 
 ---
 
@@ -22,11 +23,12 @@ The platform has **two distinct products** that share the same backend:
 
 | Interface | Users | Purpose |
 |-----------|-------|---------|
-| **Admin Panel** (web) | Venue owners, managers | Full venue operations: bookings, memberships, payments, staff, analytics |
+| **Admin Panel** (web) | Venue owners, managers | Full venue operations: bookings, memberships, programs, payments, staff, analytics |
 | **Staff Dashboard** (web) | Front-desk staff, session managers | Run live sessions, manage queue, assign courts, create bookings |
-| **Player App** (web PWA) | Members, walk-in players | Join queue, view courts, manage profile, book courts |
+| **Player App** (web PWA) | Members, walk-in players | Join queue, view courts, manage profile, book courts, browse and enroll in programs |
 | **TV Display** (web) | Public screens at venue | Show live court status, queue, and venue branding |
 | **CourtPay Mobile** (RN) | Staff on the floor, venue owners, tablet kiosks | Check-in, collect payments, view earnings on the go |
+| **CourtPass Mobile** (RN) | Players | Browse training programs, manage class passes, track session attendance |
 
 All web interfaces are **PWA-ready** (Progressive Web App) with web push notifications and work on any device.
 
@@ -125,7 +127,7 @@ For one-off events that don't fit the recurring schedule, admins can block court
 
 ### 5. Membership System
 
-Tiered membership plans with session tracking, payment management, and perks.
+Tiered membership plans with session tracking, payment management, and perks. This is the CourtFlow **open-play membership** system (distinct from the CourtPass program-pass system — see Module 11).
 
 **Membership Tiers:**
 - Admin creates tiers per venue (e.g., Basic — 5 sessions/month, Premium — unlimited)
@@ -336,6 +338,87 @@ Self-service tablet station at the venue entrance — no staff required:
 
 ---
 
+## Program Passes & CourtPass
+
+The Program Passes system is CourtFlow's **structured training & class management layer**, complementing the open-play rotation and court-booking modules. It is surfaced in three places: the Admin Panel, the Player PWA (book portal), and the dedicated **CourtPass mobile app**.
+
+### Concepts
+
+| Concept | Description |
+|---------|-------------|
+| **Pass Type** | A named training program offered by the venue (e.g., "Beginner Bootcamp", "Advanced Drills"). Defines price, sessions included, level, age range, skill tags, description, cover image, and assigned coaches. |
+| **Program Run** | A specific scheduled cohort of a Pass Type — with start date, weekly recurrence (hour + duration), total session count or end date, court assignment, capacity limit, and run-level coaches. |
+| **Class Instance** | Each individual class session auto-generated from a Program Run's recurrence rules. Holds `startAt`, `endAt`, and an optional topic. |
+| **Program Pass** | A player's enrollment ticket for a specific Program Run. Tracks `sessionsUsed` and status (`active` / `expired` / `cancelled`). |
+| **Class Check-In** | Records that a Program Pass holder attended a Class Instance. Enforces capacity and session-budget limits atomically. |
+| **Payment** | Each Program Pass generates a payment record (UNPAID → PAID). Players can upload a payment proof; admins confirm manually or via auto-reconciliation. |
+
+### Admin Capabilities (Program Passes page)
+
+**Pass Types tab:**
+- Create, edit, deactivate pass types per venue
+- Upload a cover image per pass type
+- Assign one or more coaches to a pass type
+- View active pass count per type
+
+**Program Runs tab:**
+- Create Program Runs: link to a pass type, set dates, recurrence (start hour, duration in minutes), total sessions or end date, capacity, court assignment, coaches
+- Auto-generate all Class Instances from recurrence rules (`POST /api/admin/program-runs/{id}/generate`)
+- Manage run status: `upcoming` → `in_progress` → `completed`
+- Add, edit, or delete individual Class Instances (topic, time overrides)
+
+**Passes tab (paginated list view):**
+- Filter by pass type, payment status (pending / proof submitted / paid / overdue), and date range
+- Search by player name or phone
+- Per-pass actions: activate, suspend, cancel, re-activate
+- Payment management: confirm payment, add payment note, download invoice
+- Payment status badges: `pending`, `proof_submitted`, `overdue`, `paid`
+- Bulk payment request send (via PaymentRequestButton)
+
+**Check-In:**
+- Staff manually checks a player in to a class instance from the admin panel
+- Validates: pass is active, sessions not exhausted, class not at capacity, not already checked in
+- Returns `sessionsUsed` and `sessionsIncluded` for live UI update
+- Concurrency safe (serialized transaction with one retry on conflict)
+
+### Player Portal (PWA — `/book/programs`)
+
+- Browse upcoming and in-progress Program Runs filtered by skill level (beginner / intermediate / advanced / pro)
+- View program details: coach names and photos, schedule, capacity, price
+- Enroll directly from the browser: creates a Program Pass and a pending payment record
+- Upload payment proof image
+- **My Progress page** (`/book/programs/{id}/progress`): see all class instances, attendance status per session, sessions used vs. total
+- **Program Pay page** (`/book/pay/program/{id}`): payment flow with QR or bank transfer reference
+- Waitlist: join a waitlist when a run is full; admin can promote waitlisted players
+
+### CourtPass Mobile App (`mobile-courtpass/`)
+
+A dedicated React Native (Expo) app for players, separate from CourtPay:
+
+| Tab | Description |
+|-----|-------------|
+| **Home** | Dashboard — upcoming classes, quick stats (coming soon) |
+| **Programs** | Browse active Program Runs for the player's venue |
+| **My Pass** | View active CourtPass enrollments and session attendance |
+| **Profile** | Account settings, logout |
+
+**Tech details:**
+- Bundle ID: `com.thecourtflow.courtpass`
+- Package: `com.thecourtflow.courtpass`
+- Auth: custom JWT, token stored in `expo-secure-store` under `courtpass_player_token`
+- Notifications: `expo-notifications` with channel `courtpass_default`
+- Theme: deep green (`#052e16`) — distinct from CourtPay's dark theme
+- Navigation: React Navigation bottom tabs + stack navigator
+
+### Payment Flow (Program Passes)
+
+1. Player enrolls → Program Pass created with status `active`, payment record created with status `UNPAID` and a unique payment reference
+2. Player uploads bank transfer proof via the portal or CourtPass app
+3. Admin reviews proof in the Passes list and confirms payment (marks `PAID`, records method and date)
+4. Pass remains `active` through the run; check-ins decrement the sessions budget
+
+---
+
 ## Admin Panel Sections
 
 | Section | Description |
@@ -344,6 +427,7 @@ Self-service tablet station at the venue entrance — no staff required:
 | **Bookings** | Day planner grid, booking management, schedule config, pricing rules |
 | **Coaching** | Coaches, lesson packages, lesson scheduling |
 | **Memberships** | CourtFlow membership tiers, member activation, payment tracking |
+| **Program Passes** | Pass types, program runs, class instances, player enrollments, payment management, check-in |
 | **Players** | CourtFlow player directory — skill, stats, face photo management (CourtFlow Social section) |
 | **CP Players** | CourtPay player roster — KPIs, detail drawer, subscriptions, check-in history, face thumbnails |
 | **Staff** | Staff accounts, roles, venue assignments |
@@ -378,8 +462,10 @@ Self-service tablet station at the venue entrance — no staff required:
 | **Real-time** | Socket.io (WebSocket) |
 | **Auth** | JWT + bcrypt + OTP (phone-based for players, password for staff) |
 | **Web Push** | Web Push API (VAPID) |
-| **Mobile** | React Native (Expo) — iOS & Android |
-| **Mobile Push** | Firebase Cloud Messaging (FCM) via `@react-native-firebase/messaging` |
+| **CourtPay Mobile** | React Native (Expo) — iOS & Android — staff check-in and payment |
+| **CourtPass Mobile** | React Native (Expo) — iOS & Android — player program & pass management |
+| **Mobile Push (CourtPay)** | Firebase Cloud Messaging (FCM) via `@react-native-firebase/messaging` |
+| **Mobile Push (CourtPass)** | Expo Notifications (`expo-notifications`) |
 | **Face Recognition** | AWS Rekognition |
 | **Payment Webhooks** | Sepay (auto-confirm bank transfers) + PayOS (kiosk sticker payments) |
 | **Hosting** | Railway (API + DB) |
@@ -396,9 +482,10 @@ Both jobs are secured with `CRON_SECRET` bearer token auth.
 
 ### Key Design Decisions
 
-- **Venue-scoped data** — all data (courts, sessions, bookings, memberships, payments) is scoped to a venue
+- **Venue-scoped data** — all data (courts, sessions, bookings, memberships, programs, payments) is scoped to a venue
 - **JSON settings** — per-venue configuration (pricing rules, schedule, payment config, Sepay settings) stored as JSON in `Venue.settings` for flexibility without schema migrations
 - **Three booking models** — Walk-in bookings (`Booking`), live sessions (`Session`), and time blocks (`CourtBlock`) are separate models that all feed into a unified availability API
+- **Program Pass model** — `ProgramPassType` → `ProgramRun` → `ClassInstance` hierarchy separates the program template from its scheduled cohorts and individual classes; `ProgramPass` is the player's enrollment ticket; `ClassCheckIn` records attendance with serialized concurrency control
 - **Shared venue picker** — `AdminVenuePicker` / `useAdminVenuePicker` is a single component + hook used across all admin pages, fetching from `/api/admin/venues` (auth-scoped) and persisting selection via `useAdminVenueStore` (localStorage)
 - **Timezone** — server and all date/time logic runs in the venue's local timezone (`Asia/Saigon`, UTC+7); `setHours()` used throughout (never `setUTCHours`)
 - **Payment reference parsing** — `extractPaymentRef` handles MB Bank's hyphen/space stripping variations (`CF-SES-XXXXXX`, `CFSESXXXXXX`, `CF SES XXXXXX`)
@@ -460,6 +547,70 @@ Events flow through venue-scoped rooms (`venue:{id}`) and player-scoped rooms (`
 
 ---
 
+## CourtFlow Suite — Value Proposition
+
+CourtFlow is not a single-feature tool. It is a **full operating system for racket-sport venues**, built so every product layer amplifies the others. Below is a breakdown of the compounding value each product and module delivers.
+
+### The Three Products — and Why They're Better Together
+
+| Product | Standalone Value | Compounded Value |
+|---------|-----------------|-----------------|
+| **CourtFlow** (web PWA) | Eliminates clipboard chaos; live rotation engine, bookings, and analytics in one dashboard | Feeds player profiles and session history into CourtPay face recognition and CourtPass enrollment |
+| **CourtPay** (mobile) | On-site check-in and bank-transfer auto-reconciliation; zero cash handling errors | Reuses the same player database built from CourtFlow open-play; Reclub integration bridges event operators |
+| **CourtPass** (mobile) | Structured training program management; players self-manage their pass and attendance on their phone | Coaches assigned in the admin panel appear in both CourtPass and the coaching module; payments share the same reconciliation infrastructure |
+
+### Revenue Unlocked Per Module
+
+| Module | Revenue Mechanism |
+|--------|------------------|
+| **Real-Time Rotation** | More games per session → higher per-player spend; players stay longer and return more often |
+| **Court Booking** | Monetizes every hour of court time, not just open-play windows |
+| **Weekly Schedule** | Recurring revenue from structured open-play and competition slots |
+| **Memberships** | Predictable monthly recurring revenue; reduces dependence on walk-in volume |
+| **Coaching** | Premium revenue layer: private lessons and packages at higher margins than open-play |
+| **Program Passes / CourtPass** | Upfront class-pass revenue; structured cohorts with committed enrollment; natural upsell from open-play to coaching programs |
+| **CourtPay** | Captures every walk-in payment; Sepay auto-reconciliation eliminates missed or disputed payments |
+| **Analytics** | Identifies peak hours, top players, underutilized courts — enables data-driven pricing and scheduling decisions |
+
+### Operational Advantages
+
+| Pain Point | CourtFlow Solution |
+|------------|-------------------|
+| Court downtime (15–20 min avg) | < 2 min with real-time matchmaking and WebSocket-driven court assignment |
+| Manual payment tracking | Auto-confirmed via Sepay webhook; payment history per player; CSV export for accounting |
+| Staff burnout on rotation | Staff taps one button to end a game; system assigns next group in < 3 seconds |
+| No visibility across venues | Superadmin Live panel shows all venues' court status in real time |
+| Player data silos | Single player profile shared across open play, CourtPay check-ins, bookings, and program enrollments |
+| No structured training revenue | CourtPass program passes turn coaching into a recurring, scalable revenue stream |
+| Membership payment chasing | Auto-generated billing cycles with payment proof upload and overdue escalation |
+| Reporting overhead | Built-in analytics: session, booking, membership, and coaching revenue by period and venue |
+| Staff payroll errors | Session-based automatic hours tracking; weekly payroll view with CSV export |
+
+### Why Venues Don't Switch Away
+
+1. **Data gravity** — Player profiles, session history, face recognition enrollments, and payment history accumulate over time and become increasingly valuable. Migrating away means losing this institutional knowledge.
+2. **Operational dependency** — CourtFlow becomes the live nerve center of every open-play session. Removing it means reverting to clipboards and missed payments.
+3. **Multi-product lock-in** — A venue that uses CourtFlow (rotation), CourtPay (payments), and CourtPass (programs) has three interdependent systems. Switching one requires switching all.
+4. **Staff muscle memory** — Staff learn to operate in under 3 seconds per action. Retraining to a new system has real cost.
+5. **Player expectations** — Players expect QR check-in, push notifications when their court is ready, and digital pass management. Removing this degrades the player experience.
+
+### Competitive Differentiation
+
+| Feature | CourtFlow | Generic booking tools | Court management spreadsheets |
+|---------|-----------|----------------------|-------------------------------|
+| Real-time skill-balanced matchmaking | Yes | No | No |
+| Face recognition check-in | Yes | No | No |
+| Bank transfer auto-reconciliation (Sepay) | Yes | No | No |
+| Structured class program passes | Yes | Rarely | No |
+| Player-facing mobile app (CourtPass) | Yes | Sometimes | No |
+| Reclub event integration | Yes | No | No |
+| Multi-venue single dashboard | Yes | Depends | No |
+| Staff payroll tracking | Yes | No | No |
+| TV display mode | Yes | No | No |
+| 15-minute onboarding | Yes | No | No |
+
+---
+
 ## Roadmap
 
 | Module | Status | Description |
@@ -476,8 +627,13 @@ Events flow through venue-scoped rooms (`venue:{id}`) and player-scoped rooms (`
 | **Monthly SaaS billing** | Live | Flat monthly subscription with start/end dates, cancel flow, pro-rated first invoice |
 | **Admin panel i18n** | Live | English + Vietnamese for admin pages |
 | **Face thumbnails** | Live | 96px WebP thumbs for fast player list avatars (PWA + mobile + CP Players) |
+| **Program Passes (admin)** | Live | Pass types, program runs, class instances, enrollment management, payment tracking, check-in |
+| **Program Passes (player PWA)** | Live | Browse programs, enroll, upload payment proof, track attendance progress |
+| **CourtPass Mobile App** | Live (v1.0) | Dedicated iOS/Android player app: browse programs, manage passes, view attendance |
+| **Waitlist (program runs)** | Live | Players join a waitlist when a program run is at capacity; admin can promote waitlisted entries |
 | **PayOS (CourtPay gateway)** | Coming soon | PayOS as an alternative gateway for CourtPay auto-payment |
-| **Capacity & Waitlist** | Planned | When all courts are booked, players join a waitlist |
+| **CourtPass push notifications** | Coming soon | Class reminders, payment confirmations, and waitlist promotions via Expo Notifications |
+| **Capacity & Waitlist (bookings)** | Planned | When all courts are booked, players join a waitlist |
 | **Tournament Module** | Planned | Bracket generation, seeding, scoring, and scheduling |
 
 ---

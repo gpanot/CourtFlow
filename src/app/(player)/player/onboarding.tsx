@@ -45,7 +45,7 @@ export function OnboardingFlow() {
   /** True when user landed on wristband after face scan failed — show "Try face scan again". */
   const [afterFaceFailure, setAfterFaceFailure] = useState(false);
   const cameraRef = useRef<CameraCaptureHandle>(null);
-  const countdownRef = useRef<NodeJS.Timeout | null>(null);
+  const countdownRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const debugOn = searchParams.get("debug") === "1";
   const [wristbandDebugText, setWristbandDebugText] = useState("");
 

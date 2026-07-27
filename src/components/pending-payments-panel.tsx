@@ -145,8 +145,8 @@ export function PendingPaymentsPanel({
   const [groupSaving, setGroupSaving] = useState(false);
   const [changeMethodPaymentId, setChangeMethodPaymentId] = useState<string | null>(null);
   const [changingMethod, setChangingMethod] = useState(false);
-  const tickRef = useRef<NodeJS.Timeout | null>(null);
-  const pollRef = useRef<NodeJS.Timeout | null>(null);
+  const tickRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const pollRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [, setTick] = useState(0);
   const { on } = useSocket();
 

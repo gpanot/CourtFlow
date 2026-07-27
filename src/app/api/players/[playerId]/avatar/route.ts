@@ -24,7 +24,7 @@ export async function POST(
     const player = await prisma.player.findUnique({ where: { id: playerId } });
     if (!player) return notFound("Player not found");
 
-    const formData = await request.formData();
+    const formData = await request.formData() as unknown as FormData;
     const file = formData.get("avatar") as File | null;
     if (!file) return error("No avatar file provided", 400);
 

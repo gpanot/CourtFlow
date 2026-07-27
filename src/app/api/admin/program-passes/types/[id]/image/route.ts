@@ -21,7 +21,7 @@ export async function POST(
     await requireAdminAccess(request.headers);
     const { id } = await params;
 
-    const formData = await request.formData();
+    const formData = await request.formData() as unknown as FormData;
     const file = formData.get("image") as File | null;
     if (!file) return error("No file provided", 400);
     if (!ALLOWED_TYPES.includes(file.type)) {

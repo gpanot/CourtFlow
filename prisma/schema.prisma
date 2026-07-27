@@ -1316,6 +1316,7 @@ model ProgramPassType {
   classInstances   ClassInstance[]
   programPasses    ProgramPass[]
   programRuns      ProgramRun[]
+  coaches          ProgramPassTypeCoach[]
 
   @@map("program_pass_types")
 }
@@ -1416,11 +1417,12 @@ model ProgramPass {
 
 /// Join table linking a ProgramPassType to zero or more coaches.
 model ProgramPassTypeCoach {
-  id         String      @id @default(dbgenerated("(gen_random_uuid())::text"))
-  passTypeId String      @map("pass_type_id")
-  coachId    String      @map("coach_id")
-  createdAt  DateTime    @default(now()) @map("created_at") @db.Timestamptz(6)
-  coach      StaffMember @relation(fields: [coachId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  id         String          @id @default(dbgenerated("(gen_random_uuid())::text"))
+  passTypeId String          @map("pass_type_id")
+  coachId    String          @map("coach_id")
+  createdAt  DateTime        @default(now()) @map("created_at") @db.Timestamptz(6)
+  coach      StaffMember     @relation(fields: [coachId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  passType   ProgramPassType @relation(fields: [passTypeId], references: [id], onDelete: Cascade, onUpdate: NoAction)
 
   @@unique([passTypeId, coachId])
   @@index([passTypeId])

@@ -45,7 +45,7 @@ export function TvQueueScanner({ venueId }: TvQueueScannerProps) {
   const { t } = useTranslation("translation", { i18n: tvI18n });
   const { unlockChime, playSuccessChime } = useSuccessChime();
   const cameraRef = useRef<CameraCaptureHandle>(null);
-  const resetTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const resetTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [state, setState] = useState<ScanState>("idle");
   const [result, setResult] = useState<ScanResult>({});
   const [numberInput, setNumberInput] = useState("");
