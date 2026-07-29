@@ -761,28 +761,28 @@ model CheckInPlayer {
 }
 
 model SubscriptionPackage {
-  id               String               @id @default(cuid())
-  venueId          String               @map("venue_id")
-  name             String
-  sessions         Int?
-  durationDays     Int                  @map("duration_days")
-  price            Int
-  perks            String?
-  isActive         Boolean              @default(true) @map("is_active")
-  createdAt        DateTime             @default(now()) @map("created_at")
-  updatedAt        DateTime             @updatedAt @map("updated_at")
-  discountPct      Int?                 @map("discount_pct")
-  isBestChoice     Boolean              @default(false) @map("is_best_choice")
-  showInCheckIn    Boolean              @default(true) @map("show_in_check_in")
-  isFreePass       Boolean              @default(false) @map("is_free_pass")
-  validDays        String?              @map("valid_days")
-  timeStart        String?              @map("time_start")
-  timeEnd          String?              @map("time_end")
-  fixedStartDate   DateTime?            @map("fixed_start_date") @db.Date
-  fixedEndDate     DateTime?            @map("fixed_end_date") @db.Date
-  notes            String?
-  subscriptions    PlayerSubscription[]
-  venue            Venue                @relation(fields: [venueId], references: [id])
+  id             String               @id @default(cuid())
+  venueId        String               @map("venue_id")
+  name           String
+  sessions       Int?
+  durationDays   Int                  @map("duration_days")
+  price          Int
+  perks          String?
+  isActive       Boolean              @default(true) @map("is_active")
+  createdAt      DateTime             @default(now()) @map("created_at")
+  updatedAt      DateTime             @updatedAt @map("updated_at")
+  discountPct    Int?                 @map("discount_pct")
+  isBestChoice   Boolean              @default(false) @map("is_best_choice")
+  showInCheckIn  Boolean              @default(true) @map("show_in_check_in")
+  isFreePass     Boolean              @default(false) @map("is_free_pass")
+  validDays      String?              @map("valid_days")
+  timeStart      String?              @map("time_start")
+  timeEnd        String?              @map("time_end")
+  fixedStartDate DateTime?            @map("fixed_start_date") @db.Date
+  fixedEndDate   DateTime?            @map("fixed_end_date") @db.Date
+  notes          String?
+  subscriptions  PlayerSubscription[]
+  venue          Venue                @relation(fields: [venueId], references: [id])
 
   @@index([venueId, isActive])
   @@map("subscription_packages")
@@ -1304,24 +1304,25 @@ model PlayerMagicToken {
 /// Defines a program-pass product sold at a venue (e.g. "Beginner Group 12-session pass").
 /// Time boundaries are owned by ProgramRun, not ProgramPassType.
 model ProgramPassType {
-  id               String          @id @default(cuid())
-  venueId          String          @map("venue_id")
-  name             String
-  price            Int
-  sessionsIncluded Int             @default(12) @map("sessions_included")
-  linkedCoachId    String?         @map("linked_coach_id")
-  isActive         Boolean         @default(true) @map("is_active")
-  createdAt        DateTime        @default(now()) @map("created_at")
-  updatedAt        DateTime        @updatedAt @map("updated_at")
-  level            String?
-  skillTags        String[]        @map("skill_tags")
-  prerequisites    String?
-  ageRange         String?         @map("age_range")
-  description      String?
-  imageUrl         String?         @map("image_url")
-  classInstances   ClassInstance[]
-  programPasses    ProgramPass[]
-  programRuns      ProgramRun[]
+  id                        String                 @id @default(cuid())
+  venueId                   String                 @map("venue_id")
+  name                      String
+  price                     Int
+  sessionsIncluded          Int                    @default(12) @map("sessions_included")
+  linkedCoachId             String?                @map("linked_coach_id")
+  isActive                  Boolean                @default(true) @map("is_active")
+  createdAt                 DateTime               @default(now()) @map("created_at")
+  updatedAt                 DateTime               @updatedAt @map("updated_at")
+  level                     String?
+  skillTags                 String[]               @map("skill_tags")
+  prerequisites             String?
+  ageRange                  String?                @map("age_range")
+  description               String?
+  imageUrl                  String?                @map("image_url")
+  classInstances            ClassInstance[]
+  programPasses             ProgramPass[]
+  coaches                   ProgramPassTypeCoach[]
+  programRuns               ProgramRun[]
 
   @@map("program_pass_types")
 }
@@ -1422,11 +1423,12 @@ model ProgramPass {
 
 /// Join table linking a ProgramPassType to zero or more coaches.
 model ProgramPassTypeCoach {
-  id         String      @id @default(dbgenerated("(gen_random_uuid())::text"))
-  passTypeId String      @map("pass_type_id")
-  coachId    String      @map("coach_id")
-  createdAt  DateTime    @default(now()) @map("created_at") @db.Timestamptz(6)
-  coach      StaffMember @relation(fields: [coachId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  id                 String          @id @default(dbgenerated("(gen_random_uuid())::text"))
+  passTypeId         String          @map("pass_type_id")
+  coachId            String          @map("coach_id")
+  createdAt          DateTime        @default(now()) @map("created_at") @db.Timestamptz(6)
+  coach              StaffMember     @relation(fields: [coachId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  passType           ProgramPassType @relation(fields: [passTypeId], references: [id], onDelete: Cascade, onUpdate: NoAction)
 
   @@unique([passTypeId, coachId])
   @@index([passTypeId])

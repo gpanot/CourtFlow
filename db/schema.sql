@@ -4426,6 +4426,14 @@ ALTER TABLE ONLY public.program_pass_type_coaches
 
 
 --
+-- Name: program_pass_type_coaches program_pass_type_coaches_pass_type_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.program_pass_type_coaches
+    ADD CONSTRAINT program_pass_type_coaches_pass_type_id_fkey FOREIGN KEY (pass_type_id) REFERENCES public.program_pass_types(id) ON DELETE CASCADE;
+
+
+--
 -- Name: program_run_coaches program_run_coaches_coach_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -4756,4 +4764,5 @@ INSERT INTO public.schema_migrations (version) VALUES
     ('20260717101821'),
     ('20260720030718'),
     ('20260727142918'),
-    ('20260729003529');
+    ('20260729003529'),
+    ('20260729010957');
