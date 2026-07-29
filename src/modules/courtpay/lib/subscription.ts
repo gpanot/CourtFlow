@@ -84,8 +84,15 @@ export async function activateSubscription(
     where: { id: packageId },
   });
 
-  const expiresAt = new Date();
-  expiresAt.setDate(expiresAt.getDate() + pkg.durationDays);
+  // Fixed date range package: use fixedEndDate as the expiry.
+  // Relative package: compute from activation date + durationDays.
+  const expiresAt = pkg.fixedEndDate
+    ? new Date(pkg.fixedEndDate)
+    : (() => {
+        const d = new Date();
+        d.setDate(d.getDate() + pkg.durationDays);
+        return d;
+      })();
 
   const sessionsRemaining = pkg.sessions === null ? null : pkg.sessions;
 

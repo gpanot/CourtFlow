@@ -12,6 +12,20 @@ export async function PUT(
     const { id } = await params;
     const body = await req.json();
 
+    // Build fixedStartDate / fixedEndDate at noon local time to avoid timezone date shift
+    const fixedStartPrisma =
+      body.fixedStartDate !== undefined
+        ? body.fixedStartDate
+          ? new Date(`${body.fixedStartDate}T12:00:00+07:00`)
+          : null
+        : undefined;
+    const fixedEndPrisma =
+      body.fixedEndDate !== undefined
+        ? body.fixedEndDate
+          ? new Date(`${body.fixedEndDate}T12:00:00+07:00`)
+          : null
+        : undefined;
+
     const pkg = await prisma.subscriptionPackage.update({
       where: { id },
       data: {
@@ -25,6 +39,12 @@ export async function PUT(
         ...(body.isBestChoice !== undefined && { isBestChoice: body.isBestChoice }),
         ...(body.showInCheckIn !== undefined && { showInCheckIn: body.showInCheckIn }),
         ...(body.isFreePass !== undefined && { isFreePass: body.isFreePass }),
+        ...(body.validDays !== undefined && { validDays: body.validDays ?? null }),
+        ...(body.timeStart !== undefined && { timeStart: body.timeStart ?? null }),
+        ...(body.timeEnd !== undefined && { timeEnd: body.timeEnd ?? null }),
+        ...(fixedStartPrisma !== undefined && { fixedStartDate: fixedStartPrisma }),
+        ...(fixedEndPrisma !== undefined && { fixedEndDate: fixedEndPrisma }),
+        ...(body.notes !== undefined && { notes: body.notes?.trim() || null }),
       },
     });
 

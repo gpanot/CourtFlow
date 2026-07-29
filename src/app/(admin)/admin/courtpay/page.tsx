@@ -43,6 +43,12 @@ interface PackageData {
   isBestChoice?: boolean;
   discountPct?: number | null;
   isFreePass?: boolean;
+  validDays?: string | null;
+  timeStart?: string | null;
+  timeEnd?: string | null;
+  fixedStartDate?: string | null;
+  fixedEndDate?: string | null;
+  notes?: string | null;
   venue?: { id: string; name: string };
   _count: { subscriptions: number };
 }
@@ -347,6 +353,12 @@ export default function AdminCourtPayPage() {
     discountPct?: number | null;
     showInCheckIn?: boolean;
     isFreePass?: boolean;
+    validDays?: string | null;
+    timeStart?: string | null;
+    timeEnd?: string | null;
+    fixedStartDate?: string | null;
+    fixedEndDate?: string | null;
+    notes?: string | null;
   }) => {
     if (!selectedVenueId) {
       throw new Error("Select a venue first");
@@ -370,6 +382,12 @@ export default function AdminCourtPayPage() {
     discountPct?: number | null;
     showInCheckIn?: boolean;
     isFreePass?: boolean;
+    validDays?: string | null;
+    timeStart?: string | null;
+    timeEnd?: string | null;
+    fixedStartDate?: string | null;
+    fixedEndDate?: string | null;
+    notes?: string | null;
   }) => {
     if (!editingPkg) return;
     await api.put(`/api/courtpay/staff/packages/${editingPkg.id}`, data);
@@ -835,6 +853,12 @@ export default function AdminCourtPayPage() {
             isBestChoice: editingPkg.isBestChoice,
             discountPct: editingPkg.discountPct,
             isFreePass: editingPkg.isFreePass,
+            validDays: editingPkg.validDays,
+            timeStart: editingPkg.timeStart,
+            timeEnd: editingPkg.timeEnd,
+            fixedStartDate: editingPkg.fixedStartDate,
+            fixedEndDate: editingPkg.fixedEndDate,
+            notes: editingPkg.notes,
           }}
           onSubmit={handleEditPackage}
           onClose={() => setEditingPkg(null)}

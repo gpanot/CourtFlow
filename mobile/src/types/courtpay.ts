@@ -26,6 +26,18 @@ export interface SubscriptionPackageData {
   discountPct?: number | null;
   /** Whether this package is highlighted as "Best Choice" */
   isBestChoice?: boolean;
+  /** Comma-separated valid day codes, e.g. "Mon,Tue,Wed" — null means all days */
+  validDays?: string | null;
+  /** "HH:MM" 24h start time restriction — null means anytime */
+  timeStart?: string | null;
+  /** "HH:MM" 24h end time restriction — null means anytime */
+  timeEnd?: string | null;
+  /** Fixed validity start date "YYYY-MM-DD" — null means use durationDays */
+  fixedStartDate?: string | null;
+  /** Fixed validity end date "YYYY-MM-DD" — null means use durationDays */
+  fixedEndDate?: string | null;
+  /** Admin-only note */
+  notes?: string | null;
 }
 
 export interface ActiveSubscriptionInfo {

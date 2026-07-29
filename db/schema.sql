@@ -1810,7 +1810,13 @@ CREATE TABLE public.subscription_packages (
     discount_pct integer,
     is_best_choice boolean DEFAULT false NOT NULL,
     show_in_check_in boolean DEFAULT true NOT NULL,
-    is_free_pass boolean DEFAULT false NOT NULL
+    is_free_pass boolean DEFAULT false NOT NULL,
+    valid_days text,
+    time_start text,
+    time_end text,
+    fixed_start_date date,
+    fixed_end_date date,
+    notes text
 );
 
 
@@ -4749,4 +4755,5 @@ INSERT INTO public.schema_migrations (version) VALUES
     ('20260717083921'),
     ('20260717101821'),
     ('20260720030718'),
-    ('20260727142918');
+    ('20260727142918'),
+    ('20260729003529');

@@ -3,7 +3,7 @@ import { prisma } from "@/lib/db";
 import { requireStaff } from "@/lib/auth";
 
 export const dynamic = "force-dynamic";
-const MAX_ACTIVE_PACKAGES = 3;
+const MAX_ACTIVE_PACKAGES = 10;
 
 export async function GET(req: Request) {
   try {
@@ -41,7 +41,24 @@ export async function POST(req: Request) {
   try {
     const staff = requireStaff(req.headers);
     const body = await req.json();
-    const { venueId: bodyVenueId, name, sessions, durationDays, price, perks, discountPct, isBestChoice, isFreePass, showInCheckIn } = body;
+    const {
+      venueId: bodyVenueId,
+      name,
+      sessions,
+      durationDays,
+      price,
+      perks,
+      discountPct,
+      isBestChoice,
+      isFreePass,
+      showInCheckIn,
+      validDays,
+      timeStart,
+      timeEnd,
+      fixedStartDate,
+      fixedEndDate,
+      notes,
+    } = body;
     const venueId = bodyVenueId || staff.venueId;
 
     if (!venueId || !name || durationDays === undefined || price === undefined) {
@@ -61,6 +78,14 @@ export async function POST(req: Request) {
       );
     }
 
+    // Build fixedStartDate / fixedEndDate at noon local time to avoid timezone date shift
+    const fixedStartPrisma = fixedStartDate
+      ? new Date(`${fixedStartDate}T12:00:00+07:00`)
+      : null;
+    const fixedEndPrisma = fixedEndDate
+      ? new Date(`${fixedEndDate}T12:00:00+07:00`)
+      : null;
+
     const pkg = await prisma.subscriptionPackage.create({
       data: {
         venueId,
@@ -73,6 +98,12 @@ export async function POST(req: Request) {
         isBestChoice: isBestChoice ?? false,
         isFreePass: isFreePass ?? false,
         showInCheckIn: showInCheckIn ?? false,
+        validDays: validDays ?? null,
+        timeStart: timeStart ?? null,
+        timeEnd: timeEnd ?? null,
+        fixedStartDate: fixedStartPrisma,
+        fixedEndDate: fixedEndPrisma,
+        notes: notes?.trim() || null,
       },
     });
 

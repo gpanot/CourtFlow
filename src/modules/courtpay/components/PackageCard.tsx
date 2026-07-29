@@ -1,8 +1,18 @@
 "use client";
 
 import { useState } from "react";
-import { Pencil, Trash2, Infinity, Star, Eye, EyeOff, Loader2, Gift } from "lucide-react";
+import { Pencil, Trash2, Infinity, Star, Eye, EyeOff, Loader2, Gift, Clock, CalendarDays } from "lucide-react";
 import { cn } from "@/lib/cn";
+
+/** Format "HH:MM" (24h) → "h:MMam/pm" */
+function fmt24To12(time: string): string {
+  const [hStr, mStr] = time.split(":");
+  const h = parseInt(hStr, 10);
+  const m = mStr ?? "00";
+  const suffix = h >= 12 ? "pm" : "am";
+  const h12 = h % 12 === 0 ? 12 : h % 12;
+  return `${h12}:${m}${suffix}`;
+}
 
 interface PackageCardProps {
   pkg: {
@@ -17,6 +27,12 @@ interface PackageCardProps {
     isBestChoice?: boolean;
     discountPct?: number | null;
     isFreePass?: boolean;
+    validDays?: string | null;
+    timeStart?: string | null;
+    timeEnd?: string | null;
+    fixedStartDate?: string | null;
+    fixedEndDate?: string | null;
+    notes?: string | null;
     _count?: { subscriptions: number };
   };
   venueName?: string;
@@ -111,8 +127,33 @@ export function PackageCard({
               <span>{pkg.sessions} sessions</span>
             )}
             <span>·</span>
-            <span>{pkg.durationDays} days</span>
+            {pkg.fixedStartDate && pkg.fixedEndDate ? (
+              <span>
+                {pkg.fixedStartDate.slice(0, 10)} → {pkg.fixedEndDate.slice(0, 10)}
+              </span>
+            ) : (
+              <span>{pkg.durationDays} days</span>
+            )}
           </div>
+
+          {/* Restriction badges */}
+          {(pkg.validDays || (pkg.timeStart && pkg.timeEnd)) && (
+            <div className="mt-1.5 flex flex-wrap gap-1.5">
+              {pkg.validDays && (
+                <span className="flex items-center gap-1 rounded-md border border-blue-700/40 bg-blue-500/10 px-2 py-0.5 text-[10px] font-medium text-blue-300">
+                  <CalendarDays className="h-2.5 w-2.5" />
+                  {pkg.validDays}
+                </span>
+              )}
+              {pkg.timeStart && pkg.timeEnd && (
+                <span className="flex items-center gap-1 rounded-md border border-amber-700/40 bg-amber-500/10 px-2 py-0.5 text-[10px] font-medium text-amber-300">
+                  <Clock className="h-2.5 w-2.5" />
+                  {fmt24To12(pkg.timeStart)} – {fmt24To12(pkg.timeEnd)}
+                </span>
+              )}
+            </div>
+          )}
+
           {venueName && (
             <p className="mt-0.5 text-xs text-neutral-500">{venueName}</p>
           )}

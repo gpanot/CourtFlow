@@ -26,6 +26,13 @@ interface Package {
   showInCheckIn: boolean;
   isBestChoice?: boolean;
   discountPct?: number | null;
+  isFreePass?: boolean;
+  validDays?: string | null;
+  timeStart?: string | null;
+  timeEnd?: string | null;
+  fixedStartDate?: string | null;
+  fixedEndDate?: string | null;
+  notes?: string | null;
   _count: { subscriptions: number };
 }
 
@@ -137,13 +144,13 @@ export default function StaffSubscriptionsPage() {
     }
   };
 
-  const handleCreatePackage = async (data: { name: string; sessions: number | null; durationDays: number; price: number; perks: string; isBestChoice?: boolean; discountPct?: number | null }) => {
+  const handleCreatePackage = async (data: { name: string; sessions: number | null; durationDays: number; price: number; perks: string; isBestChoice?: boolean; discountPct?: number | null; isFreePass?: boolean; showInCheckIn?: boolean; validDays?: string | null; timeStart?: string | null; timeEnd?: string | null; fixedStartDate?: string | null; fixedEndDate?: string | null; notes?: string | null }) => {
     await api.post("/api/courtpay/staff/packages", { venueId, ...data });
     setShowForm(false);
     await fetchPackages();
   };
 
-  const handleEditPackage = async (data: { name: string; sessions: number | null; durationDays: number; price: number; perks: string; isBestChoice?: boolean; discountPct?: number | null }) => {
+  const handleEditPackage = async (data: { name: string; sessions: number | null; durationDays: number; price: number; perks: string; isBestChoice?: boolean; discountPct?: number | null; isFreePass?: boolean; showInCheckIn?: boolean; validDays?: string | null; timeStart?: string | null; timeEnd?: string | null; fixedStartDate?: string | null; fixedEndDate?: string | null; notes?: string | null }) => {
     if (!editingPkg) return;
     await api.put(`/api/courtpay/staff/packages/${editingPkg.id}`, data);
     setEditingPkg(null);
@@ -353,6 +360,14 @@ export default function StaffSubscriptionsPage() {
             perks: editingPkg.perks || "",
             isBestChoice: editingPkg.isBestChoice,
             discountPct: editingPkg.discountPct,
+            isFreePass: editingPkg.isFreePass,
+            showInCheckIn: editingPkg.showInCheckIn,
+            validDays: editingPkg.validDays,
+            timeStart: editingPkg.timeStart,
+            timeEnd: editingPkg.timeEnd,
+            fixedStartDate: editingPkg.fixedStartDate,
+            fixedEndDate: editingPkg.fixedEndDate,
+            notes: editingPkg.notes,
           }}
           onSubmit={handleEditPackage}
           onClose={() => setEditingPkg(null)}
