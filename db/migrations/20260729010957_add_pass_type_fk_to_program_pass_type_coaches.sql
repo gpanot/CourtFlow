@@ -1,8 +1,11 @@
 -- migrate:up
-ALTER TABLE public.program_pass_type_coaches
-  ADD CONSTRAINT program_pass_type_coaches_pass_type_id_fkey
-  FOREIGN KEY (pass_type_id) REFERENCES public.program_pass_types(id)
-  ON DELETE CASCADE;
+DO $$ BEGIN
+  ALTER TABLE public.program_pass_type_coaches
+    ADD CONSTRAINT program_pass_type_coaches_pass_type_id_fkey
+    FOREIGN KEY (pass_type_id) REFERENCES public.program_pass_types(id)
+    ON DELETE CASCADE;
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
 
 -- migrate:down
 ALTER TABLE public.program_pass_type_coaches
