@@ -134,7 +134,7 @@ export async function GET(request: NextRequest) {
             coach: { select: { name: true, coachPhoto: true } },
           },
         },
-        _count: { select: { programPasses: true } },
+        _count: { select: { programPasses: true, classInstances: true } },
       },
     });
 
@@ -165,6 +165,8 @@ export async function GET(request: NextRequest) {
       recurrenceStartHour: run.recurrenceStartHour,
       recurrenceDurationMin: run.recurrenceDurationMin,
       recurrenceCount: run.recurrenceCount,
+      recurrenceEndDate: run.recurrenceEndDate,
+      sessionCount: run._count.classInstances > 0 ? run._count.classInstances : run.recurrenceCount,
       maxCapacity: run.maxCapacity,
       enrolledCount: run._count.programPasses,
       isFull: run._count.programPasses >= run.maxCapacity,

@@ -17,6 +17,8 @@ interface ProgramRun {
   recurrenceStartHour: number;
   recurrenceDurationMin: number;
   recurrenceCount: number | null;
+  recurrenceEndDate: string | null;
+  sessionCount: number | null;
   maxCapacity: number;
   enrolledCount: number;
   isFull: boolean;
@@ -63,17 +65,63 @@ export default function ProgramsPage() {
     return r.passType.level === levelFilter;
   });
 
-  function formatSchedule(run: ProgramRun) {
+  function formatTime(run: ProgramRun) {
     const h = run.recurrenceStartHour;
     const m = run.recurrenceDurationMin;
     const ampm = h >= 12 ? "PM" : "AM";
     const h12 = h % 12 || 12;
-    return `${h12}:00 ${ampm} · ${m} min${run.recurrenceCount ? ` · ${run.recurrenceCount} ${t("programs.sessions")}` : ""}`;
+    return `${h12}:00 ${ampm} · ${m} min`;
   }
 
-  function formatStartDate(dateStr: string) {
+  function formatDateShort(dateStr: string) {
+    const d = new Date(dateStr);
+    return d.toLocaleDateString(undefined, { month: "short", day: "numeric" });
+  }
+
+  function formatDateYear(dateStr: string) {
+    const d = new Date(dateStr);
+    return d.getFullYear();
+  }
+
+  function formatDate(dateStr: string) {
     const d = new Date(dateStr);
     return d.toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" });
+  }
+
+  function computeDateRange(run: ProgramRun): string {
+    const startShort = formatDateShort(run.startDate);
+    const startYear = formatDateYear(run.startDate);
+
+    let endStr: string | null = null;
+    if (run.recurrenceEndDate) {
+      endStr = run.recurrenceEndDate;
+    } else if (run.recurrenceCount && run.startDate) {
+      const d = new Date(run.startDate);
+      d.setDate(d.getDate() + (run.recurrenceCount - 1) * 7);
+      endStr = d.toISOString();
+    }
+
+    if (!endStr) return `${startShort}, ${startYear}`;
+
+    const endShort = formatDateShort(endStr);
+    const endYear = formatDateYear(endStr);
+    return startYear === endYear
+      ? `${startShort} – ${endShort}, ${endYear}`
+      : `${startShort}, ${startYear} – ${endShort}, ${endYear}`;
+  }
+
+  function computeEndDate(run: ProgramRun): string | null {
+    if (run.recurrenceEndDate) return formatDate(run.recurrenceEndDate);
+    if (run.recurrenceCount && run.startDate) {
+      const d = new Date(run.startDate);
+      d.setDate(d.getDate() + (run.recurrenceCount - 1) * 7);
+      return formatDate(d.toISOString());
+    }
+    return null;
+  }
+
+  function getSessionCount(run: ProgramRun): number | null {
+    return run.sessionCount ?? null;
   }
 
   const LEVEL_LABEL: Record<string, string> = {
@@ -180,12 +228,40 @@ export default function ProgramsPage() {
                     <h2 className="font-bold text-[var(--cm-text)] text-base leading-tight mb-0.5">{run.passType.name}</h2>
                     <p className="text-xs text-[var(--cm-text-muted)] mb-2">{run.name}</p>
 
-                    <p className="text-xs text-[var(--cm-text-sec)] mb-1">
-                      📅 {t("programs.startsOn")} {formatStartDate(run.startDate)}
-                    </p>
-                    <p className="text-xs text-[var(--cm-text-sec)] mb-3">
-                      ⏰ {formatSchedule(run)}
-                    </p>
+                    {/* Session info — 3-column chips */}
+                    {(() => {
+                      const dayName = new Date(run.startDate).toLocaleDateString(undefined, { weekday: "short" });
+                      const endDate = computeEndDate(run);
+                      const count = getSessionCount(run);
+                      return (
+                        <div className="flex gap-1.5 mb-3">
+                          {/* Date chip — grows to fill available space */}
+                          <div className="flex items-center gap-1.5 rounded-xl bg-[var(--cm-bg-surface)] border border-[var(--cm-border)] px-2 py-1.5 flex-1 min-w-0">
+                            <svg className="w-3.5 h-3.5 text-[var(--cm-text-muted)] shrink-0" fill="none" stroke="currentColor" strokeWidth={1.75} viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>
+                            <div className="min-w-0">
+                              <p className="text-[9px] font-semibold text-[var(--cm-text)] leading-tight whitespace-nowrap">{computeDateRange(run)}</p>
+                              <p className="text-[9px] text-[var(--cm-text-muted)] leading-tight">Every {dayName}</p>
+                            </div>
+                          </div>
+                          {/* Time chip — fixed width */}
+                          <div className="flex items-center gap-1.5 rounded-xl bg-[var(--cm-bg-surface)] border border-[var(--cm-border)] px-2 py-1.5 shrink-0">
+                            <svg className="w-3.5 h-3.5 text-[var(--cm-text-muted)] shrink-0" fill="none" stroke="currentColor" strokeWidth={1.75} viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 3"/></svg>
+                            <div>
+                              <p className="text-[9px] font-semibold text-[var(--cm-text)] leading-tight whitespace-nowrap">{formatTime(run).split(" · ")[0]}</p>
+                              <p className="text-[9px] text-[var(--cm-text-muted)] leading-tight">{run.recurrenceDurationMin} min</p>
+                            </div>
+                          </div>
+                          {/* Sessions chip — fixed width */}
+                          <div className="flex items-center gap-1.5 rounded-xl bg-[var(--cm-bg-surface)] border border-[var(--cm-border)] px-2 py-1.5 shrink-0">
+                            <svg className="w-3.5 h-3.5 text-[var(--cm-text-muted)] shrink-0" fill="none" stroke="currentColor" strokeWidth={1.75} viewBox="0 0 24 24"><path d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2"/><rect x="9" y="3" width="6" height="4" rx="1"/><path d="M9 12h6M9 16h4"/></svg>
+                            <div>
+                              <p className="text-[9px] font-semibold text-[var(--cm-text)] leading-tight">{count ?? "—"}</p>
+                              <p className="text-[9px] text-[var(--cm-text-muted)] leading-tight">{t("programs.sessions")}</p>
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })()}
 
                     {/* Capacity bar */}
                     <div className="mb-3">
@@ -203,16 +279,43 @@ export default function ProgramsPage() {
                       </div>
                     </div>
 
-                    {/* Coaches */}
+                    {/* Coaches — avatars + names */}
                     {run.coaches.length > 0 && (
-                      <p className="text-xs text-[var(--cm-text-muted)] mb-2">
-                        🎓 {run.coaches.map((c) => c.name).join(", ")}
-                      </p>
+                      <div className="flex items-center gap-2 mb-2">
+                        <div className="flex -space-x-1.5">
+                          {run.coaches.slice(0, 4).map((c, i) => (
+                            c.photo ? (
+                              <img
+                                key={i}
+                                src={c.photo}
+                                alt={c.name}
+                                className="w-6 h-6 rounded-full object-cover border-2 border-[var(--cm-bg-card)]"
+                              />
+                            ) : (
+                              <div
+                                key={i}
+                                className="w-6 h-6 rounded-full bg-[var(--cm-accent)]/20 border-2 border-[var(--cm-bg-card)] flex items-center justify-center"
+                              >
+                                <span className="text-[8px] font-bold text-[var(--cm-accent)]">
+                                  {c.name.charAt(0).toUpperCase()}
+                                </span>
+                              </div>
+                            )
+                          ))}
+                        </div>
+                        <span className="text-xs text-[var(--cm-text-muted)] leading-tight">
+                          {run.coaches.map((c) => c.name).join(", ")}
+                        </span>
+                      </div>
                     )}
 
-                    <div className="flex items-center justify-between">
+                    <div className="flex items-center justify-between mt-3">
                       <span className="text-[var(--cm-accent)] font-bold text-sm">{formatPrice(run.passType.price)}</span>
-                      <span className="text-xs text-[var(--cm-text-muted)] font-medium underline underline-offset-2">
+                      <span className={`px-4 py-1.5 rounded-full text-xs font-semibold border transition-colors ${
+                        run.isEnrolled
+                          ? "bg-[var(--cm-green)] text-white border-transparent"
+                          : "bg-transparent text-[var(--cm-accent)] border-[var(--cm-accent)]"
+                      }`}>
                         {run.isEnrolled ? t("programs.viewProgress") : run.isFull ? t("programs.joinWaitlist") : t("programs.learnMore")} →
                       </span>
                     </div>
