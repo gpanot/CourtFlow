@@ -186,11 +186,13 @@ function AmountInputString({
   onChange,
   placeholder,
   className,
+  disabled,
 }: {
   value: string;
   onChange: (v: string) => void;
   placeholder?: string;
   className?: string;
+  disabled?: boolean;
 }) {
   const numVal = parseInt(value.replace(/[^\d]/g, ""), 10) || 0;
   const [focused, setFocused] = React.useState(false);
@@ -202,6 +204,7 @@ function AmountInputString({
       value={displayValue}
       placeholder={placeholder}
       className={className}
+      disabled={disabled}
       onChange={(e) => {
         const digits = e.target.value.replace(/[^\d]/g, "");
         onChange(digits);
@@ -378,6 +381,7 @@ export default function VenueBillingDetailPage() {
   const [payAmount, setPayAmount] = useState("");
   const [payMethod, setPayMethod] = useState<"manual" | "payos" | "sepay">("manual");
   const [payComment, setPayComment] = useState("");
+  const [payFree, setPayFree] = useState(false);
 
   // Subscription actions
   const [subActionLoading, setSubActionLoading] = useState(false);
@@ -557,16 +561,20 @@ export default function VenueBillingDetailPage() {
     setPayAmount(String(totalAmount));
     setPayMethod("manual");
     setPayComment("");
+    setPayFree(false);
   };
 
   const submitMarkPaid = async () => {
     if (!payModal) return;
     setMarkingPaid(payModal.invoiceId);
     try {
+      const amount = payFree
+        ? 0
+        : (() => { const n = parseInt(payAmount.replace(/[^\d]/g, ""), 10); return n > 0 ? n : payModal.totalAmount; })();
       await api.post(
         `/api/admin/billing/venue/${venueId}/invoices/${payModal.invoiceId}/mark-paid`,
         {
-          amount: (() => { const n = parseInt(payAmount.replace(/[^\d]/g, ""), 10); return n > 0 ? n : payModal.totalAmount; })(),
+          amount,
           method: payMethod,
           comment: payComment.trim() || undefined,
         }
@@ -2434,17 +2442,32 @@ export default function VenueBillingDetailPage() {
               <div>
                 <label className="text-xs text-neutral-500 mb-1 block">Amount paid (VND)</label>
                 <AmountInputString
-                  value={payAmount}
-                  onChange={setPayAmount}
+                  value={payFree ? "0" : payAmount}
+                  onChange={(v) => { setPayFree(false); setPayAmount(v); }}
                   placeholder={formatVND(payModal.totalAmount)}
-                  className="w-full rounded-lg border border-neutral-700 bg-neutral-800 px-3 py-2 text-sm text-white"
+                  disabled={payFree}
+                  className="w-full rounded-lg border border-neutral-700 bg-neutral-800 px-3 py-2 text-sm text-white disabled:opacity-50 disabled:cursor-not-allowed"
                 />
-                {(parseInt(payAmount.replace(/[^\d]/g, ""), 10) || 0) !== payModal.totalAmount && (
+                {!payFree && (parseInt(payAmount.replace(/[^\d]/g, ""), 10) || 0) !== payModal.totalAmount && (
                   <p className="text-[10px] text-amber-400 mt-1">
                     Invoice total: {formatVND(payModal.totalAmount)} VND
                   </p>
                 )}
               </div>
+
+              {/* Free toggle */}
+              <button
+                type="button"
+                onClick={() => setPayFree((v) => !v)}
+                className={cn(
+                  "w-full rounded-lg py-2 text-sm font-medium border transition-colors",
+                  payFree
+                    ? "border-green-500 bg-green-900/30 text-green-300"
+                    : "border-neutral-700 text-neutral-400 hover:border-neutral-600"
+                )}
+              >
+                {payFree ? "✓ Free (0 VND) — click to undo" : "Mark as Free (0 VND)"}
+              </button>
 
               <div>
                 <label className="text-xs text-neutral-500 mb-1 block">Payment method</label>
