@@ -1560,7 +1560,7 @@ function PassTypeFormModal({
                   save();
                 }
               }}
-              disabled={saving || !name.trim()}
+              disabled={saving || !name.trim() || (isLastStep && !isEdit && !skipFirstRun && (!runName.trim() || runCourtIds.length === 0))}
               className="flex-1 rounded-xl bg-purple-600 py-3 font-semibold text-white hover:bg-purple-500 disabled:opacity-40"
             >
               {saveLabel}
@@ -2128,23 +2128,31 @@ function CreateRunModal({
           <button onClick={onClose} className="rounded-lg p-1.5 text-neutral-400 hover:bg-neutral-800"><X className="h-4 w-4" /></button>
         </div>
         <div className="flex-1 overflow-y-auto p-5 space-y-4">
+          {/* Pass Type */}
           <div>
             <label className="text-xs text-neutral-400 mb-1 block">{t("programPasses.runPassType")}</label>
             <select value={passTypeId} onChange={(e) => setPassTypeId(e.target.value)} className={inputCls}>
+              <option value="" disabled>{t("programPasses.runPassTypePlaceholder")}</option>
               {passTypes.map((pt) => (
                 <option key={pt.id} value={pt.id}>{pt.name}</option>
               ))}
             </select>
           </div>
+
+          {/* Run name */}
           <div>
-            <label className="text-xs text-neutral-400 mb-1 block">{t("programPasses.runName")}</label>
+            <label className="text-xs text-neutral-400 mb-1 block">{t("programPasses.runNameLabel")}</label>
             <input type="text" value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. Beginner Bootcamp — Q3 2026" className={inputCls} autoFocus />
           </div>
+
+          {/* First session date */}
           <div>
             <label className="text-xs text-neutral-400 mb-1 block">{t("programPasses.firstSessionDate")}</label>
             <input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} className={inputCls} />
             <p className="text-[11px] text-neutral-500 mt-0.5">{t("programPasses.sessionRepeatHint")}</p>
           </div>
+
+          {/* Start hour + Duration */}
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className="text-xs text-neutral-400 mb-1 block">{t("programPasses.startHour")}</label>
@@ -2159,8 +2167,10 @@ function CreateRunModal({
               <input type="number" min={15} step={15} value={durationMin} onChange={(e) => setDurationMin(Number(e.target.value))} className={inputCls} />
             </div>
           </div>
+
+          {/* Sessions */}
           <div>
-            <label className="text-xs text-neutral-400 mb-1 block">{t("programPasses.numberOfSessions")}</label>
+            <label className="text-xs text-neutral-400 mb-1 block">{t("programPasses.numberOfSessionsHint")}</label>
             <div className="flex gap-2 mb-2">
               <button onClick={() => setOccurrenceMode("count")} className={cn("rounded-lg px-3 py-1.5 text-xs font-medium", occurrenceMode === "count" ? "bg-purple-600 text-white" : "bg-neutral-800 text-neutral-400")}>By # sessions</button>
               <button onClick={() => setOccurrenceMode("endDate")} className={cn("rounded-lg px-3 py-1.5 text-xs font-medium", occurrenceMode === "endDate" ? "bg-purple-600 text-white" : "bg-neutral-800 text-neutral-400")}>By end date</button>
@@ -2171,19 +2181,35 @@ function CreateRunModal({
               <input type="date" value={recurrenceEndDate} onChange={(e) => setRecurrenceEndDate(e.target.value)} className={inputCls} />
             )}
           </div>
+
+          {/* Session preview — immediately below Sessions */}
+          {previewDates.length > 0 && (
+            <div>
+              <label className="text-xs text-neutral-400 mb-1 block">{t("programPasses.sessionPreview", { count: previewDates.length })}</label>
+              <div className="rounded-lg border border-neutral-800 bg-neutral-950 p-2 max-h-32 overflow-y-auto space-y-0.5">
+                {previewDates.map((d, i) => (
+                  <p key={i} className="text-[11px] text-neutral-400">{i + 1}. {d}</p>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Max capacity */}
           <div>
-            <label className="text-xs text-neutral-400 mb-1 block">Max capacity (number of players)</label>
+            <label className="text-xs text-neutral-400 mb-1 block">{t("programPasses.maxCapacity")}</label>
             <input type="number" min={1} value={maxCapacity} onChange={(e) => setMaxCapacity(Number(e.target.value))} className={inputCls} />
           </div>
+
+          {/* Courts — 2-column grid */}
           {courts.length > 0 && (
             <div>
               <label className="text-xs text-neutral-400 mb-1 block">
-                {t("programPasses.courts")} <span className="text-neutral-600 font-normal">({t("programPasses.courtsHint")})</span>
+                {t("programPasses.courtsSelectLabel")} <span className="text-neutral-600 font-normal">({t("programPasses.courtsHint")})</span>
               </label>
-              <div className="space-y-1">
+              <div className="grid grid-cols-2 gap-1.5">
                 {courts.map((c) => (
                   <label key={c.id} className={cn(
-                    "flex items-center gap-3 cursor-pointer select-none px-3 py-2 rounded-lg border transition-colors",
+                    "flex items-center gap-2 cursor-pointer select-none px-3 py-2 rounded-lg border transition-colors",
                     selectedCourtIds.includes(c.id)
                       ? "border-purple-500/40 bg-purple-600/10"
                       : "border-neutral-800 bg-neutral-800/40 hover:bg-neutral-800"
@@ -2194,10 +2220,10 @@ function CreateRunModal({
                       onChange={() => setSelectedCourtIds((prev) =>
                         prev.includes(c.id) ? prev.filter((id) => id !== c.id) : [...prev, c.id]
                       )}
-                      className="h-4 w-4 rounded border-neutral-600 bg-neutral-800 accent-purple-500"
+                      className="h-4 w-4 rounded border-neutral-600 bg-neutral-800 accent-purple-500 shrink-0"
                     />
-                    <span className="text-sm text-neutral-200">{c.label}</span>
-                    {selectedCourtIds.includes(c.id) && <Check className="h-3.5 w-3.5 text-purple-400 ml-auto" />}
+                    <span className="text-sm text-neutral-200 truncate">{c.label}</span>
+                    {selectedCourtIds.includes(c.id) && <Check className="h-3.5 w-3.5 text-purple-400 ml-auto shrink-0" />}
                   </label>
                 ))}
               </div>
@@ -2206,25 +2232,17 @@ function CreateRunModal({
               )}
             </div>
           )}
+
+          {/* Coaches */}
           {coaches.length > 0 && (
             <div>
-              <label className="text-xs text-neutral-400 mb-1 block">{t("programPasses.runCoaches")}</label>
+              <label className="text-xs text-neutral-400 mb-1 block">{t("programPasses.runCoachesLabel")}</label>
               <div className="rounded-lg border border-neutral-700 bg-neutral-800 p-2 space-y-1 max-h-32 overflow-y-auto">
                 {coaches.map((c) => (
                   <label key={c.id} className="flex items-center gap-2 cursor-pointer select-none px-1 py-0.5 rounded hover:bg-neutral-700">
                     <input type="checkbox" checked={selectedCoachIds.includes(c.id)} onChange={() => toggleCoach(c.id)} className="h-3.5 w-3.5 rounded border-neutral-600 bg-neutral-800 accent-purple-500" />
                     <span className="text-xs text-neutral-300">{c.name}</span>
                   </label>
-                ))}
-              </div>
-            </div>
-          )}
-          {previewDates.length > 0 && (
-            <div>
-              <label className="text-xs text-neutral-400 mb-1 block">{t("programPasses.sessionPreview", { count: previewDates.length })}</label>
-              <div className="rounded-lg border border-neutral-800 bg-neutral-950 p-2 max-h-32 overflow-y-auto space-y-0.5">
-                {previewDates.map((d, i) => (
-                  <p key={i} className="text-[11px] text-neutral-400">{i + 1}. {d}</p>
                 ))}
               </div>
             </div>
