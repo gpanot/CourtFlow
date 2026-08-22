@@ -138,5 +138,60 @@ app.prepare().then(() => {
     }
     console.log(`  Socket.io ready`);
     console.log(`  Mode: ${dev ? "development" : "production"}\n`);
+
+    // ── Inline cron scheduler (replaces the dedicated expire-holds-cron service) ──
+    // Only runs in production to avoid duplicate jobs during local dev.
+    if (!dev) {
+      const cronSecret = process.env.CRON_SECRET ?? "";
+      const cronHeaders: Record<string, string> = cronSecret
+        ? { Authorization: `Bearer ${cronSecret}` }
+        : {};
+      const localBase = `http://127.0.0.1:${port}`;
+
+      async function cronCall(name: string, path: string) {
+        const start = Date.now();
+        try {
+          const res = await fetch(`${localBase}${path}`, {
+            method: "GET",
+            headers: cronHeaders,
+          });
+          const body = await res.json().catch(() => ({}));
+          console.log(
+            `[cron] ${new Date().toISOString()} job=${name} status=${res.status} elapsed=${Date.now() - start}ms data=${JSON.stringify(body)}`
+          );
+        } catch (err) {
+          console.error(
+            `[cron] ${new Date().toISOString()} job=${name} ERROR: ${(err as Error).message}`
+          );
+        }
+      }
+
+      function cronTick() {
+        const now = new Date();
+        const mod = now.getHours() * 60 + now.getMinutes();
+        const dow = now.getDay();
+
+        cronCall("expire-holds", "/api/cron/expire-holds");
+
+        if (now.getMinutes() === 0) {
+          cronCall("auto-close-sessions", "/api/cron/auto-close-sessions");
+        }
+        if (mod === 2 * 60) {
+          cronCall("open-bill-aging", "/api/cron/open-bill-aging");
+        }
+        if (dow === 1 && mod === 1) {
+          cronCall("generate-invoices", "/api/cron/generate-invoices");
+        }
+      }
+
+      const msUntilNextMinute =
+        (60 - new Date().getSeconds()) * 1000 - new Date().getMilliseconds();
+      setTimeout(() => {
+        cronTick();
+        setInterval(cronTick, 60_000);
+      }, msUntilNextMinute);
+
+      console.log("  Inline cron scheduler started (expire-holds every 1m, auto-close every 1h, aging daily 02:00, invoices Mon 00:01)");
+    }
   });
 });
